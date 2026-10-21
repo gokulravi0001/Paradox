@@ -1,6 +1,7 @@
 import { Client, ActivityType } from "discord.js";
 import { prisma } from "@/lib/prisma";
 import { SLASH_COMMANDS_DATA } from "../commands";
+import { ensureDatabaseSchema } from "../services/ensureDb";
 
 export async function onReady(client: Client) {
   if (!client.user) return;
@@ -19,7 +20,10 @@ export async function onReady(client: Client) {
     console.error("[Bot] Failed to register slash commands:", err);
   }
 
-  // 2. Sync current guilds with database
+  // 2. Automatically ensure database tables exist (PostgreSQL / SQLite)
+  await ensureDatabaseSchema(prisma);
+
+  // 3. Sync current guilds with database
   try {
     const guilds = await client.guilds.fetch();
     console.log(`[Bot] Synchronizing ${guilds.size} connected guild(s) with database...`);
