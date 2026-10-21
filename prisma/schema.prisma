@@ -1,7 +1,7 @@
 // Prisma schema for Discord Bot & Dashboard
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
