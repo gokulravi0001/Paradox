@@ -176,7 +176,32 @@ export const ReactionRoleSchema = z.object({
   emoji: z.string().min(1, "Emoji is required"),
   roleId: z.string().min(10, "Invalid role ID"),
   roleName: z.string().min(1, "Role name is required"),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
+  type: z.enum(["REACTION", "BUTTON", "SELECT_MENU"]).optional().default("REACTION"),
+  imageUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")).nullable(),
+  bannerUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")).nullable(),
+  confirmGif: z.string().url("Must be a valid URL").optional().or(z.literal("")).nullable(),
+  buttonStyle: z.enum(["PRIMARY", "SECONDARY", "SUCCESS", "DANGER"]).optional().default("PRIMARY"),
+});
+
+export const VisualRoleDeckDeploySchema = z.object({
+  channelId: z.string().min(10, "Target channel is required"),
+  title: z.string().min(1, "Panel title is required").max(256),
+  description: z.string().max(4096).optional(),
+  color: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Invalid hex color").default("#5865F2"),
+  bannerUrl: z.string().url("Banner must be a valid image/GIF URL").optional().or(z.literal("")).nullable(),
+  type: z.enum(["BUTTON", "REACTION", "SELECT_MENU"]).default("BUTTON"),
+  roles: z.array(
+    z.object({
+      roleId: z.string().min(10, "Role is required"),
+      roleName: z.string().min(1, "Role name is required"),
+      emoji: z.string().min(1, "Emoji or icon is required"),
+      description: z.string().max(100).optional(),
+      imageUrl: z.string().url("Badge must be a valid image/GIF URL").optional().or(z.literal("")).nullable(),
+      confirmGif: z.string().url("Claim GIF must be a valid image/GIF URL").optional().or(z.literal("")).nullable(),
+      buttonStyle: z.enum(["PRIMARY", "SECONDARY", "SUCCESS", "DANGER"]).default("PRIMARY"),
+    })
+  ).min(1, "Must configure at least 1 role").max(25, "Maximum 25 roles per panel"),
 });
 
 export const EmbedSchema = z.object({

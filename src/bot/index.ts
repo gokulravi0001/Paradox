@@ -6,6 +6,7 @@ import { onReady } from "./events/ready";
 import { onMessageCreate } from "./events/messageCreate";
 import { onMessageReactionAdd } from "./events/messageReactionAdd";
 import { onMessageReactionRemove } from "./events/messageReactionRemove";
+import { onInteractionCreate } from "./events/interactionCreate";
 
 export async function startBot() {
   const token = process.env.DISCORD_BOT_TOKEN;
@@ -26,6 +27,7 @@ export async function startBot() {
   client.on("messageCreate", onMessageCreate);
   client.on("messageReactionAdd", onMessageReactionAdd);
   client.on("messageReactionRemove", onMessageReactionRemove);
+  client.on("interactionCreate", onInteractionCreate);
 
   // Error and Reconnect handling
   client.on("error", (error) => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateDiscordEmbed, DISCORD_LIMITS } from "@/lib/validations";
+import { validateDiscordEmbed, DISCORD_LIMITS, VisualRoleDeckDeploySchema } from "@/lib/validations";
 
 describe("Discord Embed Validation Rules", () => {
   it("should validate a conforming embed successfully", () => {
@@ -69,5 +69,44 @@ describe("Discord Embed Validation Rules", () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.includes("exceeds Discord limit of 6000"))).toBe(true);
+  });
+});
+
+describe("Visual Role Deck Validation", () => {
+  it("should validate a conforming visual role deck with banner GIF and badges", () => {
+    const validDeck = {
+      channelId: "123456789012345",
+      title: "Gamer Roles Deck",
+      description: "Pick your favorite games!",
+      color: "#5865F2",
+      bannerUrl: "https://media.giphy.com/media/banner/giphy.gif",
+      type: "BUTTON" as const,
+      roles: [
+        {
+          roleId: "987654321098765",
+          roleName: "Valorant",
+          emoji: "🎯",
+          description: "Access to #valorant-chat",
+          imageUrl: "https://example.com/badge.png",
+          confirmGif: "https://example.com/celebrate.gif",
+          buttonStyle: "SUCCESS" as const,
+        },
+      ],
+    };
+
+    const parsed = VisualRoleDeckDeploySchema.safeParse(validDeck);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("should reject a deck with empty roles array", () => {
+    const emptyDeck = {
+      channelId: "123456789012345",
+      title: "Empty Deck",
+      type: "BUTTON" as const,
+      roles: [],
+    };
+
+    const parsed = VisualRoleDeckDeploySchema.safeParse(emptyDeck);
+    expect(parsed.success).toBe(false);
   });
 });

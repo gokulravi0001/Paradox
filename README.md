@@ -32,9 +32,16 @@ Paradox is a production-ready Discord bot and full-stack web dashboard that allo
 
 ## Discord Bot Features
 
-### 1. Reaction Roles
-- Server administrators can configure messages with one or more emoji-to-role mappings.
-- Full support for Unicode emojis (⭐, 🎮, 🔔) and custom server emojis (`name:id`).
+### 1. Paradox Visual Role Decks & Reaction Roles (Signature Feature)
+- **Unlike Ordinary Bots:** Traditional reaction role bots (like Carl-bot or Dyno) only support plain text messages with standard emoji reactions beneath them. Paradox introduces **Visual Role Decks** that stand out completely:
+  - **Animated Banner GIFs & Images:** Deploy rich panels with custom animated banner GIFs (from Giphy, Tenor, Imgur, or Discord CDN) or high-res artwork.
+  - **Role Badges & Stickers:** Attach custom badge icons, stickers, or level GIFs to each individual role card.
+  - **Ephemeral Claim Celebration GIFs:** When a user clicks a button to claim a role, the bot sends a personalized, ephemeral celebration card displaying the role's unique animated GIF (e.g. celebration confetti, level-up badge, animated gaming artwork) and lists the role's exclusive perks!
+  - **Multiple Interaction Styles:**
+    - **Interactive Discord Buttons:** Native clickable buttons styled with custom emojis, colors (Blurple Primary, Green Success, Gray Secondary, Red Danger), and labels.
+    - **Dropdown Role Select Menus:** Clean, compact interactive select menus with emoji icons and perk descriptions.
+    - **Classic Reaction Emojis:** Auto-reacts to the visual message.
+  - **One-Click Channel Deployment:** Admins design the deck in the visual studio with a live Discord simulation preview and deploy it directly to any channel in one click—no manual copying and pasting of message IDs required.
 - **Role Hierarchy Guard:** Before saving and before assigning roles, Paradox verifies that the target role is positioned **below** the bot's highest role in Discord. If an admin selects a role equal to or higher than the bot's role, the dashboard displays a clear warning explaining how to reorder roles in Discord Server Settings.
 - **Resilience:** Gracefully handles deleted roles, deleted messages, or missing bot permissions (`50013 Missing Permissions`) without crashing.
 

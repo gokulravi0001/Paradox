@@ -46,7 +46,7 @@ export async function POST(
       );
     }
 
-    const { channelId, messageId, emoji, roleId, roleName, description } = validated.data;
+    const { channelId, messageId, emoji, roleId, roleName, description, type, imageUrl, bannerUrl, confirmGif, buttonStyle } = validated.data;
 
     // 1. Verify Bot Role Hierarchy Check:
     // Bot must have a higher role position than the role being assigned!
@@ -104,6 +104,11 @@ export async function POST(
         roleId,
         roleName: targetRole.name || roleName,
         description: description || null,
+        type: type || "REACTION",
+        imageUrl: imageUrl || null,
+        bannerUrl: bannerUrl || null,
+        confirmGif: confirmGif || null,
+        buttonStyle: buttonStyle || "PRIMARY",
       },
     });
 

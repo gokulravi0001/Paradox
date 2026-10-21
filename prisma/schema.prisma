@@ -50,12 +50,20 @@ model ReactionRole {
   roleId      String
   roleName    String
   description String?
+  
+  // Unique Visual & Interactive Features
+  type        String      @default("REACTION") // "REACTION", "BUTTON", "SELECT_MENU"
+  imageUrl    String?     // Custom badge image / GIF / sticker preview for this role
+  bannerUrl   String?     // Header banner image or GIF for the panel
+  confirmGif  String?     // Animated GIF or sticker image shown on claim/revoke
+  buttonStyle String?     @default("PRIMARY") // PRIMARY, SECONDARY, SUCCESS, DANGER
+
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   guild       GuildConfig @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
-  @@unique([messageId, emoji])
+  @@index([messageId])
   @@index([guildId])
 }
 

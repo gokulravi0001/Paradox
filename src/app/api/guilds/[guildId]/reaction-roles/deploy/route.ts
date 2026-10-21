@@ -1,0 +1,260 @@
+import { NextRequest, NextResponse } from "next/server";
+import { authorizeGuildAdmin } from "@/lib/serverAuth";
+import { prisma } from "@/lib/prisma";
+import { VisualRoleDeckDeploySchema } from "@/lib/validations";
+import { fetchGuildRoles, fetchBotMember } from "@/lib/discord";
+
+export const dynamic = "force-dynamic";
+
+const DISCORD_API_ENDPOINT = "https://discord.com/api/v10";
+
+function parseEmojiForDiscord(rawEmoji: string): { name: string; id?: string } | undefined {
+  if (!rawEmoji) return undefined;
+  const trimmed = rawEmoji.trim();
+
+  // Custom emoji format: <:name:id> or <a:name:id> or name:id
+  const customMatch = trimmed.match(/^<a?:([a-zA-Z0-9_]+):([0-9]+)>$/);
+  if (customMatch) {
+    return { name: customMatch[1], id: customMatch[2] };
+  }
+
+  const nameIdMatch = trimmed.match(/^([a-zA-Z0-9_]+):([0-9]+)$/);
+  if (nameIdMatch) {
+    return { name: nameIdMatch[1], id: nameIdMatch[2] };
+  }
+
+  // Unicode emoji
+  return { name: trimmed };
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { guildId: string } }
+) {
+  const { guildId } = params;
+  const auth = await authorizeGuildAdmin(guildId);
+  if (auth.errorResponse) return auth.errorResponse;
+
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) {
+    return NextResponse.json(
+      { error: "Bot token is not configured or is a placeholder." },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const body = await request.json();
+    const validated = VisualRoleDeckDeploySchema.safeParse(body);
+
+    if (!validated.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: validated.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { channelId, title, description, color, bannerUrl, type, roles } = validated.data;
+
+    // 1. Verify Bot Permissions & Role Hierarchy for ALL requested roles
+    const [guildRoles, botMember] = await Promise.all([
+      fetchGuildRoles(guildId),
+      fetchBotMember(guildId),
+    ]);
+
+    const botHighest = botMember?.highestPosition ?? 0;
+    for (const r of roles) {
+      const match = guildRoles.find((gr) => gr.id === r.roleId);
+      if (!match) {
+        return NextResponse.json(
+          { error: `Role '${r.roleName}' does not exist in this Discord server.` },
+          { status: 400 }
+        );
+      }
+      if (match.managed) {
+        return NextResponse.json(
+          { error: `Role '${match.name}' is an integration/managed role and cannot be assigned.` },
+          { status: 400 }
+        );
+      }
+      if (match.position >= botHighest) {
+        return NextResponse.json(
+          {
+            error: `Hierarchy violation: Role '${match.name}' is higher than or equal to the bot's highest role. Please reposition the bot's role higher in Discord Server Settings.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 2. Build the Visual Embed
+    const embedColor = parseInt(color.replace("#", ""), 16);
+    const embedFields = roles.map((r) => ({
+      name: `${r.emoji} ${r.roleName}`,
+      value: r.description || "Click below to claim or remove this role.",
+      inline: true,
+    }));
+
+    const embedPayload: Record<string, unknown> = {
+      title,
+      description: description || undefined,
+      color: embedColor,
+      fields: embedFields,
+      footer: {
+        text: "Paradox Visual Role Deck • Click to Claim or Remove",
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    if (bannerUrl) {
+      embedPayload.image = { url: bannerUrl };
+    }
+
+    // 3. Build Components (Buttons or Select Menu)
+    const components: any[] = [];
+
+    if (type === "BUTTON") {
+      // Up to 5 buttons per ActionRow, max 5 rows (25 buttons)
+      const rows: any[] = [];
+      for (let i = 0; i < roles.length; i += 5) {
+        const slice = roles.slice(i, i + 5);
+        const actionRow = {
+          type: 1, // ActionRow
+          components: slice.map((r) => {
+            let styleNum = 1; // Primary
+            if (r.buttonStyle === "SECONDARY") styleNum = 2;
+            if (r.buttonStyle === "SUCCESS") styleNum = 3;
+            if (r.buttonStyle === "DANGER") styleNum = 4;
+
+            const parsedEmoji = parseEmojiForDiscord(r.emoji);
+
+            return {
+              type: 2, // Button
+              style: styleNum,
+              label: r.roleName.slice(0, 80),
+              emoji: parsedEmoji,
+              custom_id: `rr_role_${r.roleId}`,
+            };
+          }),
+        };
+        rows.push(actionRow);
+      }
+      components.push(...rows);
+    } else if (type === "SELECT_MENU") {
+      components.push({
+        type: 1,
+        components: [
+          {
+            type: 3, // StringSelect
+            custom_id: "rr_select_menu",
+            placeholder: "Select a role to claim or remove...",
+            options: roles.slice(0, 25).map((r) => ({
+              label: r.roleName.slice(0, 100),
+              value: r.roleId,
+              description: r.description ? r.description.slice(0, 100) : undefined,
+              emoji: parseEmojiForDiscord(r.emoji),
+            })),
+          },
+        ],
+      });
+    }
+
+    // 4. Send Message to Channel via Discord API
+    const postPayload: Record<string, unknown> = {
+      embeds: [embedPayload],
+    };
+    if (components.length > 0) {
+      postPayload.components = components;
+    }
+
+    const discordRes = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(postPayload),
+    });
+
+    if (!discordRes.ok) {
+      const errJson = await discordRes.json().catch(() => ({}));
+      return NextResponse.json(
+        {
+          error: errJson.message || `Discord API error: ${discordRes.statusText}`,
+          details: errJson,
+        },
+        { status: 400 }
+      );
+    }
+
+    const createdMsg = await discordRes.json();
+    const messageId = createdMsg.id;
+
+    // 5. If Mode is REACTION, add reactions sequentially
+    if (type === "REACTION") {
+      for (const r of roles) {
+        try {
+          const encodedEmoji = encodeURIComponent(r.emoji);
+          await fetch(
+            `${DISCORD_API_ENDPOINT}/channels/${channelId}/messages/${messageId}/reactions/${encodedEmoji}/@me`,
+            {
+              method: "PUT",
+              headers: { Authorization: `Bot ${botToken}` },
+            }
+          );
+        } catch {
+          // Continue adding remaining reactions
+        }
+      }
+    }
+
+    // 6. Save Mappings in Database
+    for (const r of roles) {
+      await prisma.reactionRole.create({
+        data: {
+          guildId,
+          channelId,
+          messageId,
+          emoji: r.emoji,
+          roleId: r.roleId,
+          roleName: r.roleName,
+          description: r.description || null,
+          type,
+          imageUrl: r.imageUrl || null,
+          bannerUrl: bannerUrl || null,
+          confirmGif: r.confirmGif || null,
+          buttonStyle: r.buttonStyle || "PRIMARY",
+        },
+      });
+    }
+
+    // 7. Audit Log
+    await prisma.auditLog.create({
+      data: {
+        guildId,
+        userId: auth.context!.user.id,
+        action: "DEPLOY_VISUAL_ROLE_DECK",
+        details: JSON.stringify({
+          channelId,
+          messageId,
+          type,
+          roleCount: roles.length,
+          title,
+        }),
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      messageId,
+      channelId,
+      roleCount: roles.length,
+    });
+  } catch (err: unknown) {
+    console.error("[API:VisualRoleDeck:Deploy] Error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to deploy visual role deck." },
+      { status: 500 }
+    );
+  }
+}
