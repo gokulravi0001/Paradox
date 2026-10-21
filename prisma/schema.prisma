@@ -1,0 +1,100 @@
+// Prisma schema for Discord Bot & Dashboard
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             String    @id // Discord User ID
+  username       String
+  discriminator  String?
+  avatar         String?
+  accessToken    String?   // Encrypted/session token
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model GuildConfig {
+  id                       String         @id // Discord Guild ID
+  name                     String
+  icon                     String?
+  botJoined                Boolean        @default(true)
+  prefix                   String         @default("!")
+  
+  // Link to video fixer / embedder settings
+  videoFixerEnabled        Boolean        @default(true)
+  videoFixerProviders      String         @default("[\"twitter\",\"tiktok\",\"instagram\",\"reddit\"]") // JSON array
+  videoFixerIgnoredChannels String        @default("[]") // JSON array of channel IDs
+
+  reactionRoles            ReactionRole[]
+  embedTemplates           EmbedTemplate[]
+  auditLogs                AuditLog[]
+
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+}
+
+model ReactionRole {
+  id          String      @id @default(cuid())
+  guildId     String
+  channelId   String
+  messageId   String
+  emoji       String      // Unicode emoji or custom emoji string name:id
+  roleId      String
+  roleName    String
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  guild       GuildConfig @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, emoji])
+  @@index([guildId])
+}
+
+model EmbedTemplate {
+  id                    String      @id @default(cuid())
+  guildId               String
+  name                  String      @default("Untitled Embed")
+  title                 String?
+  description           String?
+  url                   String?
+  color                 String?     @default("#5865F2")
+  authorName            String?
+  authorUrl             String?
+  authorIconUrl         String?
+  footerText            String?
+  footerIconUrl         String?
+  timestamp             Boolean     @default(false)
+  thumbnailUrl          String?
+  imageUrl              String?
+  fields                String      @default("[]") // JSON array of { name: string, value: string, inline: boolean }
+  lastPublishedChannelId String?
+  lastPublishedMessageId String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  guild                 GuildConfig @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId])
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  guildId   String
+  userId    String
+  action    String
+  details   String?     // JSON description of changes
+  createdAt DateTime    @default(now())
+
+  guild     GuildConfig @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId])
+}
