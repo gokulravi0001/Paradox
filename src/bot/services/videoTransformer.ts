@@ -1,4 +1,4 @@
-export type VideoProviderId = "twitter" | "tiktok" | "instagram" | "reddit";
+export type VideoProviderId = "twitter" | "tiktok" | "instagram" | "reddit" | "bluesky" | "threads";
 
 export interface VideoProviderInfo {
   id: VideoProviderId;
@@ -57,6 +57,22 @@ export const SUPPORTED_PROVIDERS: Record<VideoProviderId, VideoProviderInfo> = {
       "Text-only or external link submissions do not contain video streams.",
     ],
   },
+  bluesky: {
+    id: "bluesky",
+    name: "Bluesky Social",
+    badge: "Bluesky",
+    description: "Transforms bsky.app video and post links to bskyx.app for instant Discord video player preview.",
+    targetDomain: "bskyx.app",
+    limitations: ["Text-only posts without media do not require video transformation."],
+  },
+  threads: {
+    id: "threads",
+    name: "Meta Threads",
+    badge: "Threads",
+    description: "Transforms threads.net video posts to fixthreads.net for rich Discord media playback.",
+    targetDomain: "fixthreads.net",
+    limitations: ["Private threads profiles cannot be embedded."],
+  },
 };
 
 export interface TransformedLink {
@@ -71,7 +87,7 @@ export interface TransformedLink {
  */
 export function extractAndTransformVideoUrls(
   content: string,
-  enabledProviders: string[] = ["twitter", "tiktok", "instagram", "reddit"]
+  enabledProviders: string[] = ["twitter", "tiktok", "instagram", "reddit", "bluesky", "threads"]
 ): TransformedLink[] {
   if (!content || typeof content !== "string") return [];
 
@@ -79,7 +95,6 @@ export function extractAndTransformVideoUrls(
   const activeProviders = new Set(enabledProviders);
 
   // Match URLs in the message that are NOT enclosed in <...> (which Discord uses to suppress embeds)
-  // Example: <https://x.com/...> is suppressed and must NOT be transformed
   const urlRegex = /(?<!<)\bhttps?:\/\/[^\s<>]+(?!\>)/gi;
   const matches = content.match(urlRegex);
 
@@ -94,11 +109,9 @@ export function extractAndTransformVideoUrls(
       // 1. Twitter / X
       if (activeProviders.has("twitter")) {
         const isTwitter = host === "twitter.com" || host === "www.twitter.com" || host === "x.com" || host === "www.x.com";
-        // Ensure not already transformed
         const isAlreadyTransformed = host.includes("fxtwitter") || host.includes("vxtwitter") || host.includes("fixupx");
 
         if (isTwitter && !isAlreadyTransformed) {
-          // Twitter status pattern: /username/status/123456789...
           const statusMatch = pathname.match(/^\/([a-zA-Z0-9_]+)\/status\/([0-9]+)/);
           if (statusMatch) {
             const transformed = new URL(rawUrl);
@@ -148,7 +161,6 @@ export function extractAndTransformVideoUrls(
         const isAlreadyTransformed = host.includes("ddinstagram");
 
         if (isInstagram && !isAlreadyTransformed) {
-          // Instagram reel or post: /reel/CODE/ or /p/CODE/ or /tv/CODE/
           const instaMatch = pathname.match(/^\/(reel|p|tv)\/([a-zA-Z0-9_-]+)/);
           if (instaMatch) {
             const transformed = new URL(rawUrl);
@@ -169,7 +181,6 @@ export function extractAndTransformVideoUrls(
         const isAlreadyTransformed = host.includes("rxddit");
 
         if (isReddit && !isAlreadyTransformed) {
-          // Reddit post: /r/subreddit/comments/id/...
           const redditMatch = pathname.match(/^\/r\/([a-zA-Z0-9_]+)\/comments\/([a-zA-Z0-9]+)/);
           if (redditMatch) {
             const transformed = new URL(rawUrl);
@@ -183,8 +194,41 @@ export function extractAndTransformVideoUrls(
           }
         }
       }
+
+      // 5. Bluesky
+      if (activeProviders.has("bluesky")) {
+        const isBluesky = host === "bsky.app" || host === "www.bsky.app";
+        const isAlreadyTransformed = host.includes("bskyx.app") || host.includes("fxbsky");
+
+        if (isBluesky && !isAlreadyTransformed && pathname.includes("/post/")) {
+          const transformed = new URL(rawUrl);
+          transformed.hostname = "bskyx.app";
+          results.push({
+            originalUrl: rawUrl,
+            transformedUrl: transformed.toString(),
+            provider: "bluesky",
+          });
+          continue;
+        }
+      }
+
+      // 6. Threads
+      if (activeProviders.has("threads")) {
+        const isThreads = host === "threads.net" || host === "www.threads.net";
+        const isAlreadyTransformed = host.includes("fixthreads");
+
+        if (isThreads && !isAlreadyTransformed && pathname.includes("/post/")) {
+          const transformed = new URL(rawUrl);
+          transformed.hostname = "fixthreads.net";
+          results.push({
+            originalUrl: rawUrl,
+            transformedUrl: transformed.toString(),
+            provider: "threads",
+          });
+          continue;
+        }
+      }
     } catch {
-      // Ignore malformed URLs
       continue;
     }
   }

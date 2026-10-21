@@ -26,12 +26,13 @@ model GuildConfig {
   name                     String
   icon                     String?
   botJoined                Boolean        @default(true)
-  prefix                   String         @default("!")
+  prefix                   String         @default("$")
   
   // Link to video fixer / embedder settings
   videoFixerEnabled        Boolean        @default(true)
-  videoFixerProviders      String         @default("[\"twitter\",\"tiktok\",\"instagram\",\"reddit\"]") // JSON array
+  videoFixerProviders      String         @default("[\"twitter\",\"tiktok\",\"instagram\",\"reddit\",\"bluesky\",\"threads\"]") // JSON array
   videoFixerIgnoredChannels String        @default("[]") // JSON array of channel IDs
+  videoFixerDeleteButton   Boolean        @default(true) // Auto-add 🗑️ dismiss button for message author
 
   reactionRoles            ReactionRole[]
   embedTemplates           EmbedTemplate[]
@@ -53,6 +54,8 @@ model ReactionRole {
   
   // Unique Visual & Interactive Features
   type        String      @default("REACTION") // "REACTION", "BUTTON", "SELECT_MENU"
+  mode        String      @default("TOGGLE")   // "TOGGLE", "UNIQUE" (radio single-choice), "VERIFY" (one-time lock), "REVERSED"
+  requiredRoleId String?  // Optional prerequisite role required to claim
   imageUrl    String?     // Custom badge image / GIF / sticker preview for this role
   bannerUrl   String?     // Header banner image or GIF for the panel
   confirmGif  String?     // Animated GIF or sticker image shown on claim/revoke

@@ -76,18 +76,31 @@ var SLASH_COMMANDS_DATA = [
   new import_discord2.SlashCommandBuilder().setName("dashboard").setDescription("Get a direct link to this server's web companion dashboard"),
   new import_discord2.SlashCommandBuilder().setName("roles").setDescription("List active visual role decks and reaction roles for this server"),
   new import_discord2.SlashCommandBuilder().setName("serverinfo").setDescription("Display server statistics and bot permission health"),
-  // 1. Reaction Roles Command
-  new import_discord2.SlashCommandBuilder().setName("reactionrole").setDescription("Manage emoji-to-role mappings directly from Discord").addSubcommand(
-    (sub) => sub.setName("add").setDescription("Add an emoji reaction role to an existing message").addStringOption(
+  // 1. Specialist: Reaction Roles Command (with Multi-Mode Logic & Prerequisites)
+  new import_discord2.SlashCommandBuilder().setName("reactionrole").setDescription("Specialist: Manage emoji reaction roles with custom mode logic").addSubcommand(
+    (sub) => sub.setName("add").setDescription("Add an emoji reaction role with specialized mode logic").addStringOption(
       (opt) => opt.setName("message_id").setDescription("The Discord Message ID").setRequired(true)
     ).addStringOption(
       (opt) => opt.setName("emoji").setDescription("The emoji trigger (e.g. \u2B50, \u{1F3AE})").setRequired(true)
     ).addRoleOption(
       (opt) => opt.setName("role").setDescription("The role to grant upon reacting").setRequired(true)
+    ).addStringOption(
+      (opt) => opt.setName("mode").setDescription("Role Assignment Logic").addChoices(
+        { name: "Toggle (Normal claim & unclaim)", value: "TOGGLE" },
+        { name: "Unique (Radio single-choice in this group)", value: "UNIQUE" },
+        { name: "Verify (One-time claim only, locks in)", value: "VERIFY" },
+        { name: "Reversed (Opt-out / removes role)", value: "REVERSED" }
+      )
+    ).addRoleOption(
+      (opt) => opt.setName("required_role").setDescription("Prerequisite role needed to claim this role")
     ).addChannelOption(
       (opt) => opt.setName("channel").setDescription("The channel containing the message (defaults to current)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
     ).addStringOption(
-      (opt) => opt.setName("description").setDescription("Optional perk description for this role")
+      (opt) => opt.setName("description").setDescription("Perk description displayed on claim")
+    ).addStringOption(
+      (opt) => opt.setName("badge_url").setDescription("Custom badge image/sticker icon URL")
+    ).addStringOption(
+      (opt) => opt.setName("celebration_gif").setDescription("Animated celebration GIF URL on claim")
     )
   ).addSubcommand(
     (sub) => sub.setName("remove").setDescription("Remove an existing reaction role mapping").addStringOption(
@@ -97,22 +110,44 @@ var SLASH_COMMANDS_DATA = [
     )
   ).addSubcommand(
     (sub) => sub.setName("list").setDescription("List all reaction roles configured in this server")
+  ).addSubcommand(
+    (sub) => sub.setName("clean").setDescription("Clean up deleted roles or deleted message mappings")
   ),
-  // 2. Visual Role Deck Command
-  new import_discord2.SlashCommandBuilder().setName("roledeck").setDescription("Deploy an interactive Visual Role Deck with clickable buttons and banner GIF").addStringOption(
+  // 2. Specialist: Visual Role Deck Command (Interactive Clickable Buttons & Animated GIF Header)
+  new import_discord2.SlashCommandBuilder().setName("roledeck").setDescription("Specialist: Deploy interactive Visual Role Deck with buttons and banner GIF").addStringOption(
     (opt) => opt.setName("title").setDescription("Title for the role panel").setRequired(true)
   ).addRoleOption(
     (opt) => opt.setName("role1").setDescription("First role to include").setRequired(true)
   ).addStringOption(
     (opt) => opt.setName("emoji1").setDescription("Emoji for first role (e.g. \u{1F3AE})").setRequired(true)
   ).addRoleOption((opt) => opt.setName("role2").setDescription("Second role (optional)")).addStringOption((opt) => opt.setName("emoji2").setDescription("Emoji for second role")).addRoleOption((opt) => opt.setName("role3").setDescription("Third role (optional)")).addStringOption((opt) => opt.setName("emoji3").setDescription("Emoji for third role")).addStringOption(
-    (opt) => opt.setName("banner_gif").setDescription("URL of header banner image or animated GIF (optional)")
+    (opt) => opt.setName("mode").setDescription("Role selection behavior").addChoices(
+      { name: "Toggle (Normal select / unselect)", value: "TOGGLE" },
+      { name: "Unique (Pick one only, automatically swaps)", value: "UNIQUE" },
+      { name: "Verify (One-time claim only)", value: "VERIFY" }
+    )
   ).addStringOption(
-    (opt) => opt.setName("description").setDescription("Description text above buttons (optional)")
+    (opt) => opt.setName("banner_gif").setDescription("Header banner image or animated GIF URL")
+  ).addStringOption(
+    (opt) => opt.setName("description").setDescription("Description text above buttons")
   ).addChannelOption(
-    (opt) => opt.setName("channel").setDescription("Destination channel (defaults to current channel)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
+    (opt) => opt.setName("channel").setDescription("Destination channel (defaults to current)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
   ),
-  // 3. Rich Embed Publisher Command
+  // 3. Specialist: Social Video Fixer Command
+  new import_discord2.SlashCommandBuilder().setName("videofix").setDescription("Specialist: Social Video Embed Fixer (Twitter, TikTok, Instagram, Reddit, Bluesky, Threads)").addSubcommand(
+    (sub) => sub.setName("status").setDescription("Check video fixer status, supported providers, and settings")
+  ).addSubcommand(
+    (sub) => sub.setName("toggle").setDescription("Enable or disable video fixer server-wide")
+  ).addSubcommand(
+    (sub) => sub.setName("ignore").setDescription("Mute/unmute video fixing in a specific channel").addChannelOption(
+      (opt) => opt.setName("channel").setDescription("Target channel").setRequired(true).addChannelTypes(import_discord2.ChannelType.GuildText)
+    )
+  ).addSubcommand(
+    (sub) => sub.setName("deletebutton").setDescription("Toggle the author \u{1F5D1}\uFE0F Dismiss button on fixed previews").addBooleanOption(
+      (opt) => opt.setName("enabled").setDescription("Show dismiss button?").setRequired(true)
+    )
+  ),
+  // 4. Rich Embed Publisher
   new import_discord2.SlashCommandBuilder().setName("embed").setDescription("Create and publish a rich Discord embed to any channel").addChannelOption(
     (opt) => opt.setName("channel").setDescription("Destination channel").setRequired(true).addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
   ).addStringOption(
@@ -125,16 +160,6 @@ var SLASH_COMMANDS_DATA = [
     (opt) => opt.setName("image").setDescription("Large banner image or GIF URL")
   ).addStringOption(
     (opt) => opt.setName("thumbnail").setDescription("Small top-right thumbnail icon URL")
-  ),
-  // 4. Video Link Fixer Command
-  new import_discord2.SlashCommandBuilder().setName("videofix").setDescription("Manage social video link fixer (Twitter, TikTok, Instagram, Reddit)").addSubcommand(
-    (sub) => sub.setName("status").setDescription("Check video fixer status and enabled providers")
-  ).addSubcommand(
-    (sub) => sub.setName("toggle").setDescription("Enable or disable video fixer for this server")
-  ).addSubcommand(
-    (sub) => sub.setName("ignore").setDescription("Ignore or unignore video links in a specific channel").addChannelOption(
-      (opt) => opt.setName("channel").setDescription("Target channel").setRequired(true).addChannelTypes(import_discord2.ChannelType.GuildText)
-    )
   )
 ];
 async function handleSlashCommand(interaction) {
@@ -147,26 +172,38 @@ async function handleSlashCommand(interaction) {
     return interaction.reply({ embeds: [embed] });
   }
   if (commandName === "help") {
-    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u{1F916} Paradox Bot \u2014 Command & Feature Guide").setDescription(
-      "Manage your server directly from Discord using **Slash Commands** or via the **Web Dashboard**!"
+    const config = guildId ? await prisma.guildConfig.findUnique({ where: { id: guildId } }).catch(() => null) : null;
+    const prefix = config?.prefix || "$";
+    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u{1F916} Paradox Specialist Bot \u2014 Features & Commands").setDescription(
+      `Paradox is a dual-specialist bot built for **Visual Role Decks & Reaction Roles** and **High-Performance Social Video Link Fixes**.
+
+Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
     ).addFields(
       {
-        name: "\u{1F3AD} Reaction Roles & Role Decks",
-        value: "`/reactionrole add` \u2014 Attach an emoji role to any existing message\n`/reactionrole remove` \u2014 Delete an emoji role mapping\n`/reactionrole list` \u2014 List all active server role mappings\n`/roledeck` \u2014 Deploy an interactive visual role card with clickable buttons!"
+        name: "\u{1F3AD} 1. Visual Role Decks & Reaction Roles Specialist",
+        value: `\`/reactionrole add\` \u2014 Configure reaction role with custom modes (\`TOGGLE\`, \`UNIQUE\`, \`VERIFY\`, \`REVERSED\`)
+\`/reactionrole remove\` \u2014 Delete reaction role
+\`/reactionrole clean\` \u2014 Purge deleted message/role records
+\`/roledeck\` \u2014 Deploy visual card with clickable buttons & animated banner GIF
+\`${prefix}rr add <msgId> <emoji> <@role> [mode]\` \u2014 Quick text command`
       },
       {
-        name: "\u{1F4E2} Rich Discord Embeds",
-        value: "`/embed` \u2014 Create and post rich embeds with custom images, colors, and channels."
+        name: "\u{1F3A5} 2. Social Video Embed Fixer Specialist",
+        value: `Supports: **X/Twitter**, **TikTok**, **Instagram Reels**, **Reddit**, **Bluesky**, **Threads**.
+\`/videofix status\` \u2014 View fixer health & providers
+\`/videofix toggle\` \u2014 Enable/disable server-wide
+\`/videofix ignore\` \u2014 Mute in specific channels
+\`/videofix deletebutton\` \u2014 Toggle \u{1F5D1}\uFE0F author dismiss button
+\`${prefix}videofix toggle\` \u2014 Quick text toggle`
       },
       {
-        name: "\u{1F3A5} Social Video Embeds",
-        value: "`/videofix status` \u2014 View status for Twitter, TikTok, Instagram & Reddit\n`/videofix toggle` \u2014 Enable or disable video fixer for the server\n`/videofix ignore` \u2014 Mute video fixer in specific channels"
-      },
-      {
-        name: "\u2699\uFE0F Utilities",
-        value: "`/ping` \u2014 Check latency\n`/serverinfo` \u2014 Server stats & bot health\n`/dashboard` \u2014 Web link"
+        name: "\u{1F4E2} 3. Embeds & Utilities",
+        value: `\`/embed\` \u2014 Post rich embed messages
+\`${prefix}prefix <newPrefix>\` \u2014 Change server prefix
+\`/serverinfo\` \u2014 Server stats & bot role position
+\`/dashboard\` \u2014 Web dashboard link`
       }
-    ).setFooter({ text: "Paradox Bot \u2022 In-Discord Commands Ready" }).setTimestamp();
+    ).setFooter({ text: "Paradox \u2022 Specialist Discord Bot" }).setTimestamp();
     const row = new import_discord2.ActionRowBuilder().addComponents(
       new import_discord2.ButtonBuilder().setLabel("Open Web Dashboard").setStyle(import_discord2.ButtonStyle.Link).setURL(guildId ? `${appUrl}/dashboard/${guildId}` : `${appUrl}/dashboard`)
     );
@@ -179,11 +216,13 @@ async function handleSlashCommand(interaction) {
       const mappings = await prisma.reactionRole.findMany({ where: { guildId } }).catch(() => []);
       if (mappings.length === 0) {
         return interaction.reply({
-          content: "No reaction roles configured in this server. Use `/reactionrole add` or `/roledeck` to create one!",
+          content: "No reaction roles configured yet. Use `/reactionrole add` or `/roledeck`!",
           ephemeral: true
         });
       }
-      const listText = mappings.map((m) => `\u2022 ${m.emoji} **${m.roleName}** (${m.type}) in <#${m.channelId}> \u2014 Msg: \`${m.messageId}\``).join("\n");
+      const listText = mappings.map(
+        (m) => `\u2022 ${m.emoji} **${m.roleName}** [Mode: \`${m.mode || "TOGGLE"}\`] in <#${m.channelId}> \u2014 Msg: \`${m.messageId}\``
+      ).join("\n");
       const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(`\u{1F3AD} Active Reaction Roles (${mappings.length})`).setDescription(listText).setTimestamp();
       return interaction.reply({ embeds: [embed], ephemeral: true });
     }
@@ -193,39 +232,45 @@ async function handleSlashCommand(interaction) {
         ephemeral: true
       });
     }
+    if (subcommand === "clean") {
+      const all = await prisma.reactionRole.findMany({ where: { guildId } });
+      let purged = 0;
+      for (const m of all) {
+        const roleExists = guild.roles.cache.has(m.roleId);
+        if (!roleExists) {
+          await prisma.reactionRole.delete({ where: { id: m.id } });
+          purged++;
+        }
+      }
+      return interaction.reply({ content: `\u{1F9F9} Cleaned up **${purged}** orphaned role mapping(s).`, ephemeral: true });
+    }
     if (subcommand === "add") {
       const messageId = interaction.options.getString("message_id", true).trim();
       const emoji = interaction.options.getString("emoji", true).trim();
       const role = interaction.options.getRole("role", true);
+      const mode = interaction.options.getString("mode") || "TOGGLE";
+      const requiredRole = interaction.options.getRole("required_role");
       const desc = interaction.options.getString("description");
+      const badgeUrl = interaction.options.getString("badge_url");
+      const celebrationGif = interaction.options.getString("celebration_gif");
       const targetChannel = interaction.options.getChannel("channel") || interaction.channel;
-      if (!targetChannel) {
-        return interaction.reply({ content: "Invalid channel specified.", ephemeral: true });
-      }
+      if (!targetChannel) return interaction.reply({ content: "Invalid channel.", ephemeral: true });
       const botMember = await guild.members.fetchMe().catch(() => null);
       if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
-        return interaction.reply({
-          content: "\u274C The bot lacks the **Manage Roles** permission.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "\u274C Bot lacks **Manage Roles** permission.", ephemeral: true });
       }
       if (role.position >= botMember.roles.highest.position) {
         return interaction.reply({
-          content: `\u274C Role Hierarchy Error: **${role.name}** is higher than or equal to the bot's role. Drag the bot's role above **${role.name}** in Server Settings > Roles.`,
+          content: `\u274C Role Hierarchy Error: **${role.name}** is higher than or equal to the bot's role. Drag the bot's role above **${role.name}** in Server Settings.`,
           ephemeral: true
         });
       }
       if (role.managed) {
-        return interaction.reply({
-          content: "\u274C Cannot assign managed / integration roles.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "\u274C Cannot assign managed / integration roles.", ephemeral: true });
       }
       try {
         const msg = await targetChannel.messages.fetch(messageId).catch(() => null);
-        if (msg) {
-          await msg.react(emoji).catch(() => null);
-        }
+        if (msg) await msg.react(emoji).catch(() => null);
       } catch {
       }
       await prisma.reactionRole.create({
@@ -237,11 +282,19 @@ async function handleSlashCommand(interaction) {
           roleId: role.id,
           roleName: role.name,
           description: desc || null,
-          type: "REACTION"
+          type: "REACTION",
+          mode,
+          requiredRoleId: requiredRole?.id || null,
+          imageUrl: badgeUrl || null,
+          confirmGif: celebrationGif || null
         }
       });
       const embed = new import_discord2.EmbedBuilder().setColor(5763719).setTitle("\u2705 Reaction Role Configured!").setDescription(
-        `Reacting with ${emoji} on message \`${messageId}\` in <#${targetChannel.id}> will now grant/remove the **${role.name}** role.`
+        `Reacting with ${emoji} on message \`${messageId}\` will assign **${role.name}**.
+
+\u2022 **Mode:** \`${mode}\`
+` + (requiredRole ? `\u2022 **Prerequisite:** Requires <@&${requiredRole.id}>
+` : "") + (desc ? `\u2022 **Perks:** ${desc}` : "")
       ).setTimestamp();
       return interaction.reply({ embeds: [embed] });
     }
@@ -249,33 +302,20 @@ async function handleSlashCommand(interaction) {
       const messageId = interaction.options.getString("message_id", true).trim();
       const emoji = interaction.options.getString("emoji", true).trim();
       const deleted = await prisma.reactionRole.deleteMany({
-        where: {
-          guildId,
-          messageId,
-          emoji
-        }
+        where: { guildId, messageId, emoji }
       });
-      if (deleted.count === 0) {
-        return interaction.reply({
-          content: `No reaction role mapping found with emoji ${emoji} on message \`${messageId}\`.`,
-          ephemeral: true
-        });
-      }
       return interaction.reply({
-        content: `\u2705 Successfully removed ${deleted.count} reaction role mapping(s) for message \`${messageId}\`.`
+        content: `\u2705 Removed ${deleted.count} mapping(s) for ${emoji} on message \`${messageId}\`.`,
+        ephemeral: true
       });
     }
   }
   if (commandName === "roledeck") {
     if (!guild || !guildId) return interaction.reply({ content: "Must be used in a server.", ephemeral: true });
-    if (!isManager) {
-      return interaction.reply({
-        content: "\u26D4 You need the **Manage Server** permission to deploy role decks.",
-        ephemeral: true
-      });
-    }
+    if (!isManager) return interaction.reply({ content: "\u26D4 You need the **Manage Server** permission.", ephemeral: true });
     const title = interaction.options.getString("title", true);
     const desc = interaction.options.getString("description") || "Click the buttons below to claim or remove roles:";
+    const mode = interaction.options.getString("mode") || "TOGGLE";
     const bannerGif = interaction.options.getString("banner_gif");
     const targetChannel = interaction.options.getChannel("channel") || interaction.channel;
     if (!targetChannel) return interaction.reply({ content: "Invalid channel.", ephemeral: true });
@@ -291,25 +331,23 @@ async function handleSlashCommand(interaction) {
     if (r3 && e3) deckRoles.push({ role: r3, emoji: e3 });
     const botMember = await guild.members.fetchMe().catch(() => null);
     if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
-      return interaction.reply({ content: "\u274C The bot lacks **Manage Roles** permission.", ephemeral: true });
+      return interaction.reply({ content: "\u274C Bot lacks **Manage Roles** permission.", ephemeral: true });
     }
     for (const item of deckRoles) {
       if (item.role.position >= botMember.roles.highest.position) {
         return interaction.reply({
-          content: `\u274C Role Hierarchy Error: **${item.role.name}** is higher than or equal to the bot's role. Please reorder roles in Discord Server Settings.`,
+          content: `\u274C Role Hierarchy Error: **${item.role.name}** is higher than or equal to the bot's role.`,
           ephemeral: true
         });
       }
     }
-    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(`\u2728 ${title}`).setDescription(desc).setFooter({ text: "Paradox Visual Role Deck \u2022 Click below to Claim or Remove" }).setTimestamp();
-    if (bannerGif) {
-      embed.setImage(bannerGif);
-    }
+    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(`\u2728 ${title}`).setDescription(desc).setFooter({ text: `Paradox Role Deck \u2022 Mode: ${mode}` }).setTimestamp();
+    if (bannerGif) embed.setImage(bannerGif);
     const row = new import_discord2.ActionRowBuilder();
     for (const item of deckRoles) {
       embed.addFields({
         name: `${item.emoji} ${item.role.name}`,
-        value: `Click button below to toggle`,
+        value: "Click button below to toggle",
         inline: true
       });
       row.addComponents(
@@ -327,38 +365,13 @@ async function handleSlashCommand(interaction) {
           roleId: item.role.id,
           roleName: item.role.name,
           type: "BUTTON",
+          mode,
           bannerUrl: bannerGif || null
         }
       });
     }
     return interaction.reply({
-      content: `\u{1F389} Visual Role Deck deployed to <#${targetChannel.id}> with **${deckRoles.length}** interactive role buttons!`,
-      ephemeral: true
-    });
-  }
-  if (commandName === "embed") {
-    if (!guild || !guildId) return interaction.reply({ content: "Must be used in a server.", ephemeral: true });
-    if (!isManager) {
-      return interaction.reply({ content: "\u26D4 You need the **Manage Server** permission.", ephemeral: true });
-    }
-    const targetChannel = interaction.options.getChannel("channel", true);
-    const title = interaction.options.getString("title", true);
-    const description = interaction.options.getString("description", true);
-    const colorHex = interaction.options.getString("color") || "#5865F2";
-    const image = interaction.options.getString("image");
-    const thumbnail = interaction.options.getString("thumbnail");
-    const embed = new import_discord2.EmbedBuilder().setTitle(title).setDescription(description).setTimestamp();
-    try {
-      const cleanHex = colorHex.replace("#", "");
-      embed.setColor(parseInt(cleanHex, 16));
-    } catch {
-      embed.setColor(5793266);
-    }
-    if (image) embed.setImage(image);
-    if (thumbnail) embed.setThumbnail(thumbnail);
-    await targetChannel.send({ embeds: [embed] });
-    return interaction.reply({
-      content: `\u2705 Embed published successfully to <#${targetChannel.id}>!`,
+      content: `\u{1F389} Visual Role Deck deployed to <#${targetChannel.id}> with mode \`${mode}\`!`,
       ephemeral: true
     });
   }
@@ -368,20 +381,22 @@ async function handleSlashCommand(interaction) {
     const config = await prisma.guildConfig.findUnique({ where: { id: guildId } }).catch(() => null);
     if (subcommand === "status") {
       const enabled = config?.videoFixerEnabled ?? true;
-      let providers = ["twitter", "tiktok", "instagram", "reddit"];
+      const deleteBtn = config?.videoFixerDeleteButton ?? true;
+      let providers = ["twitter", "tiktok", "instagram", "reddit", "bluesky", "threads"];
       try {
         if (config?.videoFixerProviders) providers = JSON.parse(config.videoFixerProviders);
       } catch {
       }
-      const embed = new import_discord2.EmbedBuilder().setColor(enabled ? 5763719 : 15548997).setTitle("\u{1F3A5} Video Link Fixer Status").setDescription(`Video Fixer is currently **${enabled ? "Active \u2705" : "Disabled \u274C"}**`).addFields({
+      const embed = new import_discord2.EmbedBuilder().setColor(enabled ? 5763719 : 15548997).setTitle("\u{1F3A5} Specialist: Social Video Fixer Engine").setDescription(
+        `Status: **${enabled ? "Active \u2705" : "Disabled \u274C"}**
+Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**`
+      ).addFields({
         name: "Supported Platforms",
         value: providers.map((p) => `\u2022 **${p.toUpperCase()}**`).join("\n")
       }).setTimestamp();
       return interaction.reply({ embeds: [embed] });
     }
-    if (!isManager) {
-      return interaction.reply({ content: "\u26D4 You need **Manage Server** permission.", ephemeral: true });
-    }
+    if (!isManager) return interaction.reply({ content: "\u26D4 You need **Manage Server** permission.", ephemeral: true });
     if (subcommand === "toggle") {
       const current = config?.videoFixerEnabled ?? true;
       const updated = await prisma.guildConfig.update({
@@ -389,7 +404,17 @@ async function handleSlashCommand(interaction) {
         data: { videoFixerEnabled: !current }
       });
       return interaction.reply({
-        content: `\u{1F3A5} Video Fixer has been **${updated.videoFixerEnabled ? "Enabled \u2705" : "Disabled \u274C"}** for this server!`
+        content: `\u{1F3A5} Video Fixer is now **${updated.videoFixerEnabled ? "Enabled \u2705" : "Disabled \u274C"}**!`
+      });
+    }
+    if (subcommand === "deletebutton") {
+      const enabled = interaction.options.getBoolean("enabled", true);
+      await prisma.guildConfig.update({
+        where: { id: guildId },
+        data: { videoFixerDeleteButton: enabled }
+      });
+      return interaction.reply({
+        content: `\u{1F5D1}\uFE0F Author Dismiss Button is now **${enabled ? "Enabled" : "Disabled"}**.`
       });
     }
     if (subcommand === "ignore") {
@@ -405,20 +430,40 @@ async function handleSlashCommand(interaction) {
           where: { id: guildId },
           data: { videoFixerIgnoredChannels: JSON.stringify(ignored) }
         });
-        return interaction.reply({ content: `\u2705 <#${targetChannel.id}> is now **unignored** (videos will be fixed).` });
+        return interaction.reply({ content: `\u2705 <#${targetChannel.id}> is now **unignored**.` });
       } else {
         ignored.push(targetChannel.id);
         await prisma.guildConfig.update({
           where: { id: guildId },
           data: { videoFixerIgnoredChannels: JSON.stringify(ignored) }
         });
-        return interaction.reply({ content: `\u{1F507} <#${targetChannel.id}> is now **ignored** by the video fixer.` });
+        return interaction.reply({ content: `\u{1F507} <#${targetChannel.id}> is now **ignored**.` });
       }
     }
   }
+  if (commandName === "embed") {
+    if (!guild || !guildId) return interaction.reply({ content: "Must be used in a server.", ephemeral: true });
+    if (!isManager) return interaction.reply({ content: "\u26D4 You need the **Manage Server** permission.", ephemeral: true });
+    const targetChannel = interaction.options.getChannel("channel", true);
+    const title = interaction.options.getString("title", true);
+    const description = interaction.options.getString("description", true);
+    const colorHex = interaction.options.getString("color") || "#5865F2";
+    const image = interaction.options.getString("image");
+    const thumbnail = interaction.options.getString("thumbnail");
+    const embed = new import_discord2.EmbedBuilder().setTitle(title).setDescription(description).setTimestamp();
+    try {
+      embed.setColor(parseInt(colorHex.replace("#", ""), 16));
+    } catch {
+      embed.setColor(5793266);
+    }
+    if (image) embed.setImage(image);
+    if (thumbnail) embed.setThumbnail(thumbnail);
+    await targetChannel.send({ embeds: [embed] });
+    return interaction.reply({ content: `\u2705 Embed published to <#${targetChannel.id}>!`, ephemeral: true });
+  }
   if (commandName === "dashboard") {
     const dashboardUrl = guildId ? `${appUrl}/dashboard/${guildId}` : `${appUrl}/dashboard`;
-    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u2699\uFE0F Server Dashboard").setDescription(`Configure Reaction Roles, Embeds, and Video Fixer for **${guild?.name}**:`).setTimestamp();
+    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u2699\uFE0F Server Dashboard").setDescription(`Configure Paradox for **${guild?.name}**:`).setTimestamp();
     const row = new import_discord2.ActionRowBuilder().addComponents(
       new import_discord2.ButtonBuilder().setLabel("Open Web Dashboard").setStyle(import_discord2.ButtonStyle.Link).setURL(dashboardUrl)
     );
@@ -428,11 +473,10 @@ async function handleSlashCommand(interaction) {
     if (!guild) return interaction.reply({ content: "Must be used in a server.", ephemeral: true });
     const botMember = await guild.members.fetchMe().catch(() => null);
     const botRoleName = botMember?.roles.highest.name || "None";
-    const memberCount = guild.memberCount;
     const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(`\u{1F4CA} Server Info: ${guild.name}`).setThumbnail(guild.iconURL() || null).addFields(
       { name: "Server ID", value: guild.id, inline: true },
-      { name: "Total Members", value: `${memberCount}`, inline: true },
-      { name: "Bot Highest Role", value: botRoleName, inline: true }
+      { name: "Total Members", value: `${guild.memberCount}`, inline: true },
+      { name: "Bot Role", value: botRoleName, inline: true }
     ).setFooter({ text: "Paradox Bot" }).setTimestamp();
     return interaction.reply({ embeds: [embed] });
   }
@@ -450,49 +494,69 @@ async function handleTextCommand(message, prefix) {
     return message.reply(`\u{1F3D3} Pong! WebSocket Latency: **${ping}ms**`);
   }
   if (command === "help") {
-    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u{1F916} Paradox Bot \u2014 Help & Commands").setDescription(
-      "You can configure everything directly from Discord or use the companion dashboard!"
+    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u{1F916} Paradox Specialist Bot \u2014 Command Guide").setDescription(
+      `Current Server Prefix: \`${prefix}\`
+
+Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
     ).addFields(
       {
-        name: "Commands",
-        value: `\`${prefix}ping\` \u2014 Check latency
-\`${prefix}rr add <msgId> <emoji> <@role>\` \u2014 Create reaction role
-\`${prefix}rr remove <msgId> <emoji>\` \u2014 Delete reaction role
-\`${prefix}embed <title> | <desc>\` \u2014 Quick embed message
-\`${prefix}videofix toggle\` \u2014 Toggle social video fixer
-\`${prefix}dashboard\` \u2014 Get web dashboard link`
+        name: "\u{1F3AD} Roles Commands",
+        value: `\`${prefix}rr add <msgId> <emoji> <@role> [TOGGLE|UNIQUE|VERIFY]\` \u2014 Add reaction role
+\`${prefix}rr remove <msgId> <emoji>\` \u2014 Remove mapping
+\`${prefix}rr list\` \u2014 List active mappings
+\`${prefix}rr clean\` \u2014 Clean deleted roles`
       },
       {
-        name: "Slash Commands (Recommended)",
-        value: "Type **`/`** in Discord to see interactive commands: `/reactionrole`, `/roledeck`, `/embed`, `/help`!"
+        name: "\u{1F3A5} Video Fixer Commands",
+        value: `\`${prefix}videofix status\` \u2014 Fixer status & platforms
+\`${prefix}videofix toggle\` \u2014 Toggle on/off
+\`${prefix}videofix deletebtn <on|off>\` \u2014 Toggle author \u{1F5D1}\uFE0F button`
+      },
+      {
+        name: "\u{1F4E2} Utilities",
+        value: `\`${prefix}prefix <newPrefix>\` \u2014 Change server prefix
+\`${prefix}embed <title> | <description>\` \u2014 Post quick embed
+\`${prefix}dashboard\` \u2014 Web dashboard link`
       }
-    ).setTimestamp();
+    ).setFooter({ text: "Type '/' to use interactive Discord slash commands!" }).setTimestamp();
     return message.reply({ embeds: [embed] });
+  }
+  if (command === "prefix") {
+    if (!guild || !member) return;
+    if (!isManager) return message.reply("\u26D4 You need the **Manage Server** permission to change prefix.");
+    const newPrefix = args[1]?.trim();
+    if (!newPrefix || newPrefix.length > 5) {
+      return message.reply(`Usage: \`${prefix}prefix <newPrefix>\` (1-5 characters)`);
+    }
+    await prisma.guildConfig.update({
+      where: { id: guild.id },
+      data: { prefix: newPrefix }
+    });
+    return message.reply(`\u2705 Command prefix updated! The new prefix is now \`${newPrefix}\` (e.g. \`${newPrefix}help\`).`);
   }
   if (command === "rr" || command === "reactionrole") {
     if (!guild || !member) return;
-    if (!isManager) {
-      return message.reply("\u26D4 You need the **Manage Server** permission to configure reaction roles.");
-    }
+    if (!isManager) return message.reply("\u26D4 You need the **Manage Server** permission.");
     const sub = args[1]?.toLowerCase();
     if (sub === "add") {
       const msgId = args[2];
       const emoji = args[3];
       const roleMention = message.mentions.roles.first() || guild.roles.cache.get(args[4]);
+      const mode = args[5]?.toUpperCase() || "TOGGLE";
       if (!msgId || !emoji || !roleMention) {
-        return message.reply(`Usage: \`${prefix}rr add <message_id> <emoji> <@role>\``);
+        return message.reply(
+          `Usage: \`${prefix}rr add <message_id> <emoji> <@role> [TOGGLE|UNIQUE|VERIFY]\``
+        );
       }
       const botMember = await guild.members.fetchMe().catch(() => null);
       if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
-        return message.reply("\u274C The bot is missing the **Manage Roles** permission.");
+        return message.reply("\u274C The bot is missing **Manage Roles** permission.");
       }
       if (roleMention.position >= botMember.roles.highest.position) {
         return message.reply(`\u274C **${roleMention.name}** is positioned higher than the bot's role.`);
       }
       const targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
-      if (targetMsg) {
-        await targetMsg.react(emoji).catch(() => null);
-      }
+      if (targetMsg) await targetMsg.react(emoji).catch(() => null);
       await prisma.reactionRole.create({
         data: {
           guildId: guild.id,
@@ -501,10 +565,13 @@ async function handleTextCommand(message, prefix) {
           emoji,
           roleId: roleMention.id,
           roleName: roleMention.name,
-          type: "REACTION"
+          type: "REACTION",
+          mode
         }
       });
-      return message.reply(`\u2705 Reaction role added! Reacting with ${emoji} on \`${msgId}\` will grant **${roleMention.name}**.`);
+      return message.reply(
+        `\u2705 Reaction role configured with mode \`${mode}\`! Reacting with ${emoji} grants **${roleMention.name}**.`
+      );
     }
     if (sub === "remove") {
       const msgId = args[2];
@@ -513,12 +580,59 @@ async function handleTextCommand(message, prefix) {
       await prisma.reactionRole.deleteMany({
         where: { guildId: guild.id, messageId: msgId, emoji }
       });
-      return message.reply(`\u2705 Removed reaction role mapping for ${emoji} on message \`${msgId}\`.`);
+      return message.reply(`\u2705 Removed mapping for ${emoji} on message \`${msgId}\`.`);
     }
+    if (sub === "clean") {
+      const all = await prisma.reactionRole.findMany({ where: { guildId: guild.id } });
+      let purged = 0;
+      for (const m of all) {
+        if (!guild.roles.cache.has(m.roleId)) {
+          await prisma.reactionRole.delete({ where: { id: m.id } });
+          purged++;
+        }
+      }
+      return message.reply(`\u{1F9F9} Cleaned up **${purged}** deleted role mapping(s).`);
+    }
+    if (sub === "list") {
+      const all = await prisma.reactionRole.findMany({ where: { guildId: guild.id } });
+      if (all.length === 0) return message.reply("No reaction roles configured yet.");
+      const summary = all.map((m) => `\u2022 ${m.emoji} **${m.roleName}** (\`${m.mode || "TOGGLE"}\`)`).join("\n");
+      return message.reply(`**Active Roles:**
+${summary}`);
+    }
+  }
+  if (command === "videofix") {
+    if (!guild || !member) return;
+    const sub = args[1]?.toLowerCase();
+    if (sub === "toggle") {
+      if (!isManager) return message.reply("\u26D4 You need **Manage Server** permission.");
+      const config2 = await prisma.guildConfig.findUnique({ where: { id: guild.id } });
+      const current = config2?.videoFixerEnabled ?? true;
+      const updated = await prisma.guildConfig.update({
+        where: { id: guild.id },
+        data: { videoFixerEnabled: !current }
+      });
+      return message.reply(`\u{1F3A5} Video Fixer is now **${updated.videoFixerEnabled ? "Active" : "Disabled"}**.`);
+    }
+    if (sub === "deletebtn") {
+      if (!isManager) return message.reply("\u26D4 You need **Manage Server** permission.");
+      const val = args[2]?.toLowerCase() === "on";
+      await prisma.guildConfig.update({
+        where: { id: guild.id },
+        data: { videoFixerDeleteButton: val }
+      });
+      return message.reply(`\u{1F5D1}\uFE0F Author dismiss button is now **${val ? "Enabled" : "Disabled"}**.`);
+    }
+    const config = await prisma.guildConfig.findUnique({ where: { id: guild.id } });
+    const enabled = config?.videoFixerEnabled ?? true;
+    return message.reply(
+      `\u{1F3A5} **Social Video Fixer Engine:** ${enabled ? "Active \u2705" : "Disabled \u274C"}
+Supported: Twitter/X, TikTok, Instagram Reels, Reddit, Bluesky, Threads`
+    );
   }
   if (command === "embed") {
     if (!guild || !member) return;
-    if (!isManager) return message.reply("\u26D4 You need the **Manage Server** permission.");
+    if (!isManager) return message.reply("\u26D4 You need **Manage Server** permission.");
     const raw = content.slice(command.length).trim();
     const parts = raw.split("|");
     const title = parts[0]?.trim();
@@ -530,21 +644,7 @@ async function handleTextCommand(message, prefix) {
     return message.channel.send({ embeds: [embed] });
   }
   if (command === "dashboard") {
-    const targetUrl = guild ? `${appUrl}/dashboard/${guild.id}` : `${appUrl}/dashboard`;
-    return message.reply(`Configure Paradox in the web dashboard: ${targetUrl}`);
-  }
-  if (command === "videofix") {
-    if (!guild || !member) return;
-    if (args[1]?.toLowerCase() === "toggle") {
-      if (!isManager) return message.reply("\u26D4 You need the **Manage Server** permission.");
-      const config = await prisma.guildConfig.findUnique({ where: { id: guild.id } });
-      const current = config?.videoFixerEnabled ?? true;
-      const updated = await prisma.guildConfig.update({
-        where: { id: guild.id },
-        data: { videoFixerEnabled: !current }
-      });
-      return message.reply(`\u{1F3A5} Video Fixer is now **${updated.videoFixerEnabled ? "Active" : "Disabled"}**.`);
-    }
+    return message.reply(`Manage Paradox in the web dashboard: ${appUrl}/dashboard/${guild?.id}`);
   }
 }
 
@@ -571,10 +671,11 @@ async function ensureDatabaseSchema(prisma2) {
         "name" TEXT NOT NULL,
         "icon" TEXT,
         "botJoined" BOOLEAN NOT NULL DEFAULT true,
-        "prefix" TEXT NOT NULL DEFAULT '!',
+        "prefix" TEXT NOT NULL DEFAULT '$',
         "videoFixerEnabled" BOOLEAN NOT NULL DEFAULT true,
-        "videoFixerProviders" TEXT NOT NULL DEFAULT '["twitter","tiktok","instagram","reddit"]',
+        "videoFixerProviders" TEXT NOT NULL DEFAULT '["twitter","tiktok","instagram","reddit","bluesky","threads"]',
         "videoFixerIgnoredChannels" TEXT NOT NULL DEFAULT '[]',
+        "videoFixerDeleteButton" BOOLEAN NOT NULL DEFAULT true,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -590,6 +691,8 @@ async function ensureDatabaseSchema(prisma2) {
         "roleName" TEXT NOT NULL,
         "description" TEXT,
         "type" TEXT NOT NULL DEFAULT 'REACTION',
+        "mode" TEXT NOT NULL DEFAULT 'TOGGLE',
+        "requiredRoleId" TEXT,
         "imageUrl" TEXT,
         "bannerUrl" TEXT,
         "confirmGif" TEXT,
@@ -633,6 +736,15 @@ async function ensureDatabaseSchema(prisma2) {
       );
     `);
     await prisma2.$executeRawUnsafe(`
+      ALTER TABLE "GuildConfig" ADD COLUMN IF NOT EXISTS "videoFixerDeleteButton" BOOLEAN DEFAULT true;
+    `).catch(() => null);
+    await prisma2.$executeRawUnsafe(`
+      ALTER TABLE "ReactionRole" ADD COLUMN IF NOT EXISTS "mode" TEXT DEFAULT 'TOGGLE';
+    `).catch(() => null);
+    await prisma2.$executeRawUnsafe(`
+      ALTER TABLE "ReactionRole" ADD COLUMN IF NOT EXISTS "requiredRoleId" TEXT;
+    `).catch(() => null);
+    await prisma2.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "ReactionRole_guildId_idx" ON "ReactionRole"("guildId");
     `).catch(() => null);
     await prisma2.$executeRawUnsafe(`
@@ -644,7 +756,7 @@ async function ensureDatabaseSchema(prisma2) {
     await prisma2.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "AuditLog_guildId_idx" ON "AuditLog"("guildId");
     `).catch(() => null);
-    console.log("[Database] All tables and indexes are ready!");
+    console.log("[Database] Specialist tables and indexes are ready!");
   } catch (err) {
     console.error("[Database] Automatic schema verification warning:", err);
   }
@@ -694,7 +806,7 @@ async function onReady(client) {
 var import_discord4 = require("discord.js");
 
 // src/bot/services/videoTransformer.ts
-function extractAndTransformVideoUrls(content, enabledProviders = ["twitter", "tiktok", "instagram", "reddit"]) {
+function extractAndTransformVideoUrls(content, enabledProviders = ["twitter", "tiktok", "instagram", "reddit", "bluesky", "threads"]) {
   if (!content || typeof content !== "string") return [];
   const results = [];
   const activeProviders = new Set(enabledProviders);
@@ -783,6 +895,34 @@ function extractAndTransformVideoUrls(content, enabledProviders = ["twitter", "t
           }
         }
       }
+      if (activeProviders.has("bluesky")) {
+        const isBluesky = host === "bsky.app" || host === "www.bsky.app";
+        const isAlreadyTransformed = host.includes("bskyx.app") || host.includes("fxbsky");
+        if (isBluesky && !isAlreadyTransformed && pathname.includes("/post/")) {
+          const transformed = new URL(rawUrl);
+          transformed.hostname = "bskyx.app";
+          results.push({
+            originalUrl: rawUrl,
+            transformedUrl: transformed.toString(),
+            provider: "bluesky"
+          });
+          continue;
+        }
+      }
+      if (activeProviders.has("threads")) {
+        const isThreads = host === "threads.net" || host === "www.threads.net";
+        const isAlreadyTransformed = host.includes("fixthreads");
+        if (isThreads && !isAlreadyTransformed && pathname.includes("/post/")) {
+          const transformed = new URL(rawUrl);
+          transformed.hostname = "fixthreads.net";
+          results.push({
+            originalUrl: rawUrl,
+            transformedUrl: transformed.toString(),
+            provider: "threads"
+          });
+          continue;
+        }
+      }
     } catch {
       continue;
     }
@@ -800,7 +940,7 @@ async function onMessageCreate(message) {
     const config = await prisma.guildConfig.findUnique({
       where: { id: guildId }
     }).catch(() => null);
-    const prefix = config?.prefix || "!";
+    const prefix = config?.prefix || "$";
     if (message.content.startsWith(prefix)) {
       await handleTextCommand(message, prefix);
       return;
@@ -813,11 +953,13 @@ async function onMessageCreate(message) {
       ignoredChannels = [];
     }
     if (ignoredChannels.includes(channelId)) return;
-    let enabledProviders = ["twitter", "tiktok", "instagram", "reddit"];
+    let enabledProviders = ["twitter", "tiktok", "instagram", "reddit", "bluesky", "threads"];
     try {
-      enabledProviders = JSON.parse(config.videoFixerProviders || "[]");
+      if (config.videoFixerProviders) {
+        enabledProviders = JSON.parse(config.videoFixerProviders);
+      }
     } catch {
-      enabledProviders = ["twitter", "tiktok", "instagram", "reddit"];
+      enabledProviders = ["twitter", "tiktok", "instagram", "reddit", "bluesky", "threads"];
     }
     if (enabledProviders.length === 0) return;
     const transformedLinks = extractAndTransformVideoUrls(message.content, enabledProviders);
@@ -825,11 +967,17 @@ async function onMessageCreate(message) {
     const linksList = transformedLinks.map((t) => t.transformedUrl).join("\n");
     const replyText = `\u{1F3A5} **Enhanced Video Embed** (shared by <@${message.author.id}>):
 ${linksList}`;
-    await message.channel.send({
+    const sendPayload = {
       content: replyText,
       allowedMentions: { users: [] }
-      // Avoid unwanted pings
-    });
+    };
+    if (config.videoFixerDeleteButton !== false) {
+      const row = new import_discord4.ActionRowBuilder().addComponents(
+        new import_discord4.ButtonBuilder().setCustomId(`rr_del_video_${message.author.id}`).setLabel("Dismiss Preview").setEmoji("\u{1F5D1}\uFE0F").setStyle(import_discord4.ButtonStyle.Secondary)
+      );
+      sendPayload.components = [row];
+    }
+    await message.channel.send(sendPayload);
     const botMember = message.guild.members.me;
     if (botMember && botMember.permissionsIn(message.channel.id).has(import_discord4.PermissionFlagsBits.ManageMessages)) {
       await message.suppressEmbeds(true).catch(() => null);
@@ -986,6 +1134,20 @@ async function onInteractionCreate(interaction) {
   }
   if (!interaction.inGuild() || !interaction.guild) return;
   if (interaction.isButton()) {
+    if (interaction.customId.startsWith("rr_del_video_")) {
+      const authorId = interaction.customId.replace("rr_del_video_", "");
+      const isAuthor = interaction.user.id === authorId;
+      const isMod = interaction.memberPermissions?.has(import_discord5.PermissionsBitField.Flags.ManageMessages) || interaction.memberPermissions?.has(import_discord5.PermissionsBitField.Flags.Administrator);
+      if (isAuthor || isMod) {
+        await interaction.message.delete().catch(() => null);
+        return;
+      } else {
+        return interaction.reply({
+          content: "\u274C Only the author who shared this link or server moderators can dismiss this preview.",
+          ephemeral: true
+        });
+      }
+    }
     if (interaction.customId.startsWith("rr_role_")) {
       const roleId = interaction.customId.replace("rr_role_", "");
       await handleRoleToggle(interaction, roleId);
@@ -1035,37 +1197,64 @@ async function handleRoleToggle(interaction, roleId) {
         roleId: role.id
       }
     });
+    const mode = mapping?.mode || "TOGGLE";
+    if (mapping?.requiredRoleId && !member.roles.cache.has(mapping.requiredRoleId)) {
+      return interaction.reply({
+        content: `\u{1F512} **Prerequisite Required:** You must have the <@&${mapping.requiredRoleId}> role before you can claim **${role.name}**.`,
+        ephemeral: true
+      });
+    }
     const hasRole = member.roles.cache.has(role.id);
+    if (mode === "VERIFY") {
+      if (hasRole) {
+        return interaction.reply({
+          content: `\u2705 You have already verified and claimed the **${role.name}** role.`,
+          ephemeral: true
+        });
+      }
+      await member.roles.add(role, "Paradox Verification role claim");
+      return sendRoleClaimResponse(interaction, role, mapping);
+    }
+    if (mode === "REVERSED") {
+      if (hasRole) {
+        await member.roles.remove(role, "Paradox Reversed role unclaim");
+        return sendRoleRemoveResponse(interaction, role, mapping);
+      } else {
+        return interaction.reply({
+          content: `\u2139\uFE0F You do not currently have the **${role.name}** role.`,
+          ephemeral: true
+        });
+      }
+    }
+    if (mode === "UNIQUE") {
+      if (hasRole) {
+        await member.roles.remove(role, "Paradox Unique role toggle");
+        return sendRoleRemoveResponse(interaction, role, mapping);
+      } else {
+        if (mapping?.messageId) {
+          const siblingMappings = await prisma.reactionRole.findMany({
+            where: {
+              guildId: guild.id,
+              messageId: mapping.messageId,
+              roleId: { not: role.id }
+            }
+          });
+          for (const sib of siblingMappings) {
+            if (member.roles.cache.has(sib.roleId)) {
+              await member.roles.remove(sib.roleId, "Paradox Unique mode swap").catch(() => null);
+            }
+          }
+        }
+        await member.roles.add(role, "Paradox Unique mode claim");
+        return sendRoleClaimResponse(interaction, role, mapping);
+      }
+    }
     if (hasRole) {
       await member.roles.remove(role, "Visual Role Deck unclaim");
-      const removeEmbed = new import_discord5.EmbedBuilder().setColor(15548997).setTitle(`Role Removed: ${role.name}`).setDescription(`You have removed the **${role.name}** role from your profile.`).setTimestamp();
-      if (mapping?.imageUrl) {
-        removeEmbed.setThumbnail(mapping.imageUrl);
-      }
-      return interaction.reply({
-        embeds: [removeEmbed],
-        ephemeral: true
-      });
+      return sendRoleRemoveResponse(interaction, role, mapping);
     } else {
       await member.roles.add(role, "Visual Role Deck claim");
-      const addEmbed = new import_discord5.EmbedBuilder().setColor(role.color || 5793266).setTitle(`\u2728 Role Claimed: ${role.name}`).setDescription(
-        mapping?.description ? `You received the **${role.name}** role!
-
-**Perks & Details:**
-${mapping.description}` : `You have successfully received the **${role.name}** role.`
-      ).setTimestamp();
-      if (mapping?.imageUrl) {
-        addEmbed.setThumbnail(mapping.imageUrl);
-      }
-      if (mapping?.confirmGif) {
-        addEmbed.setImage(mapping.confirmGif);
-      } else if (mapping?.imageUrl && !mapping?.confirmGif) {
-        addEmbed.setImage(mapping.imageUrl);
-      }
-      return interaction.reply({
-        embeds: [addEmbed],
-        ephemeral: true
-      });
+      return sendRoleClaimResponse(interaction, role, mapping);
     }
   } catch (err) {
     console.error("[Bot:RoleInteraction] Error toggling role:", err);
@@ -1076,6 +1265,36 @@ ${mapping.description}` : `You have successfully received the **${role.name}** r
       });
     }
   }
+}
+async function sendRoleClaimResponse(interaction, role, mapping) {
+  const addEmbed = new import_discord5.EmbedBuilder().setColor(role.color || 5793266).setTitle(`\u2728 Role Claimed: ${role.name}`).setDescription(
+    mapping?.description ? `You received the **${role.name}** role!
+
+**Perks & Details:**
+${mapping.description}` : `You have successfully received the **${role.name}** role.`
+  ).setTimestamp();
+  if (mapping?.imageUrl) {
+    addEmbed.setThumbnail(mapping.imageUrl);
+  }
+  if (mapping?.confirmGif) {
+    addEmbed.setImage(mapping.confirmGif);
+  } else if (mapping?.imageUrl && !mapping?.confirmGif) {
+    addEmbed.setImage(mapping.imageUrl);
+  }
+  return interaction.reply({
+    embeds: [addEmbed],
+    ephemeral: true
+  });
+}
+async function sendRoleRemoveResponse(interaction, role, mapping) {
+  const removeEmbed = new import_discord5.EmbedBuilder().setColor(15548997).setTitle(`Role Removed: ${role.name}`).setDescription(`You have removed the **${role.name}** role from your profile.`).setTimestamp();
+  if (mapping?.imageUrl) {
+    removeEmbed.setThumbnail(mapping.imageUrl);
+  }
+  return interaction.reply({
+    embeds: [removeEmbed],
+    ephemeral: true
+  });
 }
 
 // src/bot/index.ts

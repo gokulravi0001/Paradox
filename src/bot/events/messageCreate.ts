@@ -1,4 +1,10 @@
-import { Message, PermissionFlagsBits } from "discord.js";
+import {
+  Message,
+  PermissionFlagsBits,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} from "discord.js";
 import { prisma } from "@/lib/prisma";
 import { extractAndTransformVideoUrls } from "../services/videoTransformer";
 import { handleTextCommand } from "../commands";
@@ -17,9 +23,10 @@ export async function onMessageCreate(message: Message) {
       where: { id: guildId },
     }).catch(() => null);
 
-    const prefix = config?.prefix || "!";
+    // Default prefix is now $
+    const prefix = config?.prefix || "$";
 
-    // 2. Check for Prefix Commands (e.g. !help, !ping, !roles, !dashboard)
+    // 2. Check for Prefix Commands (e.g. $help, $ping, $rr, $roledeck, $embed, $videofix)
     if (message.content.startsWith(prefix)) {
       await handleTextCommand(message, prefix);
       return;
@@ -39,11 +46,13 @@ export async function onMessageCreate(message: Message) {
     if (ignoredChannels.includes(channelId)) return;
 
     // Get enabled providers
-    let enabledProviders: string[] = ["twitter", "tiktok", "instagram", "reddit"];
+    let enabledProviders: string[] = ["twitter", "tiktok", "instagram", "reddit", "bluesky", "threads"];
     try {
-      enabledProviders = JSON.parse(config.videoFixerProviders || "[]");
+      if (config.videoFixerProviders) {
+        enabledProviders = JSON.parse(config.videoFixerProviders);
+      }
     } catch {
-      enabledProviders = ["twitter", "tiktok", "instagram", "reddit"];
+      enabledProviders = ["twitter", "tiktok", "instagram", "reddit", "bluesky", "threads"];
     }
 
     if (enabledProviders.length === 0) return;
@@ -52,16 +61,29 @@ export async function onMessageCreate(message: Message) {
     const transformedLinks = extractAndTransformVideoUrls(message.content, enabledProviders);
     if (transformedLinks.length === 0) return;
 
-    // Post embed links
+    // Post embed links with optional 🗑️ delete button for author
     const linksList = transformedLinks.map((t) => t.transformedUrl).join("\n");
     const replyText = `🎥 **Enhanced Video Embed** (shared by <@${message.author.id}>):\n${linksList}`;
 
-    await message.channel.send({
+    const sendPayload: Record<string, unknown> = {
       content: replyText,
-      allowedMentions: { users: [] }, // Avoid unwanted pings
-    });
+      allowedMentions: { users: [] },
+    };
 
-    // If bot has permission, suppress default embed on original message to avoid duplicate previews
+    if (config.videoFixerDeleteButton !== false) {
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`rr_del_video_${message.author.id}`)
+          .setLabel("Dismiss Preview")
+          .setEmoji("🗑️")
+          .setStyle(ButtonStyle.Secondary)
+      );
+      sendPayload.components = [row];
+    }
+
+    await message.channel.send(sendPayload as any);
+
+    // If bot has permission, suppress default embed on original message to avoid duplicate cluttered previews
     const botMember = message.guild.members.me;
     if (botMember && botMember.permissionsIn(message.channel.id).has(PermissionFlagsBits.ManageMessages)) {
       await message.suppressEmbeds(true).catch(() => null);

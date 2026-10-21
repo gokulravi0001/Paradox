@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
 /**
- * Automatically creates all required database tables if they do not exist yet.
+ * Automatically creates and updates all required database tables and columns if they do not exist yet.
  * Runs on bot startup so users never have to run manual schema push commands.
  */
 export async function ensureDatabaseSchema(prisma: PrismaClient) {
@@ -28,10 +28,11 @@ export async function ensureDatabaseSchema(prisma: PrismaClient) {
         "name" TEXT NOT NULL,
         "icon" TEXT,
         "botJoined" BOOLEAN NOT NULL DEFAULT true,
-        "prefix" TEXT NOT NULL DEFAULT '!',
+        "prefix" TEXT NOT NULL DEFAULT '$',
         "videoFixerEnabled" BOOLEAN NOT NULL DEFAULT true,
-        "videoFixerProviders" TEXT NOT NULL DEFAULT '["twitter","tiktok","instagram","reddit"]',
+        "videoFixerProviders" TEXT NOT NULL DEFAULT '["twitter","tiktok","instagram","reddit","bluesky","threads"]',
         "videoFixerIgnoredChannels" TEXT NOT NULL DEFAULT '[]',
+        "videoFixerDeleteButton" BOOLEAN NOT NULL DEFAULT true,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -48,6 +49,8 @@ export async function ensureDatabaseSchema(prisma: PrismaClient) {
         "roleName" TEXT NOT NULL,
         "description" TEXT,
         "type" TEXT NOT NULL DEFAULT 'REACTION',
+        "mode" TEXT NOT NULL DEFAULT 'TOGGLE',
+        "requiredRoleId" TEXT,
         "imageUrl" TEXT,
         "bannerUrl" TEXT,
         "confirmGif" TEXT,
@@ -93,6 +96,19 @@ export async function ensureDatabaseSchema(prisma: PrismaClient) {
       );
     `);
 
+    // Ensure newly added columns exist in existing PostgreSQL tables
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "GuildConfig" ADD COLUMN IF NOT EXISTS "videoFixerDeleteButton" BOOLEAN DEFAULT true;
+    `).catch(() => null);
+
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "ReactionRole" ADD COLUMN IF NOT EXISTS "mode" TEXT DEFAULT 'TOGGLE';
+    `).catch(() => null);
+
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "ReactionRole" ADD COLUMN IF NOT EXISTS "requiredRoleId" TEXT;
+    `).catch(() => null);
+
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "ReactionRole_guildId_idx" ON "ReactionRole"("guildId");
     `).catch(() => null);
@@ -109,7 +125,7 @@ export async function ensureDatabaseSchema(prisma: PrismaClient) {
       CREATE INDEX IF NOT EXISTS "AuditLog_guildId_idx" ON "AuditLog"("guildId");
     `).catch(() => null);
 
-    console.log("[Database] All tables and indexes are ready!");
+    console.log("[Database] Specialist tables and indexes are ready!");
   } catch (err: unknown) {
     console.error("[Database] Automatic schema verification warning:", err);
   }
