@@ -57,7 +57,7 @@ function createBotClient() {
 }
 
 // src/bot/events/ready.ts
-var import_discord2 = require("discord.js");
+var import_discord3 = require("discord.js");
 
 // src/lib/prisma.ts
 var import_client = require("@prisma/client");
@@ -68,11 +68,179 @@ if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;
 }
 
+// src/bot/commands/index.ts
+var import_discord2 = require("discord.js");
+var SLASH_COMMANDS_DATA = [
+  new import_discord2.SlashCommandBuilder().setName("help").setDescription("Explore Paradox commands, features, and dashboard link"),
+  new import_discord2.SlashCommandBuilder().setName("ping").setDescription("Check bot latency and gateway connection"),
+  new import_discord2.SlashCommandBuilder().setName("dashboard").setDescription("Get a direct link to this server's web companion dashboard"),
+  new import_discord2.SlashCommandBuilder().setName("roles").setDescription("List active visual role decks and reaction roles for this server"),
+  new import_discord2.SlashCommandBuilder().setName("videofix").setDescription("Check video link fixer status for Twitter, TikTok, Instagram & Reddit"),
+  new import_discord2.SlashCommandBuilder().setName("serverinfo").setDescription("Display server statistics and bot permission health")
+];
+async function handleSlashCommand(interaction) {
+  const { commandName, guildId, guild, client } = interaction;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  if (commandName === "ping") {
+    const ping = client.ws.ping;
+    const embed = new import_discord2.EmbedBuilder().setColor(5763719).setTitle("\u{1F3D3} Pong!").setDescription(`Gateway WebSocket Latency: **${ping}ms**`).setTimestamp();
+    return interaction.reply({ embeds: [embed] });
+  }
+  if (commandName === "help") {
+    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u{1F916} Paradox Bot \u2014 Command & Feature Guide").setDescription(
+      "Welcome to **Paradox**! A modern Discord administration bot with visual role decks, rich embed designer, and social video fixes."
+    ).addFields(
+      {
+        name: "\u{1F3A8} Visual Role Decks",
+        value: "Create interactive role panels with animated banner GIFs, custom badge stickers, and celebration claim GIFs via the web dashboard."
+      },
+      {
+        name: "\u{1F3A5} Social Video Link Fixer",
+        value: "Automatically transforms video links from **X/Twitter**, **TikTok**, **Instagram Reels**, and **Reddit** into inline playable videos."
+      },
+      {
+        name: "\u26A1 Commands",
+        value: "`/help` \u2014 Show this guide\n`/ping` \u2014 Check latency\n`/dashboard` \u2014 Open server dashboard\n`/roles` \u2014 View active role setups\n`/videofix` \u2014 Video fixer status\n`/serverinfo` \u2014 Server stats & bot health"
+      }
+    ).setFooter({ text: "Paradox Bot \u2022 Web Dashboard Companion" }).setTimestamp();
+    const row = new import_discord2.ActionRowBuilder().addComponents(
+      new import_discord2.ButtonBuilder().setLabel("Open Web Dashboard").setStyle(import_discord2.ButtonStyle.Link).setURL(guildId ? `${appUrl}/dashboard/${guildId}` : `${appUrl}/dashboard`),
+      new import_discord2.ButtonBuilder().setLabel("Documentation & Privacy").setStyle(import_discord2.ButtonStyle.Link).setURL(`${appUrl}/privacy`)
+    );
+    return interaction.reply({ embeds: [embed], components: [row] });
+  }
+  if (commandName === "dashboard") {
+    if (!guildId) {
+      return interaction.reply({
+        content: `Open the global dashboard at: ${appUrl}/dashboard`,
+        ephemeral: true
+      });
+    }
+    const dashboardUrl = `${appUrl}/dashboard/${guildId}`;
+    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u2699\uFE0F Server Dashboard").setDescription(`Configure Reaction Roles, Embeds, and Video Fixer for **${guild?.name}**:`).setTimestamp();
+    const row = new import_discord2.ActionRowBuilder().addComponents(
+      new import_discord2.ButtonBuilder().setLabel("Manage Server in Dashboard").setStyle(import_discord2.ButtonStyle.Link).setURL(dashboardUrl)
+    );
+    return interaction.reply({ embeds: [embed], components: [row] });
+  }
+  if (commandName === "videofix") {
+    if (!guildId) return interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+    const config = await prisma.guildConfig.findUnique({ where: { id: guildId } }).catch(() => null);
+    const enabled = config?.videoFixerEnabled ?? true;
+    let providers = ["twitter", "tiktok", "instagram", "reddit"];
+    try {
+      if (config?.videoFixerProviders) providers = JSON.parse(config.videoFixerProviders);
+    } catch {
+    }
+    const embed = new import_discord2.EmbedBuilder().setColor(enabled ? 5763719 : 15548997).setTitle("\u{1F3A5} Link-to-Video Embed Status").setDescription(
+      `Video Fixer is currently **${enabled ? "Active \u2705" : "Disabled \u274C"}** in this server.`
+    ).addFields(
+      {
+        name: "Supported Providers",
+        value: providers.map((p) => `\u2022 **${p.toUpperCase()}**`).join("\n") || "None enabled"
+      },
+      {
+        name: "Configuration",
+        value: `Admins can toggle providers and ignore channels in the [Web Dashboard](${appUrl}/dashboard/${guildId}/video-fixer).`
+      }
+    ).setTimestamp();
+    return interaction.reply({ embeds: [embed] });
+  }
+  if (commandName === "roles") {
+    if (!guildId) return interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+    const mappings = await prisma.reactionRole.findMany({ where: { guildId } }).catch(() => []);
+    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u2728 Active Server Role Setups").setDescription(
+      mappings.length === 0 ? "No visual role decks or reaction roles configured yet. Create one in the [Web Dashboard]!" : `This server has **${mappings.length}** active role mapping(s):`
+    ).setTimestamp();
+    if (mappings.length > 0) {
+      const summary = mappings.slice(0, 15).map((m) => `\u2022 ${m.emoji} **${m.roleName}** (${m.type || "REACTION"}) in <#${m.channelId}>`).join("\n");
+      embed.addFields({ name: "Configured Roles", value: summary });
+    }
+    const row = new import_discord2.ActionRowBuilder().addComponents(
+      new import_discord2.ButtonBuilder().setLabel("Open Visual Role Studio").setStyle(import_discord2.ButtonStyle.Link).setURL(`${appUrl}/dashboard/${guildId}/reaction-roles`)
+    );
+    return interaction.reply({ embeds: [embed], components: [row] });
+  }
+  if (commandName === "serverinfo") {
+    if (!guild) return interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+    const botMember = await guild.members.fetchMe().catch(() => null);
+    const botRoleName = botMember?.roles.highest.name || "None";
+    const memberCount = guild.memberCount;
+    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(`\u{1F4CA} Server Info: ${guild.name}`).setThumbnail(guild.iconURL() || null).addFields(
+      { name: "Server ID", value: guild.id, inline: true },
+      { name: "Total Members", value: `${memberCount}`, inline: true },
+      { name: "Bot Highest Role", value: botRoleName, inline: true }
+    ).setFooter({ text: "Paradox Bot" }).setTimestamp();
+    return interaction.reply({ embeds: [embed] });
+  }
+}
+async function handleTextCommand(message, prefix) {
+  const content = message.content.slice(prefix.length).trim();
+  const args = content.split(/\s+/);
+  const command = args[0]?.toLowerCase();
+  const guild = message.guild;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  if (command === "ping") {
+    const ping = message.client.ws.ping;
+    return message.reply(`\u{1F3D3} Pong! WebSocket Latency: **${ping}ms**`);
+  }
+  if (command === "help") {
+    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u{1F916} Paradox Bot \u2014 Help & Commands").setDescription(
+      "You can use both **Slash Commands** (`/help`, `/ping`, `/dashboard`) or **Prefix Commands** (`!help`, `!ping`)!"
+    ).addFields(
+      {
+        name: "Commands",
+        value: `\`${prefix}help\` \u2014 Show this guide
+\`${prefix}ping\` \u2014 Check bot latency
+\`${prefix}dashboard\` \u2014 Get web dashboard link
+\`${prefix}roles\` \u2014 List configured roles
+\`${prefix}videofix\` \u2014 Social video fixer status`
+      },
+      {
+        name: "Web Companion Dashboard",
+        value: `Manage all settings at: [${appUrl}/dashboard](${appUrl}/dashboard)`
+      }
+    ).setTimestamp();
+    return message.reply({ embeds: [embed] });
+  }
+  if (command === "dashboard") {
+    const targetUrl = guild ? `${appUrl}/dashboard/${guild.id}` : `${appUrl}/dashboard`;
+    return message.reply(`Configure Paradox in the web dashboard: ${targetUrl}`);
+  }
+  if (command === "roles") {
+    if (!guild) return;
+    const mappings = await prisma.reactionRole.findMany({ where: { guildId: guild.id } }).catch(() => []);
+    if (mappings.length === 0) {
+      return message.reply(`No reaction roles configured yet. Create one at: ${appUrl}/dashboard/${guild.id}/reaction-roles`);
+    }
+    const summary = mappings.slice(0, 10).map((m) => `\u2022 ${m.emoji} **${m.roleName}**`).join("\n");
+    return message.reply(`**Active Roles:**
+${summary}
+
+Manage in dashboard: ${appUrl}/dashboard/${guild.id}/reaction-roles`);
+  }
+  if (command === "videofix") {
+    if (!guild) return;
+    const config = await prisma.guildConfig.findUnique({ where: { id: guild.id } }).catch(() => null);
+    const enabled = config?.videoFixerEnabled ?? true;
+    return message.reply(`\u{1F3A5} Video Fixer is currently **${enabled ? "Active" : "Disabled"}** for this server.`);
+  }
+}
+
 // src/bot/events/ready.ts
 async function onReady(client) {
   if (!client.user) return;
   console.log(`[Bot] Successfully connected to Discord Gateway as ${client.user.tag} (ID: ${client.user.id})`);
-  client.user.setActivity("Managing servers & video embeds", { type: import_discord2.ActivityType.Custom });
+  client.user.setActivity("Managing servers & video embeds", { type: import_discord3.ActivityType.Custom });
+  try {
+    if (client.application) {
+      console.log(`[Bot] Registering slash commands with Discord...`);
+      await client.application.commands.set(SLASH_COMMANDS_DATA);
+      console.log(`[Bot] Successfully registered ${SLASH_COMMANDS_DATA.length} slash commands!`);
+    }
+  } catch (err) {
+    console.error("[Bot] Failed to register slash commands:", err);
+  }
   try {
     const guilds = await client.guilds.fetch();
     console.log(`[Bot] Synchronizing ${guilds.size} connected guild(s) with database...`);
@@ -99,7 +267,7 @@ async function onReady(client) {
 }
 
 // src/bot/events/messageCreate.ts
-var import_discord3 = require("discord.js");
+var import_discord4 = require("discord.js");
 
 // src/bot/services/videoTransformer.ts
 function extractAndTransformVideoUrls(content, enabledProviders = ["twitter", "tiktok", "instagram", "reddit"]) {
@@ -207,7 +375,12 @@ async function onMessageCreate(message) {
   try {
     const config = await prisma.guildConfig.findUnique({
       where: { id: guildId }
-    });
+    }).catch(() => null);
+    const prefix = config?.prefix || "!";
+    if (message.content.startsWith(prefix)) {
+      await handleTextCommand(message, prefix);
+      return;
+    }
     if (!config || !config.videoFixerEnabled) return;
     let ignoredChannels = [];
     try {
@@ -234,11 +407,11 @@ ${linksList}`;
       // Avoid unwanted pings
     });
     const botMember = message.guild.members.me;
-    if (botMember && botMember.permissionsIn(message.channel.id).has(import_discord3.PermissionFlagsBits.ManageMessages)) {
+    if (botMember && botMember.permissionsIn(message.channel.id).has(import_discord4.PermissionFlagsBits.ManageMessages)) {
       await message.suppressEmbeds(true).catch(() => null);
     }
   } catch (err) {
-    console.error(`[Bot:VideoFixer] Error processing message in guild ${guildId}:`, err);
+    console.error(`[Bot:MessageCreate] Error processing message in guild ${guildId}:`, err);
   }
 }
 
@@ -379,8 +552,14 @@ async function onMessageReactionRemove(reaction, user) {
 }
 
 // src/bot/events/interactionCreate.ts
-var import_discord4 = require("discord.js");
+var import_discord5 = require("discord.js");
 async function onInteractionCreate(interaction) {
+  if (interaction.isChatInputCommand()) {
+    await handleSlashCommand(interaction).catch((err) => {
+      console.error("[Bot:SlashCommand] Error executing slash command:", err);
+    });
+    return;
+  }
   if (!interaction.inGuild() || !interaction.guild) return;
   if (interaction.isButton()) {
     if (interaction.customId.startsWith("rr_role_")) {
@@ -414,7 +593,7 @@ async function handleRoleToggle(interaction, roleId) {
       });
     }
     const botMember = await guild.members.fetchMe().catch(() => null);
-    if (!botMember || !botMember.permissions.has(import_discord4.PermissionsBitField.Flags.ManageRoles)) {
+    if (!botMember || !botMember.permissions.has(import_discord5.PermissionsBitField.Flags.ManageRoles)) {
       return interaction.reply({
         content: "\u26A0\uFE0F The bot lacks the **Manage Roles** permission to assign this role.",
         ephemeral: true
@@ -435,7 +614,7 @@ async function handleRoleToggle(interaction, roleId) {
     const hasRole = member.roles.cache.has(role.id);
     if (hasRole) {
       await member.roles.remove(role, "Visual Role Deck unclaim");
-      const removeEmbed = new import_discord4.EmbedBuilder().setColor(15548997).setTitle(`Role Removed: ${role.name}`).setDescription(`You have removed the **${role.name}** role from your profile.`).setTimestamp();
+      const removeEmbed = new import_discord5.EmbedBuilder().setColor(15548997).setTitle(`Role Removed: ${role.name}`).setDescription(`You have removed the **${role.name}** role from your profile.`).setTimestamp();
       if (mapping?.imageUrl) {
         removeEmbed.setThumbnail(mapping.imageUrl);
       }
@@ -445,7 +624,7 @@ async function handleRoleToggle(interaction, roleId) {
       });
     } else {
       await member.roles.add(role, "Visual Role Deck claim");
-      const addEmbed = new import_discord4.EmbedBuilder().setColor(role.color || 5793266).setTitle(`\u2728 Role Claimed: ${role.name}`).setDescription(
+      const addEmbed = new import_discord5.EmbedBuilder().setColor(role.color || 5793266).setTitle(`\u2728 Role Claimed: ${role.name}`).setDescription(
         mapping?.description ? `You received the **${role.name}** role!
 
 **Perks & Details:**

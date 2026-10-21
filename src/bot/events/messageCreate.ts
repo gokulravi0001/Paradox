@@ -1,6 +1,7 @@
 import { Message, PermissionFlagsBits } from "discord.js";
 import { prisma } from "@/lib/prisma";
 import { extractAndTransformVideoUrls } from "../services/videoTransformer";
+import { handleTextCommand } from "../commands";
 
 export async function onMessageCreate(message: Message) {
   // Ignore bot messages and webhooks
@@ -14,9 +15,17 @@ export async function onMessageCreate(message: Message) {
     // 1. Fetch guild configuration from database
     const config = await prisma.guildConfig.findUnique({
       where: { id: guildId },
-    });
+    }).catch(() => null);
 
-    // Check if video fixer is enabled
+    const prefix = config?.prefix || "!";
+
+    // 2. Check for Prefix Commands (e.g. !help, !ping, !roles, !dashboard)
+    if (message.content.startsWith(prefix)) {
+      await handleTextCommand(message, prefix);
+      return;
+    }
+
+    // 3. Process Video Embed Fixer if enabled
     if (!config || !config.videoFixerEnabled) return;
 
     // Check if channel is ignored
@@ -39,11 +48,11 @@ export async function onMessageCreate(message: Message) {
 
     if (enabledProviders.length === 0) return;
 
-    // 2. Extract and transform supported video URLs
+    // Extract and transform supported video URLs
     const transformedLinks = extractAndTransformVideoUrls(message.content, enabledProviders);
     if (transformedLinks.length === 0) return;
 
-    // 3. Post embed links
+    // Post embed links
     const linksList = transformedLinks.map((t) => t.transformedUrl).join("\n");
     const replyText = `🎥 **Enhanced Video Embed** (shared by <@${message.author.id}>):\n${linksList}`;
 
@@ -52,12 +61,12 @@ export async function onMessageCreate(message: Message) {
       allowedMentions: { users: [] }, // Avoid unwanted pings
     });
 
-    // 4. If bot has permission, suppress default embed on original message to avoid duplicate cluttered previews
+    // If bot has permission, suppress default embed on original message to avoid duplicate previews
     const botMember = message.guild.members.me;
     if (botMember && botMember.permissionsIn(message.channel.id).has(PermissionFlagsBits.ManageMessages)) {
       await message.suppressEmbeds(true).catch(() => null);
     }
   } catch (err) {
-    console.error(`[Bot:VideoFixer] Error processing message in guild ${guildId}:`, err);
+    console.error(`[Bot:MessageCreate] Error processing message in guild ${guildId}:`, err);
   }
 }

@@ -5,8 +5,17 @@ import {
   PermissionsBitField,
 } from "discord.js";
 import { prisma } from "@/lib/prisma";
+import { handleSlashCommand } from "../commands";
 
 export async function onInteractionCreate(interaction: Interaction) {
+  // 1. Handle Slash Commands
+  if (interaction.isChatInputCommand()) {
+    await handleSlashCommand(interaction).catch((err) => {
+      console.error("[Bot:SlashCommand] Error executing slash command:", err);
+    });
+    return;
+  }
+
   // Only process button clicks and select menus in guilds
   if (!interaction.inGuild() || !interaction.guild) return;
 
