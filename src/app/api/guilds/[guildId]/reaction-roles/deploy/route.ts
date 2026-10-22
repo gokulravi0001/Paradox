@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeGuildAdmin } from "@/lib/serverAuth";
 import { prisma } from "@/lib/prisma";
 import { VisualRoleDeckDeploySchema } from "@/lib/validations";
-import { fetchGuildRoles, fetchBotMember } from "@/lib/discord";
+import { fetchGuildRoles, fetchBotMember, fetchGuildChannels, DiscordChannel } from "@/lib/discord";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +55,23 @@ export async function POST(
     }
 
     const { channelId, title, description, color, bannerUrl, type, roles } = validated.data;
+
+    // 0. Resolve channel: accept channel name (with or without #) or numeric ID
+    let resolvedChannelId = channelId.trim().replace(/^#/, "");
+    if (!/^\d{17,21}$/.test(resolvedChannelId)) {
+      const guildChannels = await fetchGuildChannels(guildId);
+      const match = guildChannels.find(
+        (c: DiscordChannel) => c.name.toLowerCase() === resolvedChannelId.toLowerCase() || c.id === resolvedChannelId
+      );
+      if (match) {
+        resolvedChannelId = match.id;
+      } else {
+        return NextResponse.json(
+          { error: `Channel '${channelId}' was not found in this Discord server. Please check the channel name or paste the channel ID.` },
+          { status: 400 }
+        );
+      }
+    }
 
     // 1. Verify Bot Permissions & Role Hierarchy for ALL requested roles
     const [guildRoles, botMember] = await Promise.all([
@@ -180,7 +197,7 @@ export async function POST(
       postPayload.components = components;
     }
 
-    const discordRes = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}/messages`, {
+    const discordRes = await fetch(`${DISCORD_API_ENDPOINT}/channels/${resolvedChannelId}/messages`, {
       method: "POST",
       headers: {
         Authorization: `Bot ${botToken}`,
@@ -209,7 +226,7 @@ export async function POST(
         try {
           const encodedEmoji = encodeURIComponent(r.emoji);
           await fetch(
-            `${DISCORD_API_ENDPOINT}/channels/${channelId}/messages/${messageId}/reactions/${encodedEmoji}/@me`,
+            `${DISCORD_API_ENDPOINT}/channels/${resolvedChannelId}/messages/${messageId}/reactions/${encodedEmoji}/@me`,
             {
               method: "PUT",
               headers: { Authorization: `Bot ${botToken}` },
@@ -226,7 +243,7 @@ export async function POST(
       await prisma.reactionRole.create({
         data: {
           guildId,
-          channelId,
+          channelId: resolvedChannelId,
           messageId,
           emoji: r.emoji,
           roleId: r.roleId,

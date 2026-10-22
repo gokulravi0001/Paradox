@@ -75,6 +75,8 @@ export default function ReactionRolesPage() {
 
   // Studio Deck State
   const [deckChannelId, setDeckChannelId] = useState("");
+  const [deckChannelName, setDeckChannelName] = useState("");
+  const [deckChannelMode, setDeckChannelMode] = useState<"select" | "custom">("select");
   const [deckTitle, setDeckTitle] = useState("✨ Unlock Your Roles & Perks");
   const [deckDescription, setDeckDescription] = useState(
     "Choose your notification and community roles below. Each role grants special channel access and custom perks!"
@@ -84,6 +86,11 @@ export default function ReactionRolesPage() {
     "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExd2JvZTVocndobnIycmlpcXRvMXc2MHphZXcyejkyOW8xMWVlaGtwYyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/3oKIPnAiaMCws8nOsE/giphy.gif"
   );
   const [deckType, setDeckType] = useState<"BUTTON" | "REACTION" | "SELECT_MENU">("BUTTON");
+
+  // AI Modal State
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
 
   const [deckRoles, setDeckRoles] = useState<VisualRoleItem[]>([
     {
@@ -108,6 +115,8 @@ export default function ReactionRolesPage() {
 
   // Single Reaction Role State
   const [singleChannelId, setSingleChannelId] = useState("");
+  const [singleChannelName, setSingleChannelName] = useState("");
+  const [singleChannelMode, setSingleChannelMode] = useState<"select" | "custom">("select");
   const [singleMessageId, setSingleMessageId] = useState("");
   const [singleEmoji, setSingleEmoji] = useState("⭐");
   const [singleRoleId, setSingleRoleId] = useState("");
@@ -140,7 +149,9 @@ export default function ReactionRolesPage() {
           setChannels(cData.channels || []);
           if (cData.channels?.length > 0) {
             setDeckChannelId(cData.channels[0].id);
+            setDeckChannelName(cData.channels[0].name);
             setSingleChannelId(cData.channels[0].id);
+            setSingleChannelName(cData.channels[0].name);
           }
         }
 
@@ -260,6 +271,101 @@ export default function ReactionRolesPage() {
     } else {
       setSingleRoleName(raw);
       setSingleRoleId(trimmed);
+    }
+  }
+
+  function handleDeckChannelInput(raw: string) {
+    const trimmed = raw.trim();
+    const cleanName = trimmed.replace(/^#/, "");
+
+    const match = channels.find(
+      (c) => c.id === trimmed || c.name.toLowerCase() === cleanName.toLowerCase()
+    );
+    if (match) {
+      setDeckChannelId(match.id);
+      setDeckChannelName(match.name);
+    } else {
+      setDeckChannelId(trimmed);
+      setDeckChannelName(cleanName);
+    }
+  }
+
+  function handleSingleChannelInput(raw: string) {
+    const trimmed = raw.trim();
+    const cleanName = trimmed.replace(/^#/, "");
+
+    const match = channels.find(
+      (c) => c.id === trimmed || c.name.toLowerCase() === cleanName.toLowerCase()
+    );
+    if (match) {
+      setSingleChannelId(match.id);
+      setSingleChannelName(match.name);
+    } else {
+      setSingleChannelId(trimmed);
+      setSingleChannelName(cleanName);
+    }
+  }
+
+  async function handleAiGenerateDeck() {
+    try {
+      setAiGenerating(true);
+      setError(null);
+
+      const existingRolesPayload = deckRoles
+        .filter((r) => r.roleName && r.roleName !== "New Role")
+        .map((r) => ({
+          roleName: r.roleName,
+          emoji: r.emoji,
+          description: r.description,
+        }));
+
+      const res = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "role_deck",
+          prompt: aiPrompt.trim() || undefined,
+          roles: existingRolesPayload.length > 0 ? existingRolesPayload : undefined,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.data) {
+        throw new Error(json.error || "Failed to generate AI role deck");
+      }
+
+      const generated = json.data;
+      if (generated.title) setDeckTitle(generated.title);
+      if (generated.description) setDeckDescription(generated.description);
+      if (generated.color) setDeckColor(generated.color);
+      if (generated.bannerUrl) setDeckBannerUrl(generated.bannerUrl);
+      if (generated.type) setDeckType(generated.type);
+
+      if (Array.isArray(generated.roles) && generated.roles.length > 0) {
+        const mappedRoles: VisualRoleItem[] = generated.roles.map((gr: any) => {
+          const match = roles.find(
+            (r) => r.name.toLowerCase() === gr.roleName.toLowerCase() || r.id === gr.roleId
+          );
+          return {
+            roleId: match?.id || gr.roleId || "",
+            roleName: match?.name || gr.roleName || "Role",
+            emoji: gr.emoji || "✨",
+            description: gr.description || "",
+            imageUrl: gr.imageUrl || "",
+            confirmGif: gr.confirmGif || "",
+            buttonStyle: gr.buttonStyle || "PRIMARY",
+            customInput: !match,
+          };
+        });
+        setDeckRoles(mappedRoles);
+      }
+
+      setAiModalOpen(false);
+      setSuccess("✨ AI Role Deck successfully generated! Review the details and click Deploy.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to run AI generation");
+    } finally {
+      setAiGenerating(false);
     }
   }
 
@@ -475,7 +581,7 @@ export default function ReactionRolesPage() {
           {/* Left Column: Form (7 cols) */}
           <div className="lg:col-span-7 space-y-6">
             <form onSubmit={handleDeployDeck} className="p-6 rounded-2xl bg-discord-card border border-white/5 space-y-6">
-              <div className="border-b border-white/5 pb-4 flex items-center justify-between">
+              <div className="border-b border-white/5 pb-4 flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h2 className="text-lg font-bold text-white flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-discord-blurple" /> Visual Role Deck Builder
@@ -484,25 +590,65 @@ export default function ReactionRolesPage() {
                     Design a visually striking role panel with animated images, GIFs, and interactive controls.
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setAiModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-discord-blurple to-discord-fuchsia hover:opacity-90 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-discord-blurple/25 transition cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-discord-yellow" />
+                  <span>✨ AI Auto-Build Deck</span>
+                </button>
               </div>
 
               {/* Channel & Display Mode */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                    Target Channel
-                  </label>
-                  <select
-                    value={deckChannelId}
-                    onChange={(e) => setDeckChannelId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white focus:outline-none focus:border-discord-blurple"
-                  >
-                    {channels.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        #{c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                      Target Channel
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setDeckChannelMode(deckChannelMode === "select" ? "custom" : "select")}
+                      className="text-xs text-discord-blurple hover:underline font-normal"
+                    >
+                      {deckChannelMode === "select" ? "⌨️ Type Name or ID" : "📋 Choose from list"}
+                    </button>
+                  </div>
+
+                  {deckChannelMode === "custom" ? (
+                    <div className="space-y-1">
+                      <input
+                        type="text"
+                        placeholder="Type channel name (e.g. general) or paste Channel ID"
+                        value={deckChannelName || deckChannelId}
+                        onChange={(e) => handleDeckChannelInput(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white font-mono placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
+                      />
+                      <div className="flex items-center justify-between text-[11px] text-discord-muted">
+                        <span>Channel: <strong className="text-white">#{deckChannelName || deckChannelId || "None"}</strong></span>
+                        <span>ID: <code className="text-discord-yellow">{deckChannelId || "Resolves on deploy"}</code></span>
+                      </div>
+                    </div>
+                  ) : (
+                    <select
+                      value={deckChannelId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDeckChannelId(val);
+                        const match = channels.find((c) => c.id === val);
+                        if (match) setDeckChannelName(match.name);
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white focus:outline-none focus:border-discord-blurple"
+                    >
+                      <option value="">-- Choose a Channel --</option>
+                      {channels.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          #{c.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -942,20 +1088,52 @@ export default function ReactionRolesPage() {
           <form onSubmit={handleCreateSingle} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Channel
-                </label>
-                <select
-                  value={singleChannelId}
-                  onChange={(e) => setSingleChannelId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white"
-                >
-                  {channels.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      #{c.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Target Channel
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSingleChannelMode(singleChannelMode === "select" ? "custom" : "select")}
+                    className="text-xs text-discord-blurple hover:underline font-normal"
+                  >
+                    {singleChannelMode === "select" ? "⌨️ Type Name or ID" : "📋 Choose from list"}
+                  </button>
+                </div>
+
+                {singleChannelMode === "custom" ? (
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      placeholder="Type channel name (e.g. general) or paste Channel ID"
+                      value={singleChannelName || singleChannelId}
+                      onChange={(e) => handleSingleChannelInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white font-mono placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
+                    />
+                    <div className="flex items-center justify-between text-[11px] text-discord-muted">
+                      <span>Channel: <strong className="text-white">#{singleChannelName || singleChannelId || "None"}</strong></span>
+                      <span>ID: <code className="text-discord-yellow">{singleChannelId || "Resolves on attach"}</code></span>
+                    </div>
+                  </div>
+                ) : (
+                  <select
+                    value={singleChannelId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSingleChannelId(val);
+                      const match = channels.find((c) => c.id === val);
+                      if (match) setSingleChannelName(match.name);
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white"
+                  >
+                    <option value="">-- Choose a Channel --</option>
+                    {channels.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        #{c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -1198,6 +1376,72 @@ export default function ReactionRolesPage() {
           </div>
         )}
       </div>
+
+      {/* AI Modal for Role Deck */}
+      {aiModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-2xl bg-discord-card border border-white/10 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-2 font-bold text-white text-base">
+                <Sparkles className="w-5 h-5 text-discord-blurple" />
+                <span>AI Auto-Build Role Deck</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAiModalOpen(false)}
+                className="text-discord-muted hover:text-white transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-discord-muted leading-relaxed">
+              Specify your roles or describe your server theme below. You can type role names with emojis &amp; descriptions (e.g. <em>&quot;VIP 👑 Special lounge access, Gamer 🎮 Matchmaking pings, Streamer 🎙️ Live alerts&quot;</em>) or just list your community keywords!
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Roles, Emojis &amp; Descriptions
+              </label>
+              <textarea
+                rows={4}
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="e.g. Gamer 🎮, VIP 👑, Streamer 🎙️, Artist 🎨, Announcements 🔔"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setAiModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-discord-dark hover:bg-white/5 border border-white/10 text-xs font-semibold text-white transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={aiGenerating}
+                onClick={handleAiGenerateDeck}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-discord-blurple to-discord-fuchsia hover:opacity-95 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-discord-blurple/25 transition cursor-pointer"
+              >
+                {aiGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Generating with AI...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-discord-yellow" />
+                    <span>Generate Role Deck</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

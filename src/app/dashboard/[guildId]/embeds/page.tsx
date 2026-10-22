@@ -14,6 +14,7 @@ import {
   Eye,
   Bot,
   ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import { DISCORD_LIMITS } from "@/lib/validations";
 
@@ -63,7 +64,14 @@ export default function EmbedBuilderPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [templates, setTemplates] = useState<EmbedTemplate[]>([]);
   const [selectedChannelId, setSelectedChannelId] = useState("");
+  const [channelName, setChannelName] = useState("");
+  const [channelMode, setChannelMode] = useState<"select" | "custom">("select");
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+
+  // AI Modal State
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
 
   // Form Fields
   const [templateName, setTemplateName] = useState("Server Announcement");
@@ -105,6 +113,7 @@ export default function EmbedBuilderPage() {
           setChannels(cData.channels || []);
           if (cData.channels?.length > 0) {
             setSelectedChannelId(cData.channels[0].id);
+            setChannelName(cData.channels[0].name);
           }
         }
 
@@ -220,24 +229,73 @@ export default function EmbedBuilderPage() {
     }
   }
 
+  function handleChannelInput(raw: string) {
+    const trimmed = raw.trim();
+    const cleanName = trimmed.replace(/^#/, "");
+    const match = channels.find(
+      (c) => c.id === trimmed || c.name.toLowerCase() === cleanName.toLowerCase()
+    );
+    if (match) {
+      setSelectedChannelId(match.id);
+      setChannelName(match.name);
+    } else {
+      setSelectedChannelId(trimmed);
+      setChannelName(cleanName);
+    }
+  }
+
+  async function handleAiGenerateEmbed() {
+    try {
+      setAiGenerating(true);
+      setError(null);
+      const res = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "embed",
+          prompt: aiPrompt.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.data) {
+        throw new Error(json.error || "Failed to generate AI embed");
+      }
+      const g = json.data;
+      if (g.title) setTitle(g.title);
+      if (g.description) setDescription(g.description);
+      if (g.color) setColor(g.color);
+      if (g.authorName) setAuthorName(g.authorName);
+      if (g.footerText) setFooterText(g.footerText);
+      if (g.imageUrl) setImageUrl(g.imageUrl);
+      if (g.thumbnailUrl) setThumbnailUrl(g.thumbnailUrl);
+      if (Array.isArray(g.fields) && g.fields.length > 0) setFields(g.fields);
+      setAiModalOpen(false);
+      setSuccess("✨ AI Embed generated! Review live preview on the right.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error generating AI embed");
+    } finally {
+      setAiGenerating(false);
+    }
+  }
+
   async function handlePublish() {
     setError(null);
     setValidationErrors([]);
     setSuccess(null);
-    setPublishing(true);
 
-    if (!selectedChannelId) {
-      setError("Please select a target channel to publish to.");
-      setPublishing(false);
+    const targetChannel = selectedChannelId || channelName.trim();
+    if (!targetChannel) {
+      setError("Please select or type a target channel to publish to.");
       return;
     }
 
     try {
+      setPublishing(true);
       const res = await fetch(`/api/guilds/${guildId}/embeds/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          channelId: selectedChannelId,
+          channelId: targetChannel,
           embed: embedPayload,
           templateId: activeTemplateId || undefined,
         }),
@@ -253,7 +311,7 @@ export default function EmbedBuilderPage() {
         return;
       }
 
-      setSuccess(`Embed successfully published to selected channel! Message ID: ${data.messageId}`);
+      setSuccess(`🎉 Embed successfully published to selected channel! (Message ID: ${data.messageId})`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error publishing embed");
     } finally {
@@ -263,16 +321,26 @@ export default function EmbedBuilderPage() {
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8">
-      {/* Title */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-extrabold text-white flex items-center gap-3">
-          <Layers className="w-8 h-8 text-discord-fuchsia" />
-          <span>Discord Embed Builder & Live Preview</span>
-        </h1>
-        <p className="text-sm text-discord-muted mt-1">
-          Compose rich Discord embeds with real-time limit validation, inspect the pixel-accurate preview, and publish
-          instantly to any channel.
-        </p>
+      {/* Title & AI Generator Button */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-white flex items-center gap-3">
+            <Layers className="w-8 h-8 text-discord-fuchsia" />
+            <span>Discord Embed Builder &amp; Live Preview</span>
+          </h1>
+          <p className="text-sm text-discord-muted mt-1">
+            Compose rich Discord embeds with real-time limit validation, inspect the pixel-accurate preview, and publish
+            instantly to any channel.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setAiModalOpen(true)}
+          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-discord-blurple to-discord-fuchsia hover:opacity-90 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-discord-fuchsia/20 transition cursor-pointer"
+        >
+          <Sparkles className="w-4 h-4 text-discord-yellow" />
+          <span>✨ AI Generate Embed</span>
+        </button>
       </div>
 
       {/* Alerts */}
@@ -574,31 +642,82 @@ export default function EmbedBuilderPage() {
               </span>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/5">
-              <button
-                type="button"
-                onClick={handleSaveTemplate}
-                disabled={saving}
-                className="px-5 py-2.5 rounded-xl bg-discord-dark hover:bg-white/5 border border-white/10 text-white font-semibold text-xs sm:text-sm transition flex items-center gap-2"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>Save Template</span>
-              </button>
+            {/* Target Channel & Action Buttons */}
+            <div className="pt-4 border-t border-white/5 space-y-4">
+              <div className="p-3.5 rounded-xl bg-discord-dark border border-white/5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Destination Channel
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setChannelMode(channelMode === "select" ? "custom" : "select")}
+                    className="text-xs text-discord-blurple hover:underline font-normal"
+                  >
+                    {channelMode === "select" ? "⌨️ Type Name or ID" : "📋 Choose from list"}
+                  </button>
+                </div>
 
-              <button
-                type="button"
-                onClick={handlePublish}
-                disabled={publishing}
-                className="px-6 py-2.5 rounded-xl bg-discord-fuchsia hover:bg-pink-600 text-white font-semibold text-xs sm:text-sm transition flex items-center gap-2 shadow-lg shadow-discord-fuchsia/20"
-              >
-                {publishing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                {channelMode === "custom" ? (
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      placeholder="Type channel name (e.g. general) or paste Channel ID"
+                      value={channelName || selectedChannelId}
+                      onChange={(e) => handleChannelInput(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-discord-card border border-white/10 text-xs text-white font-mono placeholder-zinc-500 focus:outline-none focus:border-discord-fuchsia"
+                    />
+                    <div className="flex items-center justify-between text-[11px] text-discord-muted">
+                      <span>Channel: <strong className="text-white">#{channelName || selectedChannelId || "None"}</strong></span>
+                      <span>ID: <code className="text-discord-yellow">{selectedChannelId || "Resolves on publish"}</code></span>
+                    </div>
+                  </div>
                 ) : (
-                  <Send className="w-4 h-4" />
+                  <select
+                    value={selectedChannelId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedChannelId(val);
+                      const match = channels.find((c) => c.id === val);
+                      if (match) setChannelName(match.name);
+                    }}
+                    className="w-full px-3 py-2 rounded-lg bg-discord-card border border-white/10 text-xs text-white focus:outline-none focus:border-discord-fuchsia"
+                  >
+                    <option value="">-- Choose a Channel --</option>
+                    {channels.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        #{c.name}
+                      </option>
+                    ))}
+                  </select>
                 )}
-                <span>Publish to Discord</span>
-              </button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={handleSaveTemplate}
+                  disabled={saving}
+                  className="px-5 py-2.5 rounded-xl bg-discord-dark hover:bg-white/5 border border-white/10 text-white font-semibold text-xs sm:text-sm transition flex items-center gap-2"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>Save Template</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePublish}
+                  disabled={publishing}
+                  className="px-6 py-2.5 rounded-xl bg-discord-fuchsia hover:bg-pink-600 text-white font-semibold text-xs sm:text-sm transition flex items-center gap-2 shadow-lg shadow-discord-fuchsia/20 cursor-pointer"
+                >
+                  {publishing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                  <span>Publish to Discord</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -620,9 +739,11 @@ export default function EmbedBuilderPage() {
             <div className="bg-[#313338] p-4 rounded-xl text-slate-100 font-sans text-sm space-y-2 select-none shadow-inner">
               {/* Message Header (Bot Name & Tag) */}
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-discord-blurple flex items-center justify-center flex-shrink-0 text-white">
-                  <Bot className="w-5 h-5" />
-                </div>
+                <img
+                  src="/pfp.png"
+                  alt="Paradox"
+                  className="w-9 h-9 rounded-full object-cover flex-shrink-0 ring-1 ring-white/10"
+                />
                 <div className="flex items-baseline gap-2">
                   <span className="font-semibold text-white text-sm">Paradox</span>
                   <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#5865F2] text-white font-bold leading-none uppercase">
@@ -754,6 +875,72 @@ export default function EmbedBuilderPage() {
           </div>
         </div>
       </div>
+
+      {/* AI Modal for Embed Builder */}
+      {aiModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-2xl bg-discord-card border border-white/10 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-2 font-bold text-white text-base">
+                <Sparkles className="w-5 h-5 text-discord-fuchsia" />
+                <span>AI Embed Generator</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAiModalOpen(false)}
+                className="text-discord-muted hover:text-white transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-discord-muted leading-relaxed">
+              Describe what kind of announcement or message you want to compose (e.g. <em>&quot;Server rules announcement with 3 clean rule points&quot;</em> or <em>&quot;Weekly Minecraft Game Night event with time, prize, and voice channel info&quot;</em>). The AI will design a complete Discord embed with titles, descriptions, theme colors, and structured fields!
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Describe the Embed Topic or Purpose
+              </label>
+              <textarea
+                rows={4}
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="e.g. Welcome announcement for new members with server guidelines, key channels, and Discord invite link"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-discord-fuchsia"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setAiModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-discord-dark hover:bg-white/5 border border-white/10 text-xs font-semibold text-white transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={aiGenerating}
+                onClick={handleAiGenerateEmbed}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-discord-blurple to-discord-fuchsia hover:opacity-95 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-discord-fuchsia/20 transition cursor-pointer"
+              >
+                {aiGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Generating with AI...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-discord-yellow" />
+                    <span>Generate Embed</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

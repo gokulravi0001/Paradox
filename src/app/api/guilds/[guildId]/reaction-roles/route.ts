@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeGuildAdmin } from "@/lib/serverAuth";
 import { prisma } from "@/lib/prisma";
 import { ReactionRoleSchema } from "@/lib/validations";
-import { fetchGuildRoles, fetchBotMember } from "@/lib/discord";
+import { fetchGuildRoles, fetchBotMember, fetchGuildChannels, DiscordChannel } from "@/lib/discord";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +47,17 @@ export async function POST(
     }
 
     const { channelId, messageId, emoji, roleId, roleName, description, type, imageUrl, bannerUrl, confirmGif, buttonStyle } = validated.data;
+
+    let resolvedChannelId = channelId.trim().replace(/^#/, "");
+    if (!/^\d{17,21}$/.test(resolvedChannelId)) {
+      const guildChannels = await fetchGuildChannels(guildId);
+      const match = guildChannels.find(
+        (c: DiscordChannel) => c.name.toLowerCase() === resolvedChannelId.toLowerCase() || c.id === resolvedChannelId
+      );
+      if (match) {
+        resolvedChannelId = match.id;
+      }
+    }
 
     // 1. Verify Bot Role Hierarchy Check:
     // Bot must have a higher role position than the role being assigned!
@@ -104,7 +115,7 @@ export async function POST(
     const reactionRole = await prisma.reactionRole.create({
       data: {
         guildId,
-        channelId,
+        channelId: resolvedChannelId,
         messageId,
         emoji,
         roleId,

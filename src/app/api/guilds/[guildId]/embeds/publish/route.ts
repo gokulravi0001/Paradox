@@ -26,12 +26,15 @@ export async function POST(
       return NextResponse.json({ error: "Embed payload is required" }, { status: 400 });
     }
 
-    // 1. Verify channel belongs to this guild and is accessible
+    // 1. Resolve channel by name or ID
+    let resolvedChannelId = channelId.trim().replace(/^#/, "");
     const channels = await fetchGuildChannels(guildId);
-    const targetChannel = channels.find((c) => c.id === channelId);
-    if (!targetChannel) {
+    const targetChannel = channels.find((c) => c.id === resolvedChannelId || c.name.toLowerCase() === resolvedChannelId.toLowerCase());
+    if (targetChannel) {
+      resolvedChannelId = targetChannel.id;
+    } else if (!/^\d{17,21}$/.test(resolvedChannelId)) {
       return NextResponse.json(
-        { error: "The selected channel was not found or the bot lacks permissions to view it." },
+        { error: `The channel '${channelId}' was not found. Please verify the channel name or paste the channel ID.` },
         { status: 400 }
       );
     }
@@ -49,7 +52,7 @@ export async function POST(
     const formattedEmbed = formatToDiscordEmbedApi(embed);
 
     // 4. Publish message
-    const result = await publishDiscordEmbed(channelId, formattedEmbed, content);
+    const result = await publishDiscordEmbed(resolvedChannelId, formattedEmbed, content);
 
     if (!result.success) {
       return NextResponse.json(
