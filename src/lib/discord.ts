@@ -354,9 +354,13 @@ export async function publishDiscordEmbed(
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({ message: response.statusText }));
+      let msg = err.message || `Discord API error: ${response.status}`;
+      if (err.code === 50013 || err.message?.includes("Missing Permissions")) {
+        msg = "Missing Permissions: Paradox needs 'View Channel', 'Send Messages', and 'Embed Links' permissions in this channel. In Discord, edit the channel permissions and grant Paradox access.";
+      }
       return {
         success: false,
-        error: err.message || `Discord API error: ${response.status}`,
+        error: msg,
       };
     }
 

@@ -229,9 +229,17 @@ export async function POST(
 
     if (!discordRes.ok) {
       const errJson = await discordRes.json().catch(() => ({}));
+      let friendlyError = errJson.message || `Discord API error: ${discordRes.statusText}`;
+
+      if (errJson.code === 50013 || errJson.message?.includes("Missing Permissions")) {
+        friendlyError = `Missing Permissions: Paradox cannot post in this channel. In Discord, right-click the channel -> Edit Channel -> Permissions -> Add Paradox (or bot role) and turn ON 'View Channel', 'Send Messages', and 'Embed Links'.`;
+      } else if (errJson.code === 50001) {
+        friendlyError = `Missing Access: Paradox cannot access this channel. Please grant Paradox permission to view this channel.`;
+      }
+
       return NextResponse.json(
         {
-          error: errJson.message || `Discord API error: ${discordRes.statusText}`,
+          error: friendlyError,
           details: errJson,
         },
         { status: 400 }
