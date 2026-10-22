@@ -46,7 +46,7 @@ export async function POST(
       );
     }
 
-    const { channelId, messageId, emoji, roleId, roleName, description, type, imageUrl, bannerUrl, confirmGif, buttonStyle } = validated.data;
+    const { channelId, messageId, emoji, roleId, roleName, description, type, mode = "TOGGLE", imageUrl, bannerUrl, confirmGif, buttonStyle } = validated.data;
 
     let resolvedChannelId = channelId.trim().replace(/^#/, "");
     if (!/^\d{17,21}$/.test(resolvedChannelId)) {
@@ -122,6 +122,7 @@ export async function POST(
         roleName: targetRole.name || roleName,
         description: description || null,
         type: type || "REACTION",
+        mode: mode || "TOGGLE",
         imageUrl: imageUrl || null,
         bannerUrl: bannerUrl || null,
         confirmGif: confirmGif || null,

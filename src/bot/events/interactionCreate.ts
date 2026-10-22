@@ -90,13 +90,26 @@ async function handleRoleToggle(interaction: any, roleId: string) {
       });
     }
 
-    // 3. Find Visual Configuration in Database
-    const mapping = await prisma.reactionRole.findFirst({
-      where: {
-        guildId: guild.id,
-        roleId: role.id,
-      },
-    });
+    // 3. Find Visual Configuration in Database (prioritize current message)
+    const messageId = interaction.message?.id;
+    let mapping = null;
+    if (messageId) {
+      mapping = await prisma.reactionRole.findFirst({
+        where: {
+          guildId: guild.id,
+          roleId: role.id,
+          messageId,
+        },
+      });
+    }
+    if (!mapping) {
+      mapping = await prisma.reactionRole.findFirst({
+        where: {
+          guildId: guild.id,
+          roleId: role.id,
+        },
+      });
+    }
 
     const mode = mapping?.mode || "TOGGLE";
 
@@ -141,25 +154,54 @@ async function handleRoleToggle(interaction: any, roleId: string) {
         await member.roles.remove(role, "Paradox Unique role toggle");
         return sendRoleRemoveResponse(interaction, role, mapping);
       } else {
-        // Remove other sibling roles linked to this message
-        if (mapping?.messageId) {
+        const removedNames: string[] = [];
+        const targetMessageId = mapping?.messageId || interaction.message?.id;
+
+        // 1. Remove sibling roles recorded in database for this panel
+        if (targetMessageId) {
           const siblingMappings = await prisma.reactionRole.findMany({
             where: {
               guildId: guild.id,
-              messageId: mapping.messageId,
+              messageId: targetMessageId,
               roleId: { not: role.id },
             },
           });
 
           for (const sib of siblingMappings) {
             if (member.roles.cache.has(sib.roleId)) {
+              const sibRole =
+                guild.roles.cache.get(sib.roleId) ||
+                (await guild.roles.fetch(sib.roleId).catch(() => null));
+              if (sibRole) removedNames.push(sibRole.name);
               await member.roles.remove(sib.roleId, "Paradox Unique mode swap").catch(() => null);
             }
           }
         }
 
+        // 2. Also inspect the message's actual button rows to remove any active sibling role
+        if (interaction.message?.components) {
+          for (const row of interaction.message.components) {
+            if ("components" in row && Array.isArray(row.components)) {
+              for (const comp of row.components) {
+                if (comp.customId && comp.customId.startsWith("rr_role_")) {
+                  const compRoleId = comp.customId.replace("rr_role_", "");
+                  if (compRoleId !== role.id && member.roles.cache.has(compRoleId)) {
+                    const sibRole =
+                      guild.roles.cache.get(compRoleId) ||
+                      (await guild.roles.fetch(compRoleId).catch(() => null));
+                    if (sibRole && !removedNames.includes(sibRole.name)) {
+                      removedNames.push(sibRole.name);
+                    }
+                    await member.roles.remove(compRoleId, "Paradox Unique mode swap").catch(() => null);
+                  }
+                }
+              }
+            }
+          }
+        }
+
         await member.roles.add(role, "Paradox Unique mode claim");
-        return sendRoleClaimResponse(interaction, role, mapping);
+        return sendRoleClaimResponse(interaction, role, mapping, removedNames);
       }
     }
 
@@ -182,15 +224,23 @@ async function handleRoleToggle(interaction: any, roleId: string) {
   }
 }
 
-async function sendRoleClaimResponse(interaction: any, role: any, mapping: any) {
+async function sendRoleClaimResponse(
+  interaction: any,
+  role: any,
+  mapping: any,
+  removedNames?: string[]
+) {
+  let descriptionText = `You have successfully equipped the **${role.name}** role.`;
+  if (removedNames && removedNames.length > 0) {
+    descriptionText = `✨ Equipped **${role.name}**!\n\n🔄 Revoked previous role: **${removedNames.join(", ")}**`;
+  } else if (mapping?.description) {
+    descriptionText = `You received the **${role.name}** role!\n\n**Perks & Details:**\n${mapping.description}`;
+  }
+
   const addEmbed = new EmbedBuilder()
     .setColor(role.color || 0x5865f2)
-    .setTitle(`✨ Role Claimed: ${role.name}`)
-    .setDescription(
-      mapping?.description
-        ? `You received the **${role.name}** role!\n\n**Perks & Details:**\n${mapping.description}`
-        : `You have successfully received the **${role.name}** role.`
-    )
+    .setTitle(`✨ Role Equipped: ${role.name}`)
+    .setDescription(descriptionText)
     .setTimestamp();
 
   if (mapping?.imageUrl) {

@@ -1192,12 +1192,25 @@ async function handleRoleToggle(interaction, roleId) {
         ephemeral: true
       });
     }
-    const mapping = await prisma.reactionRole.findFirst({
-      where: {
-        guildId: guild.id,
-        roleId: role.id
-      }
-    });
+    const messageId = interaction.message?.id;
+    let mapping = null;
+    if (messageId) {
+      mapping = await prisma.reactionRole.findFirst({
+        where: {
+          guildId: guild.id,
+          roleId: role.id,
+          messageId
+        }
+      });
+    }
+    if (!mapping) {
+      mapping = await prisma.reactionRole.findFirst({
+        where: {
+          guildId: guild.id,
+          roleId: role.id
+        }
+      });
+    }
     const mode = mapping?.mode || "TOGGLE";
     if (mapping?.requiredRoleId && !member.roles.cache.has(mapping.requiredRoleId)) {
       return interaction.reply({
@@ -1232,22 +1245,44 @@ async function handleRoleToggle(interaction, roleId) {
         await member.roles.remove(role, "Paradox Unique role toggle");
         return sendRoleRemoveResponse(interaction, role, mapping);
       } else {
-        if (mapping?.messageId) {
+        const removedNames = [];
+        const targetMessageId = mapping?.messageId || interaction.message?.id;
+        if (targetMessageId) {
           const siblingMappings = await prisma.reactionRole.findMany({
             where: {
               guildId: guild.id,
-              messageId: mapping.messageId,
+              messageId: targetMessageId,
               roleId: { not: role.id }
             }
           });
           for (const sib of siblingMappings) {
             if (member.roles.cache.has(sib.roleId)) {
+              const sibRole = guild.roles.cache.get(sib.roleId) || await guild.roles.fetch(sib.roleId).catch(() => null);
+              if (sibRole) removedNames.push(sibRole.name);
               await member.roles.remove(sib.roleId, "Paradox Unique mode swap").catch(() => null);
             }
           }
         }
+        if (interaction.message?.components) {
+          for (const row of interaction.message.components) {
+            if ("components" in row && Array.isArray(row.components)) {
+              for (const comp of row.components) {
+                if (comp.customId && comp.customId.startsWith("rr_role_")) {
+                  const compRoleId = comp.customId.replace("rr_role_", "");
+                  if (compRoleId !== role.id && member.roles.cache.has(compRoleId)) {
+                    const sibRole = guild.roles.cache.get(compRoleId) || await guild.roles.fetch(compRoleId).catch(() => null);
+                    if (sibRole && !removedNames.includes(sibRole.name)) {
+                      removedNames.push(sibRole.name);
+                    }
+                    await member.roles.remove(compRoleId, "Paradox Unique mode swap").catch(() => null);
+                  }
+                }
+              }
+            }
+          }
+        }
         await member.roles.add(role, "Paradox Unique mode claim");
-        return sendRoleClaimResponse(interaction, role, mapping);
+        return sendRoleClaimResponse(interaction, role, mapping, removedNames);
       }
     }
     if (hasRole) {
@@ -1267,13 +1302,19 @@ async function handleRoleToggle(interaction, roleId) {
     }
   }
 }
-async function sendRoleClaimResponse(interaction, role, mapping) {
-  const addEmbed = new import_discord5.EmbedBuilder().setColor(role.color || 5793266).setTitle(`\u2728 Role Claimed: ${role.name}`).setDescription(
-    mapping?.description ? `You received the **${role.name}** role!
+async function sendRoleClaimResponse(interaction, role, mapping, removedNames) {
+  let descriptionText = `You have successfully equipped the **${role.name}** role.`;
+  if (removedNames && removedNames.length > 0) {
+    descriptionText = `\u2728 Equipped **${role.name}**!
+
+\u{1F504} Revoked previous role: **${removedNames.join(", ")}**`;
+  } else if (mapping?.description) {
+    descriptionText = `You received the **${role.name}** role!
 
 **Perks & Details:**
-${mapping.description}` : `You have successfully received the **${role.name}** role.`
-  ).setTimestamp();
+${mapping.description}`;
+  }
+  const addEmbed = new import_discord5.EmbedBuilder().setColor(role.color || 5793266).setTitle(`\u2728 Role Equipped: ${role.name}`).setDescription(descriptionText).setTimestamp();
   if (mapping?.imageUrl) {
     addEmbed.setThumbnail(mapping.imageUrl);
   }

@@ -54,7 +54,7 @@ export async function POST(
       );
     }
 
-    const { channelId, title, description, color, bannerUrl, type, roles } = validated.data;
+    const { channelId, title, description, color, bannerUrl, type, mode = "TOGGLE", showRoleFields = true, roles } = validated.data;
 
     // 0. Resolve channel: accept channel name (with or without #) or numeric ID
     let resolvedChannelId = channelId.trim().replace(/^#/, "");
@@ -140,22 +140,39 @@ export async function POST(
 
     // 2. Build the Visual Embed
     const embedColor = parseInt(color.replace("#", ""), 16);
-    const embedFields = roles.map((r) => ({
-      name: `${r.emoji} ${r.roleName}`,
-      value: r.description || "Click below to claim or remove this role.",
-      inline: true,
-    }));
+
+    // If showRoleFields is true, include the role fields.
+    // If r.description is empty, use invisible zero-width space "\u200b" so Discord doesn't show any repetitive subtitle!
+    const embedFields = showRoleFields
+      ? roles.map((r) => ({
+          name: `${r.emoji} ${r.roleName}`,
+          value: r.description && r.description.trim().length > 0 ? r.description.trim() : "\u200b",
+          inline: true,
+        }))
+      : [];
+
+    let footerText = "Paradox Visual Role Deck • Click to Claim or Remove";
+    if (mode === "UNIQUE") {
+      footerText = "Paradox Visual Role Deck • Select 1 Role (Switching revokes previous)";
+    } else if (mode === "VERIFY") {
+      footerText = "Paradox Visual Role Deck • One-Time Claim (Verification)";
+    } else if (mode === "REVERSED") {
+      footerText = "Paradox Visual Role Deck • Click to Remove Role";
+    }
 
     const embedPayload: Record<string, unknown> = {
       title,
       description: description || undefined,
       color: embedColor,
-      fields: embedFields,
       footer: {
-        text: "Paradox Visual Role Deck • Click to Claim or Remove",
+        text: footerText,
       },
       timestamp: new Date().toISOString(),
     };
+
+    if (embedFields.length > 0) {
+      embedPayload.fields = embedFields;
+    }
 
     if (bannerUrl) {
       embedPayload.image = { url: bannerUrl };
@@ -279,6 +296,7 @@ export async function POST(
           roleName: r.roleName,
           description: r.description || null,
           type,
+          mode: mode || "TOGGLE",
           imageUrl: r.imageUrl || null,
           bannerUrl: bannerUrl || null,
           confirmGif: r.confirmGif || null,
@@ -297,6 +315,7 @@ export async function POST(
           channelId,
           messageId,
           type,
+          mode: mode || "TOGGLE",
           roleCount: roles.length,
           title,
         }),

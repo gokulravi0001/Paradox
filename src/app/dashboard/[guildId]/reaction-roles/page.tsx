@@ -88,6 +88,8 @@ export default function ReactionRolesPage() {
     "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExd2JvZTVocndobnIycmlpcXRvMXc2MHphZXcyejkyOW8xMWVlaGtwYyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/3oKIPnAiaMCws8nOsE/giphy.gif"
   );
   const [deckType, setDeckType] = useState<"BUTTON" | "REACTION" | "SELECT_MENU">("BUTTON");
+  const [deckMode, setDeckMode] = useState<"UNIQUE" | "TOGGLE" | "VERIFY" | "REVERSED">("UNIQUE");
+  const [deckShowFields, setDeckShowFields] = useState<boolean>(false);
 
   // AI Modal State
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -135,6 +137,7 @@ export default function ReactionRolesPage() {
   const [singleDesc, setSingleDesc] = useState("");
   const [singleBadgeUrl, setSingleBadgeUrl] = useState("");
   const [singleConfirmGif, setSingleConfirmGif] = useState("");
+  const [singleMode, setSingleMode] = useState<"TOGGLE" | "UNIQUE" | "VERIFY" | "REVERSED">("TOGGLE");
 
   const [deploying, setDeploying] = useState(false);
   const [submittingSingle, setSubmittingSingle] = useState(false);
@@ -463,7 +466,7 @@ export default function ReactionRolesPage() {
       roleId: r.id,
       roleName: r.name,
       emoji: "⭐",
-      description: `Unlock ${r.name} role and community perks.`,
+      description: "",
       imageUrl: "",
       confirmGif: "",
       buttonStyle: "PRIMARY",
@@ -484,7 +487,7 @@ export default function ReactionRolesPage() {
         roleId: fallback?.id || "",
         roleName: fallback?.name || "New Role",
         emoji: "⭐",
-        description: "Unlock special community perks.",
+        description: "",
         imageUrl: "",
         confirmGif: "",
         buttonStyle: "PRIMARY",
@@ -543,6 +546,8 @@ export default function ReactionRolesPage() {
           color: deckColor,
           bannerUrl: deckBannerUrl.trim() || undefined,
           type: deckType,
+          mode: deckMode,
+          showRoleFields: deckShowFields,
           roles: sanitizedRoles,
         }),
       });
@@ -601,6 +606,7 @@ export default function ReactionRolesPage() {
           roleName: effectiveRoleName,
           description: singleDesc.trim() || undefined,
           type: "REACTION",
+          mode: singleMode,
           imageUrl: singleBadgeUrl.trim() || undefined,
           confirmGif: singleConfirmGif.trim() || undefined,
         }),
@@ -807,6 +813,53 @@ export default function ReactionRolesPage() {
                     <option value="REACTION">Classic Reaction Emojis</option>
                   </select>
                 </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                    <span>Role Selection Mode</span>
+                    <span className="text-[10px] text-discord-blurple lowercase font-mono">
+                      {deckMode === "UNIQUE" ? "1 role at a time" : "multi-select"}
+                    </span>
+                  </label>
+                  <select
+                    value={deckMode}
+                    onChange={(e) => setDeckMode(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white focus:outline-none focus:border-discord-blurple"
+                  >
+                    <option value="UNIQUE">🔘 Unique / Single Choice (Equipping revokes previous role - Best for Colors)</option>
+                    <option value="TOGGLE">🔁 Multi-Select (Members can toggle multiple roles freely)</option>
+                    <option value="VERIFY">🔒 One-Time Claim (Verification - cannot be unequipped)</option>
+                    <option value="REVERSED">🔄 Remove Only (Clicking revokes the role)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Embed Role Layout Style */}
+              <div className="p-3.5 rounded-xl bg-discord-dark/60 border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="text-xs font-semibold text-white flex items-center gap-2">
+                    <span>Embed Role List Cards</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${deckShowFields ? "bg-discord-blurple/20 text-discord-blurple border border-discord-blurple/30" : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"}`}>
+                      {deckShowFields ? "DETAILED FIELDS" : "CLEAN EMBED (RECOMMENDED)"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-discord-muted">
+                    {deckShowFields
+                      ? "Embed shows role cards. Empty descriptions show only the role name without any repetitive subtitle text."
+                      : "Clean layout: embed only shows Title, Description & Banner. Role names and emojis are displayed cleanly on the buttons below."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDeckShowFields(!deckShowFields)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex-shrink-0 ${
+                    deckShowFields
+                      ? "bg-discord-blurple text-white hover:bg-discord-blurple/90 shadow"
+                      : "bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40"
+                  }`}
+                >
+                  {deckShowFields ? "✓ Fields Enabled" : "🔲 Clean (Buttons Only)"}
+                </button>
               </div>
 
               {/* Title & Color */}
@@ -1001,12 +1054,12 @@ export default function ReactionRolesPage() {
 
                         {/* Perks / Description */}
                         <div>
-                          <label className="text-[10px] text-discord-muted uppercase">Role Perks & Description</label>
+                          <label className="text-[10px] text-discord-muted uppercase">Role Perks & Description (Optional - Leave blank for clean look)</label>
                           <input
                             type="text"
                             value={dr.description}
                             onChange={(e) => updateDeckRole(idx, "description", e.target.value)}
-                            placeholder="e.g. Unlocks access to #vip and private events"
+                            placeholder="Optional perk / description (leave blank to show only role name)"
                             className="w-full px-2.5 py-1.5 rounded-lg bg-discord-card border border-white/10 text-xs text-white"
                           />
                         </div>
@@ -1176,30 +1229,40 @@ export default function ReactionRolesPage() {
                   )}
 
                   {/* Fields list */}
-                  <div className="space-y-2 pt-2 border-t border-white/5">
-                    {deckRoles.map((r, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs">
-                        {r.imageUrl && (
-                          <img
-                            src={r.imageUrl}
-                            alt=""
-                            className="w-6 h-6 rounded object-cover flex-shrink-0 mt-0.5"
-                            onError={(e) => (e.currentTarget.style.display = "none")}
-                          />
-                        )}
-                        <div>
-                          <div className="font-semibold text-white">
-                            {r.emoji} {r.roleName}
+                  {deckShowFields && (
+                    <div className="space-y-2 pt-2 border-t border-white/5">
+                      {deckRoles.map((r, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs">
+                          {r.imageUrl && (
+                            <img
+                              src={r.imageUrl}
+                              alt=""
+                              className="w-6 h-6 rounded object-cover flex-shrink-0 mt-0.5"
+                              onError={(e) => (e.currentTarget.style.display = "none")}
+                            />
+                          )}
+                          <div>
+                            <div className="font-semibold text-white">
+                              {r.emoji} {r.roleName}
+                            </div>
+                            {r.description && (
+                              <div className="text-[11px] text-[#949ba4]">{r.description}</div>
+                            )}
                           </div>
-                          <div className="text-[11px] text-[#949ba4]">{r.description}</div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Footer */}
                   <div className="text-[10px] text-[#949ba4] pt-2">
-                    Paradox Visual Role Deck • Click to Claim or Remove
+                    {deckMode === "UNIQUE"
+                      ? "Paradox Visual Role Deck • Select 1 Role (Switching revokes previous)"
+                      : deckMode === "VERIFY"
+                      ? "Paradox Visual Role Deck • One-Time Claim (Verification)"
+                      : deckMode === "REVERSED"
+                      ? "Paradox Visual Role Deck • Click to Remove Role"
+                      : "Paradox Visual Role Deck • Click to Claim or Remove"}
                   </div>
                 </div>
 
@@ -1392,6 +1455,21 @@ export default function ReactionRolesPage() {
                     ))}
                   </select>
                 )}
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Role Selection Mode
+                </label>
+                <select
+                  value={singleMode}
+                  onChange={(e) => setSingleMode(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white focus:outline-none focus:border-discord-blurple"
+                >
+                  <option value="TOGGLE">🔁 Multi-Select (Members can toggle multiple roles freely)</option>
+                  <option value="UNIQUE">🔘 Unique / Single Choice (Selecting revokes other roles in this message)</option>
+                  <option value="VERIFY">🔒 One-Time Claim (Verification - cannot be unequipped)</option>
+                  <option value="REVERSED">🔄 Remove Only (Clicking revokes the role)</option>
+                </select>
               </div>
             </div>
 

@@ -178,6 +178,7 @@ export const ReactionRoleSchema = z.object({
   roleName: z.string().min(1, "Role name is required"),
   description: z.string().optional().nullable(),
   type: z.enum(["REACTION", "BUTTON", "SELECT_MENU"]).optional().default("REACTION"),
+  mode: z.enum(["TOGGLE", "UNIQUE", "VERIFY", "REVERSED"]).optional().default("TOGGLE"),
   imageUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")).nullable(),
   bannerUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")).nullable(),
   confirmGif: z.string().url("Must be a valid URL").optional().or(z.literal("")).nullable(),
@@ -191,6 +192,8 @@ export const VisualRoleDeckDeploySchema = z.object({
   color: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Invalid hex color").default("#5865F2"),
   bannerUrl: z.string().url("Banner must be a valid image/GIF URL").optional().or(z.literal("")).nullable(),
   type: z.enum(["BUTTON", "REACTION", "SELECT_MENU"]).default("BUTTON"),
+  mode: z.enum(["TOGGLE", "UNIQUE", "VERIFY", "REVERSED"]).optional().default("TOGGLE"),
+  showRoleFields: z.boolean().optional().default(true),
   roles: z.array(
     z.object({
       roleId: z.string().optional().or(z.literal("")).nullable(),
