@@ -21,6 +21,7 @@ import {
   ExternalLink,
   ChevronDown,
 } from "lucide-react";
+import { DiscordMarkdown } from "@/lib/discordMarkdown";
 
 interface Channel {
   id: string;
@@ -325,7 +326,7 @@ export default function ReactionRolesPage() {
         body: JSON.stringify({
           type: "role_deck",
           prompt: aiPrompt.trim() || undefined,
-          roles: existingRolesPayload.length > 0 ? existingRolesPayload : undefined,
+          roles: aiPrompt.trim() ? undefined : (existingRolesPayload.length > 0 ? existingRolesPayload : undefined),
         }),
       });
 
@@ -993,9 +994,11 @@ export default function ReactionRolesPage() {
               <div className="bg-[#313338] p-4 rounded-xl text-slate-100 font-sans text-sm space-y-3 select-none shadow-inner">
                 {/* Header */}
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-full bg-discord-blurple flex items-center justify-center flex-shrink-0 text-white">
-                    <Bot className="w-5 h-5" />
-                  </div>
+                  <img
+                    src="/pfp.png"
+                    alt="Paradox"
+                    className="w-9 h-9 rounded-full object-cover flex-shrink-0 ring-1 ring-white/10"
+                  />
                   <div className="flex items-baseline gap-2">
                     <span className="font-semibold text-white text-sm">Paradox</span>
                     <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#5865F2] text-white font-bold uppercase">
@@ -1012,8 +1015,8 @@ export default function ReactionRolesPage() {
                 >
                   <div className="font-bold text-white text-base">{deckTitle || "Role Deck"}</div>
                   {deckDescription && (
-                    <div className="text-xs text-[#dbdee1] leading-relaxed whitespace-pre-wrap">
-                      {deckDescription}
+                    <div className="text-xs text-[#dbdee1] leading-relaxed">
+                      <DiscordMarkdown content={deckDescription} />
                     </div>
                   )}
 
@@ -1442,9 +1445,47 @@ export default function ReactionRolesPage() {
                 rows={4}
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="e.g. Gamer 🎮, VIP 👑, Streamer 🎙️, Artist 🎨, Announcements 🔔"
+                placeholder="e.g. Gamer 🎮 LFG pings, VIP 👑 Lounge perks, Streamer 🎙️ Live alerts, Announcements 🔔"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
               />
+            </div>
+
+            {/* Quick Inspiration Presets */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Quick Presets:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  {
+                    label: "🎮 Gaming Squads",
+                    text: "Valorant 🎯 Ranked 5-stack alerts, Minecraft ⛏️ SMP server IP & builds, Fortnite ⚡ Battle pass XP grind, Gamer 🎮 General LFG pings",
+                  },
+                  {
+                    label: "👑 VIP & Supporters",
+                    text: "VIP Member 👑 Exclusive lounge & priority voice, Server Booster 🚀 Custom color roles & nitro giveaways, Supporter ⭐ Special supporter badge",
+                  },
+                  {
+                    label: "🔔 Notification Pings",
+                    text: "Announcements 📢 Major server news & updates, Events 🎉 Weekly game nights & tournaments, Giveaways 🎁 Nitro & steam game alerts",
+                  },
+                  {
+                    label: "🌸 Anime & Community",
+                    text: "Anime Fans 🌸 Seasonal watch party pings, Manga Readers 📖 Release alerts & discussions, Artists 🎨 Creative showcase gallery",
+                  },
+                  {
+                    label: "🛡️ Staff & Moderation",
+                    text: "Server Admin ⚔️ Server administration & security, Moderator 🛡️ Chat moderation & safety, Helper 🤝 Community guide & ticket support",
+                  },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => setAiPrompt(preset.text)}
+                    className="px-2.5 py-1 rounded-lg bg-discord-dark hover:bg-white/10 border border-white/5 text-[11px] text-zinc-300 hover:text-white transition cursor-pointer"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2">

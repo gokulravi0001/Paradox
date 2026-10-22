@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { DISCORD_LIMITS } from "@/lib/validations";
+import { DiscordMarkdown } from "@/lib/discordMarkdown";
 
 interface Channel {
   id: string;
@@ -788,8 +789,8 @@ export default function EmbedBuilderPage() {
 
                 {/* Description */}
                 {description && (
-                  <div className="text-xs text-[#dbdee1] whitespace-pre-wrap leading-relaxed">
-                    {description}
+                  <div className="text-xs text-[#dbdee1] leading-relaxed">
+                    <DiscordMarkdown content={description} />
                   </div>
                 )}
 
@@ -802,7 +803,9 @@ export default function EmbedBuilderPage() {
                         className={`${f.inline ? "col-span-4" : "col-span-12"} space-y-0.5`}
                       >
                         <div className="text-[11px] font-bold text-[#dbdee1]">{f.name}</div>
-                        <div className="text-xs text-[#b5bac1]">{f.value}</div>
+                        <div className="text-xs text-[#b5bac1]">
+                          <DiscordMarkdown content={f.value} />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -909,6 +912,29 @@ export default function EmbedBuilderPage() {
                 placeholder="e.g. Welcome announcement for new members with server guidelines, key channels, and Discord invite link"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-discord-fuchsia"
               />
+            </div>
+
+            {/* Quick Inspiration Presets */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Quick Presets:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: "📜 Server Rules", text: "Server rules with 4 clear guidelines on respect, no spam, Discord TOS, and staff discretion" },
+                  { label: "🎉 Game Night Event", text: "Weekly community gaming tournament this Saturday at 7 PM EST with Discord Nitro prizes" },
+                  { label: "📢 Major Server Update", text: "Important server update announcing new visual role decks, improved bot commands, and channels" },
+                  { label: "🎁 Nitro Giveaway", text: "Special community giveaway for 1 Month Discord Nitro ending in 48 hours" },
+                  { label: "✨ New Member Welcome", text: "Welcome guide for new server members with rules channel, roles setup, and introduction chat" },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => setAiPrompt(preset.text)}
+                    className="px-2.5 py-1 rounded-lg bg-discord-dark hover:bg-white/10 border border-white/5 text-[11px] text-zinc-300 hover:text-white transition cursor-pointer"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2">
