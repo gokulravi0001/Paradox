@@ -863,12 +863,13 @@ function extractAndTransformVideoUrls(content, enabledProviders = ["twitter", "t
       }
       if (activeProviders.has("instagram")) {
         const isInstagram = host === "instagram.com" || host === "www.instagram.com";
-        const isAlreadyTransformed = host.includes("ddinstagram");
+        const isAlreadyTransformed = host.includes("fxinstagram") || host.includes("ddinstagram") || host.includes("vxinstagram");
         if (isInstagram && !isAlreadyTransformed) {
           const instaMatch = pathname.match(/^\/(reel|p|tv)\/([a-zA-Z0-9_-]+)/);
           if (instaMatch) {
             const transformed = new URL(rawUrl);
-            transformed.hostname = "ddinstagram.com";
+            transformed.hostname = "fxinstagram.com";
+            transformed.search = "";
             results.push({
               originalUrl: rawUrl,
               transformedUrl: transformed.toString(),

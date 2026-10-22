@@ -38,8 +38,8 @@ export const SUPPORTED_PROVIDERS: Record<VideoProviderId, VideoProviderInfo> = {
     id: "instagram",
     name: "Instagram Reels & Posts",
     badge: "Instagram",
-    description: "Transforms instagram.com/reel and /p/ links to ddinstagram.com so video reels play directly inside Discord chat.",
-    targetDomain: "ddinstagram.com",
+    description: "Transforms instagram.com/reel and /p/ links to fxinstagram.com so video reels play directly inside Discord chat.",
+    targetDomain: "fxinstagram.com",
     limitations: [
       "Private Instagram account links cannot be resolved.",
       "Instagram Stories are not supported.",
@@ -158,13 +158,14 @@ export function extractAndTransformVideoUrls(
       // 3. Instagram
       if (activeProviders.has("instagram")) {
         const isInstagram = host === "instagram.com" || host === "www.instagram.com";
-        const isAlreadyTransformed = host.includes("ddinstagram");
+        const isAlreadyTransformed = host.includes("fxinstagram") || host.includes("ddinstagram") || host.includes("vxinstagram");
 
         if (isInstagram && !isAlreadyTransformed) {
           const instaMatch = pathname.match(/^\/(reel|p|tv)\/([a-zA-Z0-9_-]+)/);
           if (instaMatch) {
             const transformed = new URL(rawUrl);
-            transformed.hostname = "ddinstagram.com";
+            transformed.hostname = "fxinstagram.com";
+            transformed.search = ""; // Strip tracking parameters for clean embed
             results.push({
               originalUrl: rawUrl,
               transformedUrl: transformed.toString(),
