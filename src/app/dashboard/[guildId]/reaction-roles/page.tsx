@@ -92,6 +92,13 @@ export default function ReactionRolesPage() {
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiChannelId, setAiChannelId] = useState("");
+  const [aiSelectedRoleIds, setAiSelectedRoleIds] = useState<string[]>([]);
+
+  // Bulk Role Picker State
+  const [serverRolePickerOpen, setServerRolePickerOpen] = useState(false);
+  const [bulkSelectedRoleIds, setBulkSelectedRoleIds] = useState<string[]>([]);
+  const [roleSearchQuery, setRoleSearchQuery] = useState("");
 
   const [deckRoles, setDeckRoles] = useState<VisualRoleItem[]>([
     {
@@ -350,13 +357,24 @@ export default function ReactionRolesPage() {
       setAiGenerating(true);
       setError(null);
 
-      const existingRolesPayload = deckRoles
-        .filter((r) => r.roleName && r.roleName !== "New Role")
-        .map((r) => ({
-          roleName: r.roleName,
-          emoji: r.emoji,
-          description: r.description,
+      // 1. Sync target channel if chosen in AI modal
+      if (aiChannelId) {
+        setDeckChannelId(aiChannelId);
+        const match = channels.find((c) => c.id === aiChannelId);
+        if (match) setDeckChannelName(match.name);
+      }
+
+      // 2. Prepare roles payload: prioritize checked server roles if selected
+      let rolesPayloadToSend: any = undefined;
+      if (aiSelectedRoleIds.length > 0) {
+        const checked = roles.filter((r) => aiSelectedRoleIds.includes(r.id));
+        rolesPayloadToSend = checked.map((r) => ({
+          roleId: r.id,
+          roleName: r.name,
+          emoji: "⭐",
+          description: `Unlock ${r.name} role and community permissions.`,
         }));
+      }
 
       const res = await fetch("/api/ai/generate", {
         method: "POST",
@@ -364,7 +382,7 @@ export default function ReactionRolesPage() {
         body: JSON.stringify({
           type: "role_deck",
           prompt: aiPrompt.trim() || undefined,
-          roles: aiPrompt.trim() ? undefined : (existingRolesPayload.length > 0 ? existingRolesPayload : undefined),
+          roles: rolesPayloadToSend,
         }),
       });
 
@@ -383,7 +401,7 @@ export default function ReactionRolesPage() {
       if (Array.isArray(generated.roles) && generated.roles.length > 0) {
         const mappedRoles: VisualRoleItem[] = generated.roles.map((gr: any) => {
           const match = roles.find(
-            (r) => r.name.toLowerCase() === gr.roleName.toLowerCase() || r.id === gr.roleId
+            (r) => r.id === gr.roleId || r.name.toLowerCase() === gr.roleName.toLowerCase()
           );
           return {
             roleId: match?.id || gr.roleId || "",
@@ -400,12 +418,35 @@ export default function ReactionRolesPage() {
       }
 
       setAiModalOpen(false);
-      setSuccess("✨ AI Role Deck successfully generated! Review the details and click Deploy.");
+      setSuccess("✨ Channel & Role Deck configured! Review the details and click Deploy.");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to run AI generation");
     } finally {
       setAiGenerating(false);
     }
+  }
+
+  function applyBulkSelectedRoles() {
+    if (bulkSelectedRoleIds.length === 0) {
+      setServerRolePickerOpen(false);
+      return;
+    }
+
+    const selected = roles.filter((r) => bulkSelectedRoleIds.includes(r.id));
+    const newItems: VisualRoleItem[] = selected.map((r) => ({
+      roleId: r.id,
+      roleName: r.name,
+      emoji: "⭐",
+      description: `Unlock ${r.name} role and community perks.`,
+      imageUrl: "",
+      confirmGif: "",
+      buttonStyle: "PRIMARY",
+      customInput: false,
+    }));
+
+    setDeckRoles(newItems);
+    setServerRolePickerOpen(false);
+    setSuccess(`✅ Loaded ${newItems.length} server roles into the deck!`);
   }
 
   function addDeckRole() {
@@ -811,13 +852,25 @@ export default function ReactionRolesPage() {
                   <h3 className="text-xs font-bold text-discord-muted uppercase tracking-wider">
                     Roles in Deck ({deckRoles.length}/25)
                   </h3>
-                  <button
-                    type="button"
-                    onClick={addDeckRole}
-                    className="px-2.5 py-1 rounded-lg bg-discord-dark hover:bg-white/5 text-xs text-discord-blurple font-semibold border border-white/5 flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add Role Card
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBulkSelectedRoleIds(deckRoles.map((dr) => dr.roleId).filter(Boolean));
+                        setServerRolePickerOpen(true);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-discord-blurple/20 hover:bg-discord-blurple/30 text-xs text-discord-blurple font-semibold border border-discord-blurple/30 flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" /> 📋 Select Server Roles
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addDeckRole}
+                      className="px-2.5 py-1 rounded-lg bg-discord-dark hover:bg-white/5 text-xs text-discord-blurple font-semibold border border-white/5 flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Card
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -1472,7 +1525,7 @@ export default function ReactionRolesPage() {
       {/* AI Modal for Role Deck */}
       {aiModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-lg rounded-2xl bg-discord-card border border-white/10 p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-discord-card border border-white/10 p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
               <div className="flex items-center gap-2 font-bold text-white text-base">
                 <Sparkles className="w-5 h-5 text-discord-blurple" />
@@ -1488,19 +1541,108 @@ export default function ReactionRolesPage() {
             </div>
 
             <p className="text-xs text-discord-muted leading-relaxed">
-              Specify your roles or describe your server theme below. You can type role names with emojis &amp; descriptions (e.g. <em>&quot;VIP 👑 Special lounge access, Gamer 🎮 Matchmaking pings, Streamer 🎙️ Live alerts&quot;</em>) or just list your community keywords!
+              Configure your <strong>Target Channel</strong> and select your <strong>Server Roles</strong> together. You can check off roles directly from your server, or type custom roles with emojis!
             </p>
 
+            {/* 1. Target Channel Selection */}
+            <div className="space-y-1.5 p-3 rounded-xl bg-discord-dark border border-white/5">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                <span>📍 1. Target Channel</span>
+                <span className="text-[10px] text-discord-muted font-normal">Where to post the embed</span>
+              </label>
+              <select
+                value={aiChannelId || deckChannelId}
+                onChange={(e) => {
+                  setAiChannelId(e.target.value);
+                  setDeckChannelId(e.target.value);
+                  const match = channels.find((c) => c.id === e.target.value);
+                  if (match) setDeckChannelName(match.name);
+                }}
+                className="w-full px-3 py-2 rounded-xl bg-discord-card border border-white/10 text-xs text-white focus:outline-none focus:border-discord-blurple"
+              >
+                <option value="">-- Choose a Channel --</option>
+                {channels.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    #{c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. Server Roles Checklist */}
+            <div className="space-y-1.5 p-3 rounded-xl bg-discord-dark border border-white/5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-discord-blurple" />
+                  <span>2. Pick Server Roles ({aiSelectedRoleIds.length} Selected)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAiSelectedRoleIds(roles.filter((r) => r.name !== "@everyone").map((r) => r.id))}
+                    className="text-[10px] text-discord-blurple hover:underline font-semibold"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-zinc-600">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setAiSelectedRoleIds([])}
+                    className="text-[10px] text-discord-muted hover:text-white"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="max-h-36 overflow-y-auto p-1.5 rounded-lg bg-discord-card border border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {roles
+                  .filter((r) => r.name !== "@everyone")
+                  .map((r) => {
+                    const isChecked = aiSelectedRoleIds.includes(r.id);
+                    return (
+                      <label
+                        key={r.id}
+                        className={`flex items-center gap-2 p-1.5 rounded-md cursor-pointer text-xs border transition ${
+                          isChecked
+                            ? "bg-discord-blurple/20 border-discord-blurple/50 text-white font-semibold"
+                            : "border-transparent text-zinc-300 hover:bg-white/5"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setAiSelectedRoleIds(aiSelectedRoleIds.filter((id) => id !== r.id));
+                            } else {
+                              setAiSelectedRoleIds([...aiSelectedRoleIds, r.id]);
+                            }
+                          }}
+                          className="rounded bg-discord-dark border-white/20 text-discord-blurple focus:ring-0"
+                        />
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: r.color || "#99aab5" }}
+                        />
+                        <span className="truncate">{r.name}</span>
+                      </label>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {/* 3. Theme or Prompt */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Roles, Emojis &amp; Descriptions
+                3. Custom Theme, Prompt or Extra Roles
               </label>
               <textarea
-                rows={4}
+                rows={2}
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="e.g. Gamer 🎮 LFG pings, VIP 👑 Lounge perks, Streamer 🎙️ Live alerts, Announcements 🔔"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
+                placeholder="e.g. Choose Which color you want your username to be, or Gaming squad roles"
+                className="w-full px-3.5 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
               />
             </div>
 
@@ -1559,15 +1701,130 @@ export default function ReactionRolesPage() {
                 {aiGenerating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Generating with AI...</span>
+                    <span>Generating &amp; Applying...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4 text-discord-yellow" />
-                    <span>Generate Role Deck</span>
+                    <span>Apply Channel &amp; Roles</span>
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Server Role Picker Modal */}
+      {serverRolePickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl bg-discord-card border border-white/10 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-2 font-bold text-white text-base">
+                <CheckCircle2 className="w-5 h-5 text-discord-blurple" />
+                <span>Select Roles from Discord Server</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setServerRolePickerOpen(false)}
+                className="text-discord-muted hover:text-white transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-discord-muted">
+              Check all the roles you want to include in this visual deck. They will be added with their exact Discord IDs.
+            </p>
+
+            <div className="flex items-center justify-between gap-2">
+              <input
+                type="text"
+                placeholder="Search server roles..."
+                value={roleSearchQuery}
+                onChange={(e) => setRoleSearchQuery(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
+              />
+              <button
+                type="button"
+                onClick={() => setBulkSelectedRoleIds(roles.filter((r) => r.name !== "@everyone").map((r) => r.id))}
+                className="px-2.5 py-1.5 rounded-lg bg-discord-dark hover:bg-white/5 text-[11px] font-semibold text-discord-blurple border border-white/5 whitespace-nowrap"
+              >
+                Check All
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkSelectedRoleIds([])}
+                className="px-2.5 py-1.5 rounded-lg bg-discord-dark hover:bg-white/5 text-[11px] text-zinc-400 hover:text-white border border-white/5 whitespace-nowrap"
+              >
+                Clear
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto max-h-64 p-2 rounded-xl bg-discord-dark border border-white/5 space-y-1">
+              {roles
+                .filter((r) => r.name !== "@everyone")
+                .filter((r) => r.name.toLowerCase().includes(roleSearchQuery.toLowerCase()))
+                .map((r) => {
+                  const isChecked = bulkSelectedRoleIds.includes(r.id);
+                  return (
+                    <label
+                      key={r.id}
+                      className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-xs border transition ${
+                        isChecked
+                          ? "bg-discord-blurple/20 border-discord-blurple/50 text-white font-semibold"
+                          : "border-transparent text-zinc-300 hover:bg-white/5"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 truncate">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setBulkSelectedRoleIds(bulkSelectedRoleIds.filter((id) => id !== r.id));
+                            } else {
+                              setBulkSelectedRoleIds([...bulkSelectedRoleIds, r.id]);
+                            }
+                          }}
+                          className="rounded bg-discord-card border-white/20 text-discord-blurple focus:ring-0"
+                        />
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: r.color || "#99aab5" }}
+                        />
+                        <span className="truncate">{r.name}</span>
+                      </div>
+                      {!r.assignableByBot && roles.some((x) => x.assignableByBot) && (
+                        <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                          Above Bot
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <span className="text-xs text-discord-muted">
+                {bulkSelectedRoleIds.length} roles selected
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setServerRolePickerOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-discord-dark hover:bg-white/5 text-xs text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={applyBulkSelectedRoles}
+                  className="px-5 py-2 rounded-xl bg-discord-blurple hover:bg-discord-blurple/90 text-white font-bold text-xs"
+                >
+                  Load {bulkSelectedRoleIds.length} Roles to Deck
+                </button>
+              </div>
             </div>
           </div>
         </div>
