@@ -224,19 +224,25 @@ export async function fetchGuildChannels(guildId: string): Promise<DiscordChanne
     return [];
   }
 
-  const response = await fetch(`${DISCORD_API_ENDPOINT}/guilds/${guildId}/channels`, {
-    headers: {
-      Authorization: `Bot ${botToken}`,
-    },
-  });
+  try {
+    const response = await fetch(`${DISCORD_API_ENDPOINT}/guilds/${guildId}/channels`, {
+      headers: {
+        Authorization: `Bot ${botToken}`,
+      },
+      cache: "no-store",
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      console.error(`[fetchGuildChannels] Discord error for ${guildId}: ${response.status}`);
+      return [];
+    }
+
+    const channels: DiscordChannel[] = await response.json();
+    return channels.filter((c) => c.type === 0 || c.type === 5);
+  } catch (err) {
+    console.error(`[fetchGuildChannels] Exception:`, err);
     return [];
   }
-
-  const channels: DiscordChannel[] = await response.json();
-  // Filter for text channels (0) and announcement channels (5)
-  return channels.filter((c) => c.type === 0 || c.type === 5);
 }
 
 /**
@@ -245,59 +251,77 @@ export async function fetchGuildChannels(guildId: string): Promise<DiscordChanne
 export async function fetchGuildRoles(guildId: string): Promise<DiscordRole[]> {
   const botToken = process.env.DISCORD_BOT_TOKEN;
   if (!botToken || botToken.startsWith("dummy_")) {
+    console.warn(`[fetchGuildRoles] No valid bot token for ${guildId}`);
     return [];
   }
 
-  const response = await fetch(`${DISCORD_API_ENDPOINT}/guilds/${guildId}/roles`, {
-    headers: {
-      Authorization: `Bot ${botToken}`,
-    },
-  });
+  try {
+    const response = await fetch(`${DISCORD_API_ENDPOINT}/guilds/${guildId}/roles`, {
+      headers: {
+        Authorization: `Bot ${botToken}`,
+      },
+      cache: "no-store",
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[fetchGuildRoles] Discord error for ${guildId}: ${response.status} ${errText}`);
+      return [];
+    }
+
+    const roles: DiscordRole[] = await response.json();
+    if (!Array.isArray(roles)) {
+      console.error(`[fetchGuildRoles] Expected array, got:`, roles);
+      return [];
+    }
+    return roles.sort((a, b) => b.position - a.position);
+  } catch (err) {
+    console.error(`[fetchGuildRoles] Exception:`, err);
     return [];
   }
-
-  const roles: DiscordRole[] = await response.json();
-  // Sort descending by position (highest role first)
-  return roles.sort((a, b) => b.position - a.position);
 }
 
 /**
  * Fetch bot member in guild to inspect its highest role position
  */
-export async function fetchBotMember(guildId: string): Promise<{ id: string; roles: string[]; highestPosition: number } | null> {
+export async function fetchBotMember(
+  guildId: string,
+  existingRoles?: DiscordRole[]
+): Promise<{ id: string; roles: string[]; highestPosition: number } | null> {
   const botToken = process.env.DISCORD_BOT_TOKEN;
-  const botClientId = process.env.DISCORD_CLIENT_ID;
-  if (!botToken || !botClientId || botToken.startsWith("dummy_")) {
+  if (!botToken || botToken.startsWith("dummy_")) {
     return null;
   }
 
   try {
-    const [memberRes, rolesRes] = await Promise.all([
-      fetch(`${DISCORD_API_ENDPOINT}/guilds/${guildId}/members/${botClientId}`, {
-        headers: { Authorization: `Bot ${botToken}` },
-      }),
-      fetchGuildRoles(guildId),
-    ]);
+    // Discord API v10 supports @me to fetch current bot's guild member
+    const memberRes = await fetch(`${DISCORD_API_ENDPOINT}/guilds/${guildId}/members/@me`, {
+      headers: { Authorization: `Bot ${botToken}` },
+      cache: "no-store",
+    });
 
-    if (!memberRes.ok) return null;
+    if (!memberRes.ok) {
+      return null;
+    }
+
     const member = await memberRes.json();
     const roleIds: string[] = member.roles || [];
+    const rolesList = existingRoles || (await fetchGuildRoles(guildId));
 
     let highestPosition = 0;
-    for (const role of rolesRes) {
+    for (const role of rolesList) {
       if (roleIds.includes(role.id) && role.position > highestPosition) {
         highestPosition = role.position;
       }
     }
 
     return {
-      id: botClientId,
+      id: member.user?.id || "",
       roles: roleIds,
       highestPosition,
     };
-  } catch {
+  } catch (err) {
+    console.error(`[fetchBotMember] Exception:`, err);
     return null;
   }
 }

@@ -13,10 +13,8 @@ export async function GET(
   if (auth.errorResponse) return auth.errorResponse;
 
   try {
-    const [roles, botMember] = await Promise.all([
-      fetchGuildRoles(guildId),
-      fetchBotMember(guildId),
-    ]);
+    const roles = await fetchGuildRoles(guildId);
+    const botMember = await fetchBotMember(guildId, roles);
 
     const botHighestPosition = botMember?.highestPosition ?? 0;
 
