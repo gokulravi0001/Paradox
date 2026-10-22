@@ -391,8 +391,8 @@ export default function ReactionRolesPage() {
     setDeckRoles(deckRoles.filter((_, i) => i !== index));
   }
 
-  async function handleDeployDeck(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleDeployDeck(e?: React.FormEvent) {
+    if (e) e.preventDefault();
     setError(null);
     setSuccess(null);
 
@@ -590,14 +590,34 @@ export default function ReactionRolesPage() {
                     Design a visually striking role panel with animated images, GIFs, and interactive controls.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setAiModalOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-discord-blurple to-discord-fuchsia hover:opacity-90 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-discord-blurple/25 transition cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-discord-yellow" />
-                  <span>✨ AI Auto-Build Deck</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAiModalOpen(true)}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-discord-blurple to-discord-fuchsia hover:opacity-90 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-discord-blurple/25 transition cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-discord-yellow" />
+                    <span>✨ AI Auto-Build</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeployDeck()}
+                    disabled={deploying}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/25 transition cursor-pointer"
+                  >
+                    {deploying ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Deploying...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        <span>🚀 Deploy to Discord</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Channel & Display Mode */}
@@ -949,9 +969,24 @@ export default function ReactionRolesPage() {
                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white">
                   <Eye className="w-4 h-4 text-discord-blurple" /> Live Discord Deck Simulation
                 </div>
-                <span className="text-[10px] text-discord-muted bg-discord-dark px-2 py-0.5 rounded">
-                  Discord Dark
-                </span>
+                <button
+                  type="button"
+                  onClick={() => handleDeployDeck()}
+                  disabled={deploying}
+                  className="px-3 py-1 rounded-lg bg-discord-blurple hover:bg-discord-blurple/90 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 shadow transition cursor-pointer"
+                >
+                  {deploying ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Deploying...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3 h-3" />
+                      <span>🚀 Deploy</span>
+                    </>
+                  )}
+                </button>
               </div>
 
               {/* Discord Message Simulator */}
