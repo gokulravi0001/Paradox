@@ -60,14 +60,21 @@ export async function POST(
     let resolvedChannelId = channelId.trim().replace(/^#/, "");
     if (!/^\d{17,21}$/.test(resolvedChannelId)) {
       const guildChannels = await fetchGuildChannels(guildId);
-      const match = guildChannels.find(
-        (c: DiscordChannel) => c.name.toLowerCase() === resolvedChannelId.toLowerCase() || c.id === resolvedChannelId
-      );
+      const cleanTarget = resolvedChannelId.toLowerCase().replace(/[\s\-_•^⭐*#]/g, "");
+
+      const match = guildChannels.find((c: DiscordChannel) => {
+        if (c.id === resolvedChannelId) return true;
+        if (c.name.toLowerCase() === resolvedChannelId.toLowerCase()) return true;
+        const cleanName = c.name.toLowerCase().replace(/[\s\-_•^⭐*#]/g, "");
+        if (cleanName && cleanTarget && (cleanName === cleanTarget || cleanName.includes(cleanTarget) || cleanTarget.includes(cleanName))) return true;
+        return false;
+      });
+
       if (match) {
         resolvedChannelId = match.id;
       } else {
         return NextResponse.json(
-          { error: `Channel '${channelId}' was not found in this Discord server. Please check the channel name or paste the channel ID.` },
+          { error: `Channel '${channelId}' was not found in this Discord server. Please select it from the dropdown or paste the numeric Channel ID (Right-click channel in Discord -> Copy Channel ID).` },
           { status: 400 }
         );
       }
@@ -81,23 +88,37 @@ export async function POST(
 
     const botHighest = botMember?.highestPosition ?? 0;
     for (const r of roles) {
-      let match = guildRoles.find((gr) => gr.id === r.roleId);
+      let match = r.roleId ? guildRoles.find((gr) => gr.id === r.roleId) : undefined;
+
       if (!match && r.roleName) {
         match = guildRoles.find((gr) => gr.name.toLowerCase() === r.roleName.toLowerCase());
-        if (match) {
-          r.roleId = match.id;
+        if (!match) {
+          const cleanReq = r.roleName.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (cleanReq) {
+            match = guildRoles.find((gr) => {
+              const cleanGr = gr.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+              return cleanGr === cleanReq || cleanGr.includes(cleanReq) || cleanReq.includes(cleanGr);
+            });
+          }
         }
-      }
-      if (!match && r.roleId) {
-        match = guildRoles.find((gr) => gr.name.toLowerCase() === r.roleId.toLowerCase());
         if (match) {
           r.roleId = match.id;
           r.roleName = match.name;
         }
       }
+
+      const currentRoleId = r.roleId;
+      if (!match && currentRoleId) {
+        match = guildRoles.find((gr) => gr.name.toLowerCase() === currentRoleId.toLowerCase() || gr.id === currentRoleId);
+        if (match) {
+          r.roleId = match.id;
+          r.roleName = match.name;
+        }
+      }
+
       if (!match) {
         return NextResponse.json(
-          { error: `Role '${r.roleName || r.roleId}' does not exist in this Discord server. Please check the role name or role ID.` },
+          { error: `Role '${r.roleName || r.roleId}' does not exist in this Discord server. Please check the role name in Server Settings -> Roles or select it from the list.` },
           { status: 400 }
         );
       }
@@ -180,7 +201,7 @@ export async function POST(
             placeholder: "Select a role to claim or remove...",
             options: roles.slice(0, 25).map((r) => ({
               label: r.roleName.slice(0, 100),
-              value: r.roleId,
+              value: r.roleId as string,
               description: r.description ? r.description.slice(0, 100) : undefined,
               emoji: parseEmojiForDiscord(r.emoji),
             })),
@@ -246,7 +267,7 @@ export async function POST(
           channelId: resolvedChannelId,
           messageId,
           emoji: r.emoji,
-          roleId: r.roleId,
+          roleId: r.roleId as string,
           roleName: r.roleName,
           description: r.description || null,
           type,

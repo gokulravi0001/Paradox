@@ -279,32 +279,70 @@ export default function ReactionRolesPage() {
     const trimmed = raw.trim();
     const cleanName = trimmed.replace(/^#/, "");
 
-    const match = channels.find(
-      (c) => c.id === trimmed || c.name.toLowerCase() === cleanName.toLowerCase()
-    );
-    if (match) {
-      setDeckChannelId(match.id);
-      setDeckChannelName(match.name);
-    } else {
-      setDeckChannelId(trimmed);
-      setDeckChannelName(cleanName);
+    const byId = channels.find((c) => c.id === trimmed);
+    if (byId) {
+      setDeckChannelId(byId.id);
+      setDeckChannelName(byId.name);
+      return;
     }
+
+    const byName = channels.find((c) => c.name.toLowerCase() === cleanName.toLowerCase());
+    if (byName) {
+      setDeckChannelId(byName.id);
+      setDeckChannelName(byName.name);
+      return;
+    }
+
+    const cleanTarget = cleanName.toLowerCase().replace(/[\s\-_•^⭐*#]/g, "");
+    if (cleanTarget) {
+      const fuzzy = channels.find((c) => {
+        const cClean = c.name.toLowerCase().replace(/[\s\-_•^⭐*#]/g, "");
+        return cClean === cleanTarget || cClean.includes(cleanTarget) || cleanTarget.includes(cClean);
+      });
+      if (fuzzy) {
+        setDeckChannelId(fuzzy.id);
+        setDeckChannelName(fuzzy.name);
+        return;
+      }
+    }
+
+    setDeckChannelId(trimmed);
+    setDeckChannelName(cleanName);
   }
 
   function handleSingleChannelInput(raw: string) {
     const trimmed = raw.trim();
     const cleanName = trimmed.replace(/^#/, "");
 
-    const match = channels.find(
-      (c) => c.id === trimmed || c.name.toLowerCase() === cleanName.toLowerCase()
-    );
-    if (match) {
-      setSingleChannelId(match.id);
-      setSingleChannelName(match.name);
-    } else {
-      setSingleChannelId(trimmed);
-      setSingleChannelName(cleanName);
+    const byId = channels.find((c) => c.id === trimmed);
+    if (byId) {
+      setSingleChannelId(byId.id);
+      setSingleChannelName(byId.name);
+      return;
     }
+
+    const byName = channels.find((c) => c.name.toLowerCase() === cleanName.toLowerCase());
+    if (byName) {
+      setSingleChannelId(byName.id);
+      setSingleChannelName(byName.name);
+      return;
+    }
+
+    const cleanTarget = cleanName.toLowerCase().replace(/[\s\-_•^⭐*#]/g, "");
+    if (cleanTarget) {
+      const fuzzy = channels.find((c) => {
+        const cClean = c.name.toLowerCase().replace(/[\s\-_•^⭐*#]/g, "");
+        return cClean === cleanTarget || cClean.includes(cleanTarget) || cleanTarget.includes(cClean);
+      });
+      if (fuzzy) {
+        setSingleChannelId(fuzzy.id);
+        setSingleChannelName(fuzzy.name);
+        return;
+      }
+    }
+
+    setSingleChannelId(trimmed);
+    setSingleChannelName(cleanName);
   }
 
   async function handleAiGenerateDeck() {
@@ -418,22 +456,38 @@ export default function ReactionRolesPage() {
 
     try {
       setDeploying(true);
+      const sanitizedRoles = deckRoles.map((dr) => ({
+        roleId: dr.roleId ? dr.roleId.trim() : undefined,
+        roleName: dr.roleName.trim(),
+        emoji: dr.emoji ? dr.emoji.trim() : "⭐",
+        description: dr.description?.trim() || undefined,
+        imageUrl: dr.imageUrl?.trim() || undefined,
+        confirmGif: dr.confirmGif?.trim() || undefined,
+        buttonStyle: dr.buttonStyle || "PRIMARY",
+      }));
+
       const res = await fetch(`/api/guilds/${guildId}/reaction-roles/deploy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          channelId: deckChannelId,
-          title: deckTitle,
-          description: deckDescription,
+          channelId: deckChannelId.trim(),
+          title: deckTitle.trim(),
+          description: deckDescription.trim() || undefined,
           color: deckColor,
           bannerUrl: deckBannerUrl.trim() || undefined,
           type: deckType,
-          roles: deckRoles,
+          roles: sanitizedRoles,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
+        if (data.details && data.details.fieldErrors) {
+          const fieldMsgs = Object.entries(data.details.fieldErrors)
+            .map(([field, errs]) => `${field}: ${(errs as string[]).join(", ")}`)
+            .join(" | ");
+          throw new Error(`Validation failed: ${fieldMsgs}`);
+        }
         throw new Error(data.error || "Failed to deploy visual role deck.");
       }
 
