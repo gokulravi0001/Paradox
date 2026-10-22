@@ -26,9 +26,11 @@ export default async function HomePage() {
       <header className="border-b border-discord-card bg-discord-darker/80 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-discord-blurple to-indigo-400 flex items-center justify-center shadow-lg shadow-discord-blurple/20">
-              <Bot className="w-6 h-6 text-white" />
-            </div>
+            <img
+              src="/pfp.png"
+              alt="Paradox Bot"
+              className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-discord-blurple/25 border border-white/10 ring-1 ring-white/10"
+            />
             <span className="font-extrabold text-xl tracking-tight text-white">
               Paradox <span className="text-discord-blurple text-xs font-semibold px-2 py-0.5 rounded-full bg-discord-blurple/10 border border-discord-blurple/20">Bot</span>
             </span>
@@ -73,7 +75,7 @@ export default async function HomePage() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-discord-blurple/15 rounded-full blur-[120px] pointer-events-none" />
 
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-discord-card border border-white/10 text-xs font-medium text-discord-muted mb-6">
-          <Sparkles className="w-3.5 h-3.5 text-discord-yellow" />
+          <img src="/pfp.png" alt="Paradox" className="w-4 h-4 rounded-full object-cover" />
           <span>Next-Generation Discord Server Management & Video Enhancements</span>
         </div>
 

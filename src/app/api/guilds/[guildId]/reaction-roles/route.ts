@@ -55,10 +55,16 @@ export async function POST(
       fetchBotMember(guildId),
     ]);
 
-    const targetRole = roles.find((r) => r.id === roleId);
+    let targetRole = roles.find((r) => r.id === roleId);
+    if (!targetRole && roleName) {
+      targetRole = roles.find((r) => r.name.toLowerCase() === roleName.toLowerCase());
+    }
+    if (!targetRole && roleId) {
+      targetRole = roles.find((r) => r.name.toLowerCase() === roleId.toLowerCase());
+    }
     if (!targetRole) {
       return NextResponse.json(
-        { error: "The selected role was not found in this Discord server." },
+        { error: "The specified role was not found in this Discord server. Please check the role name or role ID." },
         { status: 400 }
       );
     }

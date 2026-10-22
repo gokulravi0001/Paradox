@@ -4,6 +4,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Paradox | Production Discord Bot & Web Dashboard",
   description: "Configure reaction roles, publish rich embeds, and enhance social video embeds in Discord with a secure companion dashboard.",
+  icons: {
+    icon: "/pfp.png",
+    shortcut: "/pfp.png",
+    apple: "/pfp.png",
+  },
 };
 
 export default function RootLayout({

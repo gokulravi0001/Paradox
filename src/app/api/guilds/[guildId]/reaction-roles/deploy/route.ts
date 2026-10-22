@@ -64,10 +64,23 @@ export async function POST(
 
     const botHighest = botMember?.highestPosition ?? 0;
     for (const r of roles) {
-      const match = guildRoles.find((gr) => gr.id === r.roleId);
+      let match = guildRoles.find((gr) => gr.id === r.roleId);
+      if (!match && r.roleName) {
+        match = guildRoles.find((gr) => gr.name.toLowerCase() === r.roleName.toLowerCase());
+        if (match) {
+          r.roleId = match.id;
+        }
+      }
+      if (!match && r.roleId) {
+        match = guildRoles.find((gr) => gr.name.toLowerCase() === r.roleId.toLowerCase());
+        if (match) {
+          r.roleId = match.id;
+          r.roleName = match.name;
+        }
+      }
       if (!match) {
         return NextResponse.json(
-          { error: `Role '${r.roleName}' does not exist in this Discord server.` },
+          { error: `Role '${r.roleName || r.roleId}' does not exist in this Discord server. Please check the role name or role ID.` },
           { status: 400 }
         );
       }
@@ -77,10 +90,10 @@ export async function POST(
           { status: 400 }
         );
       }
-      if (match.position >= botHighest) {
+      if (botHighest > 0 && match.position >= botHighest) {
         return NextResponse.json(
           {
-            error: `Hierarchy violation: Role '${match.name}' is higher than or equal to the bot's highest role. Please reposition the bot's role higher in Discord Server Settings.`,
+            error: `Hierarchy violation: Role '${match.name}' is higher than or equal to the bot's highest role. In Discord Server Settings -> Roles, please drag the bot's role above '${match.name}'.`,
           },
           { status: 400 }
         );

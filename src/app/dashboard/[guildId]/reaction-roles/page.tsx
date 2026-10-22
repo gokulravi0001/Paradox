@@ -60,6 +60,7 @@ interface VisualRoleItem {
   imageUrl: string;
   confirmGif: string;
   buttonStyle: "PRIMARY" | "SECONDARY" | "SUCCESS" | "DANGER";
+  customInput?: boolean;
 }
 
 export default function ReactionRolesPage() {
@@ -110,6 +111,9 @@ export default function ReactionRolesPage() {
   const [singleMessageId, setSingleMessageId] = useState("");
   const [singleEmoji, setSingleEmoji] = useState("⭐");
   const [singleRoleId, setSingleRoleId] = useState("");
+  const [singleRoleName, setSingleRoleName] = useState("");
+  const [singleRoleMode, setSingleRoleMode] = useState<"select" | "custom">("select");
+  const [singleRoleCustomInput, setSingleRoleCustomInput] = useState("");
   const [singleDesc, setSingleDesc] = useState("");
   const [singleBadgeUrl, setSingleBadgeUrl] = useState("");
   const [singleConfirmGif, setSingleConfirmGif] = useState("");
@@ -145,15 +149,17 @@ export default function ReactionRolesPage() {
           const loadedRoles: Role[] = rData.roles || [];
           setRoles(loadedRoles);
 
-          const assignable = loadedRoles.filter((r) => r.assignableByBot);
-          if (assignable.length > 0) {
-            setSingleRoleId(assignable[0].id);
-            // Assign default valid roles to deckRoles if empty
+          const preferredRoles = loadedRoles.filter((r) => r.assignableByBot);
+          const pool = preferredRoles.length > 0 ? preferredRoles : loadedRoles;
+          if (pool.length > 0) {
+            setSingleRoleId(pool[0].id);
+            setSingleRoleName(pool[0].name);
+            setSingleRoleCustomInput(pool[0].name);
             setDeckRoles((prev) =>
               prev.map((item, idx) => ({
                 ...item,
-                roleId: assignable[idx % assignable.length]?.id || assignable[0].id,
-                roleName: assignable[idx % assignable.length]?.name || assignable[0].name,
+                roleId: pool[idx % pool.length]?.id || pool[0].id,
+                roleName: pool[idx % pool.length]?.name || pool[0].name,
               }))
             );
           }
@@ -178,11 +184,11 @@ export default function ReactionRolesPage() {
   function updateDeckRole(index: number, key: keyof VisualRoleItem, value: any) {
     const updated = [...deckRoles];
     if (key === "roleId") {
-      const match = roles.find((r) => r.id === value);
+      const match = roles.find((r) => r.id === value || r.name.toLowerCase() === String(value).toLowerCase());
       updated[index] = {
         ...updated[index],
-        roleId: value,
-        roleName: match?.name || "Role",
+        roleId: match ? match.id : value,
+        roleName: match ? match.name : updated[index].roleName || "Role",
       };
     } else {
       updated[index] = { ...updated[index], [key]: value };
@@ -190,19 +196,87 @@ export default function ReactionRolesPage() {
     setDeckRoles(updated);
   }
 
+  function handleCustomRoleInput(index: number, raw: string) {
+    const trimmed = raw.trim();
+    const updated = [...deckRoles];
+
+    const byId = roles.find((r) => r.id === trimmed);
+    if (byId) {
+      updated[index] = {
+        ...updated[index],
+        roleId: byId.id,
+        roleName: byId.name,
+      };
+      setDeckRoles(updated);
+      return;
+    }
+
+    const byName = roles.find((r) => r.name.toLowerCase() === trimmed.toLowerCase());
+    if (byName) {
+      updated[index] = {
+        ...updated[index],
+        roleId: byName.id,
+        roleName: byName.name,
+      };
+      setDeckRoles(updated);
+      return;
+    }
+
+    if (/^\d{17,21}$/.test(trimmed)) {
+      updated[index] = {
+        ...updated[index],
+        roleId: trimmed,
+      };
+    } else {
+      updated[index] = {
+        ...updated[index],
+        roleName: raw,
+        roleId: trimmed,
+      };
+    }
+    setDeckRoles(updated);
+  }
+
+  function handleSingleCustomRoleInput(raw: string) {
+    setSingleRoleCustomInput(raw);
+    const trimmed = raw.trim();
+
+    const byId = roles.find((r) => r.id === trimmed);
+    if (byId) {
+      setSingleRoleId(byId.id);
+      setSingleRoleName(byId.name);
+      return;
+    }
+
+    const byName = roles.find((r) => r.name.toLowerCase() === trimmed.toLowerCase());
+    if (byName) {
+      setSingleRoleId(byName.id);
+      setSingleRoleName(byName.name);
+      return;
+    }
+
+    if (/^\d{17,21}$/.test(trimmed)) {
+      setSingleRoleId(trimmed);
+    } else {
+      setSingleRoleName(raw);
+      setSingleRoleId(trimmed);
+    }
+  }
+
   function addDeckRole() {
     if (deckRoles.length >= 25) return;
-    const assignable = roles.find((r) => r.assignableByBot);
+    const fallback = roles.length > 0 ? roles[0] : null;
     setDeckRoles([
       ...deckRoles,
       {
-        roleId: assignable?.id || "",
-        roleName: assignable?.name || "New Role",
+        roleId: fallback?.id || "",
+        roleName: fallback?.name || "New Role",
         emoji: "⭐",
         description: "Unlock special community perks.",
         imageUrl: "",
         confirmGif: "",
         buttonStyle: "PRIMARY",
+        customInput: false,
       },
     ]);
   }
@@ -226,13 +300,11 @@ export default function ReactionRolesPage() {
       return;
     }
 
-    // Check hierarchy for all roles
-    for (const r of deckRoles) {
-      const match = roles.find((role) => role.id === r.roleId);
-      if (match && !match.assignableByBot) {
-        setError(
-          `Hierarchy conflict: '${match.name}' is higher than or equal to the bot's highest role. Please reposition the bot's role higher in Discord Server Settings.`
-        );
+    // Verify all role cards have an identifier
+    for (let i = 0; i < deckRoles.length; i++) {
+      const r = deckRoles[i];
+      if (!r.roleId && !r.roleName) {
+        setError(`Role Card #${i + 1} needs a Role Name or Role ID.`);
         return;
       }
     }
@@ -280,9 +352,11 @@ export default function ReactionRolesPage() {
     setError(null);
     setSuccess(null);
 
-    const targetRole = roles.find((r) => r.id === singleRoleId);
-    if (!targetRole || !targetRole.assignableByBot) {
-      setError("The selected role is higher than the bot's highest role.");
+    const effectiveRoleId = singleRoleId || singleRoleCustomInput.trim();
+    const effectiveRoleName = singleRoleName || singleRoleCustomInput.trim() || "Role";
+
+    if (!effectiveRoleId && !effectiveRoleName) {
+      setError("Please select or type a target role name or role ID.");
       return;
     }
 
@@ -295,8 +369,8 @@ export default function ReactionRolesPage() {
           channelId: singleChannelId,
           messageId: singleMessageId.trim(),
           emoji: singleEmoji.trim(),
-          roleId: singleRoleId,
-          roleName: targetRole.name,
+          roleId: effectiveRoleId,
+          roleName: effectiveRoleName,
           description: singleDesc.trim() || undefined,
           type: "REACTION",
           imageUrl: singleBadgeUrl.trim() || undefined,
@@ -553,24 +627,54 @@ export default function ReactionRolesPage() {
 
                         {/* Role Select & Emoji */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          <div className="sm:col-span-2">
-                            <label className="text-[10px] text-discord-muted uppercase">Target Server Role</label>
-                            <select
-                              value={dr.roleId}
-                              onChange={(e) => updateDeckRole(idx, "roleId", e.target.value)}
-                              className="w-full px-2.5 py-1.5 rounded-lg bg-discord-card border border-white/10 text-xs text-white"
-                            >
-                              {roles.map((r) => (
-                                <option
-                                  key={r.id}
-                                  value={r.id}
-                                  disabled={!r.assignableByBot}
-                                  className={!r.assignableByBot ? "text-zinc-500" : "text-white"}
-                                >
-                                  {r.name} {!r.assignableByBot ? "(Higher than Bot)" : ""}
-                                </option>
-                              ))}
-                            </select>
+                          <div className="sm:col-span-2 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] text-discord-muted uppercase font-semibold">Target Server Role</label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...deckRoles];
+                                  updated[idx] = { ...updated[idx], customInput: !updated[idx].customInput };
+                                  setDeckRoles(updated);
+                                }}
+                                className="text-[10px] text-discord-blurple hover:underline font-medium"
+                              >
+                                {dr.customInput ? "📋 Choose from list" : "⌨️ Type Name or Role ID"}
+                              </button>
+                            </div>
+
+                            {dr.customInput ? (
+                              <div className="space-y-1">
+                                <input
+                                  type="text"
+                                  placeholder="Type role name (e.g. Gamer) or paste Role ID"
+                                  value={dr.roleId ? (dr.roleName && dr.roleName !== "Role" ? `${dr.roleName}` : dr.roleId) : dr.roleName}
+                                  onChange={(e) => handleCustomRoleInput(idx, e.target.value)}
+                                  className="w-full px-2.5 py-1.5 rounded-lg bg-discord-card border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-discord-blurple font-mono"
+                                />
+                                <div className="flex items-center justify-between text-[10px] text-discord-muted">
+                                  <span>Role: <strong className="text-white">{dr.roleName}</strong></span>
+                                  <span>ID: <code className="text-discord-yellow">{dr.roleId || "Resolves on deploy"}</code></span>
+                                </div>
+                              </div>
+                            ) : (
+                              <select
+                                value={dr.roleId}
+                                onChange={(e) => updateDeckRole(idx, "roleId", e.target.value)}
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-discord-card border border-white/10 text-xs text-white"
+                              >
+                                <option value="">-- Choose a Role --</option>
+                                {roles.map((r) => (
+                                  <option
+                                    key={r.id}
+                                    value={r.id}
+                                    className="text-white bg-[#2b2d31]"
+                                  >
+                                    {r.name} {!r.assignableByBot && roles.some(x => x.assignableByBot) ? "⚠️ (Check Position)" : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
                           </div>
 
                           <div>
@@ -880,20 +984,55 @@ export default function ReactionRolesPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Target Role
-                </label>
-                <select
-                  value={singleRoleId}
-                  onChange={(e) => setSingleRoleId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white"
-                >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id} disabled={!r.assignableByBot}>
-                      {r.name} {!r.assignableByBot ? "(Higher than Bot)" : ""}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Target Role
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSingleRoleMode(singleRoleMode === "select" ? "custom" : "select")}
+                    className="text-xs text-discord-blurple hover:underline font-normal"
+                  >
+                    {singleRoleMode === "select" ? "⌨️ Type Name or Role ID" : "📋 Choose from list"}
+                  </button>
+                </div>
+
+                {singleRoleMode === "custom" ? (
+                  <div className="space-y-1.5">
+                    <input
+                      type="text"
+                      placeholder="Type role name (e.g. Member) or paste Role ID"
+                      value={singleRoleCustomInput}
+                      onChange={(e) => handleSingleCustomRoleInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white font-mono placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
+                    />
+                    <div className="flex items-center justify-between text-xs text-discord-muted">
+                      <span>Name: <strong className="text-white">{singleRoleName || "None"}</strong></span>
+                      <span>ID: <code className="text-discord-yellow">{singleRoleId || "Enter Role ID"}</code></span>
+                    </div>
+                  </div>
+                ) : (
+                  <select
+                    value={singleRoleId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSingleRoleId(val);
+                      const match = roles.find((r) => r.id === val);
+                      if (match) {
+                        setSingleRoleName(match.name);
+                        setSingleRoleCustomInput(match.name);
+                      }
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white"
+                  >
+                    <option value="">-- Choose a Role --</option>
+                    {roles.map((r) => (
+                      <option key={r.id} value={r.id} className="text-white bg-[#2b2d31]">
+                        {r.name} {!r.assignableByBot && roles.some((x) => x.assignableByBot) ? "⚠️ (Check Position)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 

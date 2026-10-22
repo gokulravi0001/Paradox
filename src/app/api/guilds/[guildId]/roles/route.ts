@@ -29,7 +29,7 @@ export async function GET(
       assignableByBot:
         role.name !== "@everyone" &&
         !role.managed &&
-        role.position < botHighestPosition,
+        (botHighestPosition === 0 || role.position < botHighestPosition),
     }));
 
     return NextResponse.json({

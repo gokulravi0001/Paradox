@@ -83,9 +83,11 @@ export default function DashboardServerPicker() {
       <header className="border-b border-discord-card bg-discord-darker/90 backdrop-blur sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-discord-blurple to-indigo-500 flex items-center justify-center shadow-md shadow-discord-blurple/20">
-              <Bot className="w-5 h-5 text-white" />
-            </div>
+            <img
+              src="/pfp.png"
+              alt="Paradox"
+              className="w-9 h-9 rounded-xl object-cover shadow-md shadow-discord-blurple/25 border border-white/10 ring-1 ring-white/10"
+            />
             <span className="font-extrabold text-lg text-white">
               Paradox <span className="text-discord-blurple text-xs font-semibold">Dashboard</span>
             </span>

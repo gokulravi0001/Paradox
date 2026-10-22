@@ -222,8 +222,8 @@ export default function GuildDashboardLayout({
         {/* Footer info & Logout */}
         <div className="p-4 border-t border-discord-card text-xs text-discord-muted flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Bot className="w-4 h-4 text-discord-blurple" />
-            <span>Paradox Bot</span>
+            <img src="/pfp.png" alt="Paradox" className="w-5 h-5 rounded-md object-cover" />
+            <span className="font-semibold text-slate-300">Paradox Bot</span>
           </div>
           <a
             href="/api/auth/logout"
