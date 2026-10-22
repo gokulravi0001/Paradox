@@ -300,6 +300,7 @@ export async function POST(
           imageUrl: r.imageUrl || null,
           bannerUrl: bannerUrl || null,
           confirmGif: r.confirmGif || null,
+          requiredRoleId: r.requiredRoleId || null,
           buttonStyle: r.buttonStyle || "PRIMARY",
         },
       });

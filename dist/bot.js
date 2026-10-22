@@ -112,6 +112,31 @@ var SLASH_COMMANDS_DATA = [
     (sub) => sub.setName("list").setDescription("List all reaction roles configured in this server")
   ).addSubcommand(
     (sub) => sub.setName("clean").setDescription("Clean up deleted roles or deleted message mappings")
+  ).addSubcommand(
+    (sub) => sub.setName("setmode").setDescription("Change role selection mode for all roles on a message").addStringOption(
+      (opt) => opt.setName("message_id").setDescription("The Discord Message ID").setRequired(true)
+    ).addStringOption(
+      (opt) => opt.setName("mode").setDescription("Role Assignment Logic").setRequired(true).addChoices(
+        { name: "Unique (Radio single-choice, auto-swaps)", value: "UNIQUE" },
+        { name: "Onetime (Verify / one-time claim only)", value: "VERIFY" },
+        { name: "Multirole (Free toggle, select multiple)", value: "TOGGLE" },
+        { name: "Reversed (Opt-out / removes role)", value: "REVERSED" }
+      )
+    )
+  ).addSubcommand(
+    (sub) => sub.setName("restrict").setDescription("Set a prerequisite role restriction on a mapped role").addStringOption(
+      (opt) => opt.setName("message_id").setDescription("The Discord Message ID").setRequired(true)
+    ).addRoleOption(
+      (opt) => opt.setName("role").setDescription("The role to restrict").setRequired(true)
+    ).addRoleOption(
+      (opt) => opt.setName("required_role").setDescription("The prerequisite role needed").setRequired(true)
+    )
+  ).addSubcommand(
+    (sub) => sub.setName("unrestrict").setDescription("Remove prerequisite requirement from a role on a message").addStringOption(
+      (opt) => opt.setName("message_id").setDescription("The Discord Message ID").setRequired(true)
+    ).addRoleOption(
+      (opt) => opt.setName("role").setDescription("The role to unrestrict").setRequired(true)
+    )
   ),
   // 2. Specialist: Visual Role Deck Command (Interactive Clickable Buttons & Animated GIF Header)
   new import_discord2.SlashCommandBuilder().setName("roledeck").setDescription("Specialist: Deploy interactive Visual Role Deck with buttons and banner GIF").addStringOption(
@@ -122,10 +147,12 @@ var SLASH_COMMANDS_DATA = [
     (opt) => opt.setName("emoji1").setDescription("Emoji for first role (e.g. \u{1F3AE})").setRequired(true)
   ).addRoleOption((opt) => opt.setName("role2").setDescription("Second role (optional)")).addStringOption((opt) => opt.setName("emoji2").setDescription("Emoji for second role")).addRoleOption((opt) => opt.setName("role3").setDescription("Third role (optional)")).addStringOption((opt) => opt.setName("emoji3").setDescription("Emoji for third role")).addStringOption(
     (opt) => opt.setName("mode").setDescription("Role selection behavior").addChoices(
-      { name: "Toggle (Normal select / unselect)", value: "TOGGLE" },
       { name: "Unique (Pick one only, automatically swaps)", value: "UNIQUE" },
+      { name: "Toggle (Normal select / unselect)", value: "TOGGLE" },
       { name: "Verify (One-time claim only)", value: "VERIFY" }
     )
+  ).addRoleOption(
+    (opt) => opt.setName("required_role").setDescription("Prerequisite role needed to claim roles in this deck")
   ).addStringOption(
     (opt) => opt.setName("banner_gif").setDescription("Header banner image or animated GIF URL")
   ).addStringOption(
@@ -147,13 +174,15 @@ var SLASH_COMMANDS_DATA = [
       (opt) => opt.setName("enabled").setDescription("Show dismiss button?").setRequired(true)
     )
   ),
-  // 4. Rich Embed Publisher
-  new import_discord2.SlashCommandBuilder().setName("embed").setDescription("Create and publish a rich Discord embed to any channel").addChannelOption(
+  // 4. Rich Embed Publisher & Editor
+  new import_discord2.SlashCommandBuilder().setName("embed").setDescription("Create or edit a rich Discord embed in any channel").addChannelOption(
     (opt) => opt.setName("channel").setDescription("Destination channel").setRequired(true).addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
   ).addStringOption(
     (opt) => opt.setName("title").setDescription("Embed title").setRequired(true)
   ).addStringOption(
     (opt) => opt.setName("description").setDescription("Embed description text").setRequired(true)
+  ).addStringOption(
+    (opt) => opt.setName("message_id").setDescription("Message ID to edit (leave blank to post a new embed)")
   ).addStringOption(
     (opt) => opt.setName("color").setDescription("Hex color (e.g. #5865F2, #57F287, #ED4245)")
   ).addStringOption(
@@ -309,6 +338,52 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
         ephemeral: true
       });
     }
+    if (subcommand === "setmode") {
+      const messageId = interaction.options.getString("message_id", true).trim();
+      const newMode = interaction.options.getString("mode", true);
+      const updated = await prisma.reactionRole.updateMany({
+        where: { guildId, messageId },
+        data: { mode: newMode }
+      });
+      if (updated.count === 0) {
+        return interaction.reply({
+          content: `\u26A0\uFE0F No reaction roles found on message \`${messageId}\`.`,
+          ephemeral: true
+        });
+      }
+      return interaction.reply({
+        content: `\u2705 Successfully updated **${updated.count}** role mapping(s) on message \`${messageId}\` to mode **\`${newMode}\`**!`
+      });
+    }
+    if (subcommand === "restrict") {
+      const messageId = interaction.options.getString("message_id", true).trim();
+      const targetRole = interaction.options.getRole("role", true);
+      const reqRole = interaction.options.getRole("required_role", true);
+      const updated = await prisma.reactionRole.updateMany({
+        where: { guildId, messageId, roleId: targetRole.id },
+        data: { requiredRoleId: reqRole.id }
+      });
+      if (updated.count === 0) {
+        return interaction.reply({
+          content: `\u26A0\uFE0F No mapping found for role **${targetRole.name}** on message \`${messageId}\`.`,
+          ephemeral: true
+        });
+      }
+      return interaction.reply({
+        content: `\u{1F512} **Restriction Enabled:** Members now require <@&${reqRole.id}> to claim **${targetRole.name}** on message \`${messageId}\`.`
+      });
+    }
+    if (subcommand === "unrestrict") {
+      const messageId = interaction.options.getString("message_id", true).trim();
+      const targetRole = interaction.options.getRole("role", true);
+      const updated = await prisma.reactionRole.updateMany({
+        where: { guildId, messageId, roleId: targetRole.id },
+        data: { requiredRoleId: null }
+      });
+      return interaction.reply({
+        content: `\u{1F513} **Restriction Removed:** Anyone can now claim **${targetRole.name}** on message \`${messageId}\`.`
+      });
+    }
   }
   if (commandName === "roledeck") {
     if (!guild || !guildId) return interaction.reply({ content: "Must be used in a server.", ephemeral: true });
@@ -316,6 +391,7 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
     const title = interaction.options.getString("title", true);
     const desc = interaction.options.getString("description") || "Click the buttons below to claim or remove roles:";
     const mode = interaction.options.getString("mode") || "TOGGLE";
+    const requiredRole = interaction.options.getRole("required_role");
     const bannerGif = interaction.options.getString("banner_gif");
     const targetChannel = interaction.options.getChannel("channel") || interaction.channel;
     if (!targetChannel) return interaction.reply({ content: "Invalid channel.", ephemeral: true });
@@ -366,6 +442,7 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
           roleName: item.role.name,
           type: "BUTTON",
           mode,
+          requiredRoleId: requiredRole?.id || null,
           bannerUrl: bannerGif || null
         }
       });
@@ -447,6 +524,7 @@ Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**
     const targetChannel = interaction.options.getChannel("channel", true);
     const title = interaction.options.getString("title", true);
     const description = interaction.options.getString("description", true);
+    const messageId = interaction.options.getString("message_id");
     const colorHex = interaction.options.getString("color") || "#5865F2";
     const image = interaction.options.getString("image");
     const thumbnail = interaction.options.getString("thumbnail");
@@ -458,8 +536,31 @@ Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**
     }
     if (image) embed.setImage(image);
     if (thumbnail) embed.setThumbnail(thumbnail);
-    await targetChannel.send({ embeds: [embed] });
-    return interaction.reply({ content: `\u2705 Embed published to <#${targetChannel.id}>!`, ephemeral: true });
+    if (messageId && messageId.trim()) {
+      const targetMsg = await targetChannel.messages.fetch(messageId.trim()).catch(() => null);
+      if (!targetMsg) {
+        return interaction.reply({
+          content: `\u274C Could not find message \`${messageId.trim()}\` in <#${targetChannel.id}>. Make sure the message exists in this channel.`,
+          ephemeral: true
+        });
+      }
+      if (targetMsg.author.id !== client.user?.id) {
+        return interaction.reply({
+          content: `\u274C Paradox can only edit embed messages sent by Paradox itself.`,
+          ephemeral: true
+        });
+      }
+      await targetMsg.edit({ embeds: [embed] });
+      return interaction.reply({
+        content: `\u2705 Successfully edited embed for message \`${messageId.trim()}\` in <#${targetChannel.id}>!`,
+        ephemeral: true
+      });
+    }
+    const sent = await targetChannel.send({ embeds: [embed] });
+    return interaction.reply({
+      content: `\u2705 Embed published to <#${targetChannel.id}>! (Message ID: \`${sent.id}\`)`,
+      ephemeral: true
+    });
   }
   if (commandName === "dashboard") {
     const dashboardUrl = guildId ? `${appUrl}/dashboard/${guildId}` : `${appUrl}/dashboard`;
@@ -500,11 +601,14 @@ async function handleTextCommand(message, prefix) {
 Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
     ).addFields(
       {
-        name: "\u{1F3AD} Roles Commands",
-        value: `\`${prefix}rr add <msgId> <emoji> <@role> [TOGGLE|UNIQUE|VERIFY]\` \u2014 Add reaction role
+        name: "\u{1F3AD} Roles & Reaction Commands",
+        value: `\`${prefix}rr unique <msgId> <emoji> <@role>\` \u2014 Single-choice role (auto-swaps)
+\`${prefix}rr onetime <msgId> <emoji> <@role>\` \u2014 One-time claim (verification lock)
+\`${prefix}rr multi <msgId> <emoji> <@role>\` \u2014 Multi-role (toggle freely)
+\`${prefix}rr restrict <msgId> <emoji> <@role> <@reqRole>\` \u2014 Restricted role
+\`${prefix}rr setmode <msgId> <unique|onetime|multi>\` \u2014 Switch message mode
 \`${prefix}rr remove <msgId> <emoji>\` \u2014 Remove mapping
-\`${prefix}rr list\` \u2014 List active mappings
-\`${prefix}rr clean\` \u2014 Clean deleted roles`
+\`${prefix}rr list\` \u2014 List active mappings`
       },
       {
         name: "\u{1F3A5} Video Fixer Commands",
@@ -513,9 +617,10 @@ Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
 \`${prefix}videofix deletebtn <on|off>\` \u2014 Toggle author \u{1F5D1}\uFE0F button`
       },
       {
-        name: "\u{1F4E2} Utilities",
-        value: `\`${prefix}prefix <newPrefix>\` \u2014 Change server prefix
-\`${prefix}embed <title> | <description>\` \u2014 Post quick embed
+        name: "\u{1F4E2} Embeds & Utilities",
+        value: `\`${prefix}embed <title> | <description>\` \u2014 Post quick embed
+\`${prefix}embed edit <msgId> <title> | <description>\` \u2014 Edit existing embed
+\`${prefix}prefix <newPrefix>\` \u2014 Change server prefix
 \`${prefix}dashboard\` \u2014 Web dashboard link`
       }
     ).setFooter({ text: "Type '/' to use interactive Discord slash commands!" }).setTimestamp();
@@ -572,6 +677,153 @@ Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
       return message.reply(
         `\u2705 Reaction role configured with mode \`${mode}\`! Reacting with ${emoji} grants **${roleMention.name}**.`
       );
+    }
+    if (sub === "unique") {
+      const msgId = args[2];
+      const emoji = args[3];
+      const roleMention = message.mentions.roles.first() || guild.roles.cache.get(args[4]);
+      if (!msgId || !emoji || !roleMention) {
+        return message.reply(`Usage: \`${prefix}rr unique <message_id> <emoji> <@role>\`
+*Selecting this role will revoke any previously equipped role in this panel.*`);
+      }
+      const botMember = await guild.members.fetchMe().catch(() => null);
+      if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
+        return message.reply("\u274C The bot is missing **Manage Roles** permission.");
+      }
+      if (roleMention.position >= botMember.roles.highest.position) {
+        return message.reply(`\u274C **${roleMention.name}** is positioned higher than the bot's role.`);
+      }
+      const targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
+      if (targetMsg) await targetMsg.react(emoji).catch(() => null);
+      await prisma.reactionRole.create({
+        data: {
+          guildId: guild.id,
+          channelId: message.channel.id,
+          messageId: msgId,
+          emoji,
+          roleId: roleMention.id,
+          roleName: roleMention.name,
+          type: "REACTION",
+          mode: "UNIQUE"
+        }
+      });
+      return message.reply(`\u{1F518} **Unique Role Configured:** Reacting with ${emoji} gives **${roleMention.name}** and revokes other roles in this group!`);
+    }
+    if (sub === "onetime" || sub === "verify") {
+      const msgId = args[2];
+      const emoji = args[3];
+      const roleMention = message.mentions.roles.first() || guild.roles.cache.get(args[4]);
+      if (!msgId || !emoji || !roleMention) {
+        return message.reply(`Usage: \`${prefix}rr onetime <message_id> <emoji> <@role>\`
+*Members can claim this role only once; cannot be removed.*`);
+      }
+      const botMember = await guild.members.fetchMe().catch(() => null);
+      if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
+        return message.reply("\u274C The bot is missing **Manage Roles** permission.");
+      }
+      if (roleMention.position >= botMember.roles.highest.position) {
+        return message.reply(`\u274C **${roleMention.name}** is positioned higher than the bot's role.`);
+      }
+      const targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
+      if (targetMsg) await targetMsg.react(emoji).catch(() => null);
+      await prisma.reactionRole.create({
+        data: {
+          guildId: guild.id,
+          channelId: message.channel.id,
+          messageId: msgId,
+          emoji,
+          roleId: roleMention.id,
+          roleName: roleMention.name,
+          type: "REACTION",
+          mode: "VERIFY"
+        }
+      });
+      return message.reply(`\u{1F512} **One-Time Role Configured:** Reacting with ${emoji} grants **${roleMention.name}** permanently (verification lock)!`);
+    }
+    if (sub === "multi" || sub === "multirole") {
+      const msgId = args[2];
+      const emoji = args[3];
+      const roleMention = message.mentions.roles.first() || guild.roles.cache.get(args[4]);
+      if (!msgId || !emoji || !roleMention) {
+        return message.reply(`Usage: \`${prefix}rr multi <message_id> <emoji> <@role>\`
+*Members can toggle multiple roles freely.*`);
+      }
+      const botMember = await guild.members.fetchMe().catch(() => null);
+      if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
+        return message.reply("\u274C The bot is missing **Manage Roles** permission.");
+      }
+      if (roleMention.position >= botMember.roles.highest.position) {
+        return message.reply(`\u274C **${roleMention.name}** is positioned higher than the bot's role.`);
+      }
+      const targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
+      if (targetMsg) await targetMsg.react(emoji).catch(() => null);
+      await prisma.reactionRole.create({
+        data: {
+          guildId: guild.id,
+          channelId: message.channel.id,
+          messageId: msgId,
+          emoji,
+          roleId: roleMention.id,
+          roleName: roleMention.name,
+          type: "REACTION",
+          mode: "TOGGLE"
+        }
+      });
+      return message.reply(`\u{1F501} **Multi-Role Configured:** Reacting with ${emoji} toggles **${roleMention.name}**.`);
+    }
+    if (sub === "restrict") {
+      const msgId = args[2];
+      const emoji = args[3];
+      const rolesMentioned = message.mentions.roles;
+      const targetRole = rolesMentioned.first() || guild.roles.cache.get(args[4]);
+      const requiredRole = rolesMentioned.size > 1 ? rolesMentioned.at(1) : guild.roles.cache.get(args[5]);
+      if (!msgId || !emoji || !targetRole || !requiredRole) {
+        return message.reply(`Usage: \`${prefix}rr restrict <message_id> <emoji> <@targetRole> <@requiredRole>\`
+*Requires members to have @requiredRole before they can claim @targetRole.*`);
+      }
+      const botMember = await guild.members.fetchMe().catch(() => null);
+      if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
+        return message.reply("\u274C The bot is missing **Manage Roles** permission.");
+      }
+      if (targetRole.position >= botMember.roles.highest.position) {
+        return message.reply(`\u274C **${targetRole.name}** is positioned higher than the bot's role.`);
+      }
+      const targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
+      if (targetMsg) await targetMsg.react(emoji).catch(() => null);
+      await prisma.reactionRole.create({
+        data: {
+          guildId: guild.id,
+          channelId: message.channel.id,
+          messageId: msgId,
+          emoji,
+          roleId: targetRole.id,
+          roleName: targetRole.name,
+          type: "REACTION",
+          mode: "TOGGLE",
+          requiredRoleId: requiredRole.id
+        }
+      });
+      return message.reply(`\u{1F6E1}\uFE0F **Restricted Role Configured:** Reacting with ${emoji} grants **${targetRole.name}**, but ONLY if the member already has **${requiredRole.name}**!`);
+    }
+    if (sub === "setmode" || sub === "mode") {
+      const msgId = args[2];
+      const rawMode = args[3]?.toLowerCase();
+      let modeToSet = "TOGGLE";
+      if (rawMode === "unique" || rawMode === "radio") modeToSet = "UNIQUE";
+      else if (rawMode === "onetime" || rawMode === "verify") modeToSet = "VERIFY";
+      else if (rawMode === "multi" || rawMode === "toggle") modeToSet = "TOGGLE";
+      else if (rawMode === "reversed" || rawMode === "remove") modeToSet = "REVERSED";
+      else {
+        return message.reply(`Usage: \`${prefix}rr setmode <message_id> <unique|onetime|multi|reversed>\``);
+      }
+      const updated = await prisma.reactionRole.updateMany({
+        where: { guildId: guild.id, messageId: msgId },
+        data: { mode: modeToSet }
+      });
+      if (updated.count === 0) {
+        return message.reply(`\u26A0\uFE0F No reaction role mappings found for message \`${msgId}\`.`);
+      }
+      return message.reply(`\u2705 Updated **${updated.count}** role mapping(s) on message \`${msgId}\` to mode **\`${modeToSet}\`**!`);
     }
     if (sub === "remove") {
       const msgId = args[2];
@@ -634,11 +886,45 @@ Supported: Twitter/X, TikTok, Instagram Reels, Reddit, Bluesky, Threads`
     if (!guild || !member) return;
     if (!isManager) return message.reply("\u26D4 You need **Manage Server** permission.");
     const raw = content.slice(command.length).trim();
+    if (raw.toLowerCase().startsWith("edit")) {
+      const editRaw = raw.slice(4).trim();
+      const firstSpaceIdx = editRaw.indexOf(" ");
+      if (firstSpaceIdx === -1) {
+        return message.reply(`Usage: \`${prefix}embed edit <message_id> <title> | <description>\``);
+      }
+      const msgId = editRaw.slice(0, firstSpaceIdx).trim();
+      const contentRest = editRaw.slice(firstSpaceIdx).trim();
+      const parts2 = contentRest.split("|");
+      const title2 = parts2[0]?.trim();
+      const desc2 = parts2[1]?.trim();
+      if (!msgId || !title2 || !desc2) {
+        return message.reply(`Usage: \`${prefix}embed edit <message_id> <title> | <description>\``);
+      }
+      let targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
+      if (!targetMsg) {
+        for (const ch of guild.channels.cache.values()) {
+          if (ch.isTextBased() && "messages" in ch) {
+            targetMsg = await ch.messages.fetch(msgId).catch(() => null);
+            if (targetMsg) break;
+          }
+        }
+      }
+      if (!targetMsg) {
+        return message.reply(`\u274C Message \`${msgId}\` was not found. Make sure the message exists in a channel Paradox can read.`);
+      }
+      if (targetMsg.author.id !== message.client.user?.id) {
+        return message.reply(`\u274C Paradox can only edit embed messages originally sent by Paradox itself.`);
+      }
+      const embed2 = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(title2).setDescription(desc2).setTimestamp();
+      await targetMsg.edit({ embeds: [embed2] });
+      return message.reply(`\u2705 Successfully updated embed for message \`${msgId}\`!`);
+    }
     const parts = raw.split("|");
     const title = parts[0]?.trim();
     const desc = parts[1]?.trim();
     if (!title || !desc) {
-      return message.reply(`Usage: \`${prefix}embed <title> | <description>\``);
+      return message.reply(`Usage: \`${prefix}embed <title> | <description>\`
+Or to edit: \`${prefix}embed edit <message_id> <title> | <description>\``);
     }
     const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(title).setDescription(desc).setTimestamp();
     return message.channel.send({ embeds: [embed] });

@@ -179,6 +179,7 @@ export const ReactionRoleSchema = z.object({
   description: z.string().optional().nullable(),
   type: z.enum(["REACTION", "BUTTON", "SELECT_MENU"]).optional().default("REACTION"),
   mode: z.enum(["TOGGLE", "UNIQUE", "VERIFY", "REVERSED"]).optional().default("TOGGLE"),
+  requiredRoleId: z.string().optional().or(z.literal("")).nullable(),
   imageUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")).nullable(),
   bannerUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")).nullable(),
   confirmGif: z.string().url("Must be a valid URL").optional().or(z.literal("")).nullable(),
@@ -193,6 +194,7 @@ export const VisualRoleDeckDeploySchema = z.object({
   bannerUrl: z.string().url("Banner must be a valid image/GIF URL").optional().or(z.literal("")).nullable(),
   type: z.enum(["BUTTON", "REACTION", "SELECT_MENU"]).default("BUTTON"),
   mode: z.enum(["TOGGLE", "UNIQUE", "VERIFY", "REVERSED"]).optional().default("TOGGLE"),
+  requiredRoleId: z.string().optional().or(z.literal("")).nullable(),
   showRoleFields: z.boolean().optional().default(true),
   roles: z.array(
     z.object({
@@ -202,6 +204,7 @@ export const VisualRoleDeckDeploySchema = z.object({
       description: z.string().max(500).optional().or(z.literal("")).nullable(),
       imageUrl: z.string().url("Badge must be a valid image/GIF URL").optional().or(z.literal("")).nullable(),
       confirmGif: z.string().url("Claim GIF must be a valid image/GIF URL").optional().or(z.literal("")).nullable(),
+      requiredRoleId: z.string().optional().or(z.literal("")).nullable(),
       buttonStyle: z.enum(["PRIMARY", "SECONDARY", "SUCCESS", "DANGER"]).default("PRIMARY"),
     })
   ).min(1, "Must configure at least 1 role").max(25, "Maximum 25 roles per panel"),

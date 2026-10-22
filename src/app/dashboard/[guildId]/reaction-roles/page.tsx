@@ -61,6 +61,7 @@ interface VisualRoleItem {
   description: string;
   imageUrl: string;
   confirmGif: string;
+  requiredRoleId?: string;
   buttonStyle: "PRIMARY" | "SECONDARY" | "SUCCESS" | "DANGER";
   customInput?: boolean;
 }
@@ -138,6 +139,7 @@ export default function ReactionRolesPage() {
   const [singleBadgeUrl, setSingleBadgeUrl] = useState("");
   const [singleConfirmGif, setSingleConfirmGif] = useState("");
   const [singleMode, setSingleMode] = useState<"TOGGLE" | "UNIQUE" | "VERIFY" | "REVERSED">("TOGGLE");
+  const [singleRequiredRoleId, setSingleRequiredRoleId] = useState("");
 
   const [deploying, setDeploying] = useState(false);
   const [submittingSingle, setSubmittingSingle] = useState(false);
@@ -533,6 +535,7 @@ export default function ReactionRolesPage() {
         description: dr.description?.trim() || undefined,
         imageUrl: dr.imageUrl?.trim() || undefined,
         confirmGif: dr.confirmGif?.trim() || undefined,
+        requiredRoleId: dr.requiredRoleId ? dr.requiredRoleId.trim() : undefined,
         buttonStyle: dr.buttonStyle || "PRIMARY",
       }));
 
@@ -607,6 +610,7 @@ export default function ReactionRolesPage() {
           description: singleDesc.trim() || undefined,
           type: "REACTION",
           mode: singleMode,
+          requiredRoleId: singleRequiredRoleId || undefined,
           imageUrl: singleBadgeUrl.trim() || undefined,
           confirmGif: singleConfirmGif.trim() || undefined,
         }),
@@ -1064,6 +1068,26 @@ export default function ReactionRolesPage() {
                           />
                         </div>
 
+                        {/* Restricted / Prerequisite Role */}
+                        <div>
+                          <label className="text-[10px] text-discord-muted uppercase flex items-center justify-between">
+                            <span>Prerequisite Role Restriction (Optional)</span>
+                            <span className="text-[9px] text-amber-400 font-mono">Members must have this role to claim</span>
+                          </label>
+                          <select
+                            value={dr.requiredRoleId || ""}
+                            onChange={(e) => updateDeckRole(idx, "requiredRoleId", e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-discord-card border border-white/10 text-xs text-white"
+                          >
+                            <option value="">-- No Restriction (Anyone can claim) --</option>
+                            {roles.map((r) => (
+                              <option key={r.id} value={r.id}>
+                                🔒 Requires @{r.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
                         {/* Media: Custom Badge Image / Sticker & Claim Celebration GIF */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                           <div>
@@ -1469,6 +1493,25 @@ export default function ReactionRolesPage() {
                   <option value="UNIQUE">🔘 Unique / Single Choice (Selecting revokes other roles in this message)</option>
                   <option value="VERIFY">🔒 One-Time Claim (Verification - cannot be unequipped)</option>
                   <option value="REVERSED">🔄 Remove Only (Clicking revokes the role)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                  <span>Prerequisite Role Restriction (Optional)</span>
+                  <span className="text-[10px] text-amber-400 font-mono">Requires this role to claim</span>
+                </label>
+                <select
+                  value={singleRequiredRoleId}
+                  onChange={(e) => setSingleRequiredRoleId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white focus:outline-none focus:border-discord-blurple"
+                >
+                  <option value="">-- No Restriction (Anyone can claim) --</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      🔒 Requires @{r.name}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

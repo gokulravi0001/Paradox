@@ -373,3 +373,95 @@ export async function publishDiscordEmbed(
     };
   }
 }
+
+/**
+ * Edit existing embed message in Discord channel
+ */
+export async function editDiscordEmbed(
+  channelId: string,
+  messageId: string,
+  embedData: Record<string, unknown>,
+  content?: string
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) {
+    return { success: false, error: "Bot token not configured or invalid." };
+  }
+
+  try {
+    const response = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}/messages/${messageId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bot ${botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content: content || undefined,
+        embeds: [embedData],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ message: response.statusText }));
+      let msg = err.message || `Discord API error: ${response.status}`;
+      if (err.code === 10008) {
+        msg = "Unknown Message: The message ID was not found in this channel or was deleted.";
+      } else if (err.code === 50005) {
+        msg = "Cannot Edit Message: Paradox can only edit messages sent by Paradox itself.";
+      } else if (err.code === 50013 || err.message?.includes("Missing Permissions")) {
+        msg = "Missing Permissions: Paradox lacks permission to access or edit messages in this channel.";
+      }
+      return {
+        success: false,
+        error: msg,
+      };
+    }
+
+    const updated = await response.json();
+    return { success: true, messageId: updated.id };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to edit embed message",
+    };
+  }
+}
+
+/**
+ * Fetch an existing Discord message from a channel
+ */
+export async function fetchDiscordMessage(
+  channelId: string,
+  messageId: string
+): Promise<{ success: boolean; message?: any; error?: string }> {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) {
+    return { success: false, error: "Bot token not configured or invalid." };
+  }
+
+  try {
+    const response = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}/messages/${messageId}`, {
+      headers: {
+        Authorization: `Bot ${botToken}`,
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ message: response.statusText }));
+      let msg = err.message || `Discord API error: ${response.status}`;
+      if (err.code === 10008) {
+        msg = "Unknown Message: The message ID does not exist in this channel.";
+      }
+      return { success: false, error: msg };
+    }
+
+    const message = await response.json();
+    return { success: true, message };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to fetch message from Discord",
+    };
+  }
+}

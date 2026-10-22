@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeGuildAdmin } from "@/lib/serverAuth";
 import { prisma } from "@/lib/prisma";
 import { formatToDiscordEmbedApi, validateDiscordEmbed } from "@/lib/validations";
-import { publishDiscordEmbed, fetchGuildChannels } from "@/lib/discord";
+import { publishDiscordEmbed, editDiscordEmbed, fetchGuildChannels } from "@/lib/discord";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const { channelId, embed, content, templateId } = body;
+    const { channelId, messageId, embed, content, templateId } = body;
 
     if (!channelId) {
       return NextResponse.json({ error: "Destination channel is required" }, { status: 400 });
@@ -51,12 +51,15 @@ export async function POST(
     // 3. Format payload for Discord API
     const formattedEmbed = formatToDiscordEmbedApi(embed);
 
-    // 4. Publish message
-    const result = await publishDiscordEmbed(resolvedChannelId, formattedEmbed, content);
+    // 4. Publish or Edit message
+    const isEdit = Boolean(messageId && messageId.trim().length > 0);
+    const result = isEdit
+      ? await editDiscordEmbed(resolvedChannelId, messageId.trim(), formattedEmbed, content)
+      : await publishDiscordEmbed(resolvedChannelId, formattedEmbed, content);
 
     if (!result.success) {
       return NextResponse.json(
-        { error: result.error || "Failed to publish embed to Discord" },
+        { error: result.error || (isEdit ? "Failed to update existing embed in Discord" : "Failed to publish embed to Discord") },
         { status: 400 }
       );
     }
@@ -77,10 +80,11 @@ export async function POST(
       data: {
         guildId,
         userId: auth.context!.user.id,
-        action: "PUBLISH_EMBED",
+        action: isEdit ? "EDIT_EMBED" : "PUBLISH_EMBED",
         details: JSON.stringify({
           channelId,
           messageId: result.messageId,
+          isEdit,
           title: embed.title || "Untitled Embed",
         }),
       },
@@ -90,6 +94,7 @@ export async function POST(
       success: true,
       messageId: result.messageId,
       channelId,
+      isEdit,
     });
   } catch (err: unknown) {
     console.error(`[API:PublishEmbed] Error:`, err);

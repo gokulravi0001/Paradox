@@ -69,6 +69,11 @@ export default function EmbedBuilderPage() {
   const [channelMode, setChannelMode] = useState<"select" | "custom">("select");
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
 
+  // Edit Existing Embed State
+  const [publishMode, setPublishMode] = useState<"new" | "edit">("new");
+  const [editMessageId, setEditMessageId] = useState("");
+  const [fetchingMessage, setFetchingMessage] = useState(false);
+
   // AI Modal State
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -279,6 +284,73 @@ export default function EmbedBuilderPage() {
     }
   }
 
+  async function handleFetchExistingMessage() {
+    setError(null);
+    setSuccess(null);
+
+    const targetChannel = selectedChannelId || channelName.trim();
+    if (!targetChannel) {
+      setError("Please select or specify the channel where the message is located.");
+      return;
+    }
+
+    if (!editMessageId.trim()) {
+      setError("Please enter the Discord Message ID you want to load and edit.");
+      return;
+    }
+
+    try {
+      setFetchingMessage(true);
+      const res = await fetch(
+        `/api/guilds/${guildId}/embeds/fetch-message?channelId=${encodeURIComponent(targetChannel)}&messageId=${encodeURIComponent(editMessageId.trim())}`
+      );
+      const data = await res.json();
+
+      if (!res.ok || !data.message) {
+        throw new Error(data.error || "Could not retrieve message from Discord.");
+      }
+
+      const msg = data.message;
+      if (!msg.embeds || msg.embeds.length === 0) {
+        throw new Error("This message does not contain any embeds.");
+      }
+
+      const emb = msg.embeds[0];
+      if (emb.title) setTitle(emb.title);
+      if (emb.description) setDescription(emb.description);
+      if (emb.url) setUrl(emb.url);
+      if (emb.color !== undefined && emb.color !== null) {
+        setColor(`#${emb.color.toString(16).padStart(6, "0")}`);
+      }
+      if (emb.author) {
+        setAuthorName(emb.author.name || "");
+        setAuthorUrl(emb.author.url || "");
+        setAuthorIconUrl(emb.author.icon_url || "");
+      }
+      if (emb.footer) {
+        setFooterText(emb.footer.text || "");
+        setFooterIconUrl(emb.footer.icon_url || "");
+      }
+      if (emb.thumbnail) setThumbnailUrl(emb.thumbnail.url || "");
+      if (emb.image) setImageUrl(emb.image.url || "");
+      if (Array.isArray(emb.fields)) {
+        setFields(
+          emb.fields.map((f: any) => ({
+            name: f.name || "",
+            value: f.value || "",
+            inline: Boolean(f.inline),
+          }))
+        );
+      }
+
+      setSuccess(`✅ Successfully loaded embed from Message #${editMessageId.trim()}! You can now edit and update it.`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load message from Discord");
+    } finally {
+      setFetchingMessage(false);
+    }
+  }
+
   async function handlePublish() {
     setError(null);
     setValidationErrors([]);
@@ -286,7 +358,12 @@ export default function EmbedBuilderPage() {
 
     const targetChannel = selectedChannelId || channelName.trim();
     if (!targetChannel) {
-      setError("Please select or type a target channel to publish to.");
+      setError("Please select or type a target channel.");
+      return;
+    }
+
+    if (publishMode === "edit" && !editMessageId.trim()) {
+      setError("Please provide the Message ID of the embed you want to edit.");
       return;
     }
 
@@ -297,6 +374,7 @@ export default function EmbedBuilderPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           channelId: targetChannel,
+          messageId: publishMode === "edit" ? editMessageId.trim() : undefined,
           embed: embedPayload,
           templateId: activeTemplateId || undefined,
         }),
@@ -312,7 +390,11 @@ export default function EmbedBuilderPage() {
         return;
       }
 
-      setSuccess(`🎉 Embed successfully published to selected channel! (Message ID: ${data.messageId})`);
+      if (publishMode === "edit") {
+        setSuccess(`🎉 Existing Discord embed successfully updated! (Message ID: ${data.messageId})`);
+      } else {
+        setSuccess(`🎉 Embed successfully published to selected channel! (Message ID: ${data.messageId})`);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error publishing embed");
     } finally {
@@ -645,7 +727,59 @@ export default function EmbedBuilderPage() {
 
             {/* Target Channel & Action Buttons */}
             <div className="pt-4 border-t border-white/5 space-y-4">
-              <div className="p-3.5 rounded-xl bg-discord-dark border border-white/5 space-y-2">
+              <div className="p-3.5 rounded-xl bg-discord-dark border border-white/5 space-y-3">
+                {/* Mode Selector: New vs Edit */}
+                <div className="flex items-center gap-2 pb-1 border-b border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setPublishMode("new")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      publishMode === "new"
+                        ? "bg-discord-fuchsia text-white shadow"
+                        : "bg-white/5 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    ➕ Publish New Embed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPublishMode("edit")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      publishMode === "edit"
+                        ? "bg-discord-blurple text-white shadow"
+                        : "bg-white/5 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    ✏️ Edit Existing Embed
+                  </button>
+                </div>
+
+                {publishMode === "edit" && (
+                  <div className="p-3 rounded-lg bg-discord-card border border-discord-blurple/30 space-y-2">
+                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                      <span>Discord Message ID to Edit</span>
+                      <span className="text-[10px] text-discord-blurple font-normal">Right-click message in Discord → Copy ID</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Paste Message ID (e.g. 132456789012345678)"
+                        value={editMessageId}
+                        onChange={(e) => setEditMessageId(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-xs text-white font-mono placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleFetchExistingMessage}
+                        disabled={fetchingMessage}
+                        className="px-3.5 py-2 rounded-lg bg-discord-blurple hover:bg-discord-blurple/90 disabled:opacity-50 text-white font-bold text-xs whitespace-nowrap flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        {fetchingMessage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>📥 Load Embed</span>}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                     Destination Channel
@@ -716,7 +850,7 @@ export default function EmbedBuilderPage() {
                   ) : (
                     <Send className="w-4 h-4" />
                   )}
-                  <span>Publish to Discord</span>
+                  <span>{publishMode === "edit" ? "Update Existing Embed" : "Publish to Discord"}</span>
                 </button>
               </div>
             </div>
