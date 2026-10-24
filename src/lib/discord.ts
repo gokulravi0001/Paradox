@@ -375,6 +375,43 @@ export async function publishDiscordEmbed(
 }
 
 /**
+ * Send full message payload (content, embeds, components) to Discord channel
+ */
+export async function postDiscordMessage(
+  channelId: string,
+  body: {
+    content?: string;
+    embeds?: Record<string, unknown>[];
+    components?: Record<string, unknown>[];
+  }
+): Promise<{ id: string }> {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) {
+    throw new Error("Bot token not configured or invalid.");
+  }
+
+  const response = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: response.statusText }));
+    let msg = err.message || `Discord API error: ${response.status}`;
+    if (err.code === 50013 || err.message?.includes("Missing Permissions")) {
+      msg = "Missing Permissions: Paradox needs 'View Channel', 'Send Messages', and 'Embed Links' permissions in this channel.";
+    }
+    throw new Error(msg);
+  }
+
+  return response.json();
+}
+
+/**
  * Edit existing embed message in Discord channel
  */
 export async function editDiscordEmbed(

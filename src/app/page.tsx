@@ -4,15 +4,25 @@ import { getBotInviteUrl } from "@/lib/discord";
 import {
   Sparkles,
   ShieldCheck,
-  Video,
+  Film,
   Smile,
-  Layers,
+  Palette,
   ArrowRight,
   ExternalLink,
   Bot,
-  Lock,
+  UserCheck,
+  Scroll,
+  Megaphone,
+  Calendar,
+  Gift,
+  Clock,
+  Pin,
   CheckCircle2,
+  ChevronDown,
+  HelpCircle,
+  Zap,
 } from "lucide-react";
+import { DiscordPreview } from "@/components/ui/DiscordPreview";
 
 export const dynamic = "force-dynamic";
 
@@ -20,49 +30,122 @@ export default async function HomePage() {
   const sessionUser = await getSession();
   const inviteUrl = getBotInviteUrl();
 
+  const features = [
+    {
+      icon: Smile,
+      title: "Visual Role Decks & Single Choice",
+      desc: "Deploy interactive role buttons with single-choice radio modes, one-time claim verification, and bot hierarchy safeguards.",
+      color: "from-blue-500/20 to-indigo-500/20 text-discord-blurple",
+    },
+    {
+      icon: Palette,
+      title: "Advanced Embed Builder",
+      desc: "Create and publish pixel-perfect Discord embeds with author icons, inline fields, custom hex color pickers, and live staging.",
+      color: "from-purple-500/20 to-pink-500/20 text-purple-400",
+    },
+    {
+      icon: UserCheck,
+      title: "Dynamic Welcome & Goodbye",
+      desc: "Greet newcomers automatically with dynamic mentions, server statistics, multi-channel references, and auto-role assignments.",
+      color: "from-emerald-500/20 to-teal-500/20 text-emerald-400",
+    },
+    {
+      icon: Scroll,
+      title: "Server Rules Management",
+      desc: "Structure official community guidelines with numbered rules, custom emojis, and one-click direct publishing to Discord.",
+      color: "from-amber-500/20 to-orange-500/20 text-amber-400",
+    },
+    {
+      icon: Megaphone,
+      title: "Broadcast Announcements",
+      desc: "Broadcast formatted announcements across channels with audience ping controls, role mentions, and confirmation warnings.",
+      color: "from-rose-500/20 to-red-500/20 text-discord-red",
+    },
+    {
+      icon: Gift,
+      title: "Automated Giveaways",
+      desc: "Host interactive giveaways with one-click enter buttons, role prerequisites, live end countdowns, and automatic winner selection.",
+      color: "from-pink-500/20 to-fuchsia-500/20 text-pink-400",
+    },
+    {
+      icon: Calendar,
+      title: "Community Scheduled Events",
+      desc: "Schedule voice channel tournaments and community gaming sessions with automatic broadcast alerts and time zone handling.",
+      color: "from-cyan-500/20 to-blue-500/20 text-cyan-400",
+    },
+    {
+      icon: Film,
+      title: "Native Video Link Previews",
+      desc: "Automatically transform broken social links from X/Twitter, TikTok, Instagram, and Reddit into playable in-Discord video players.",
+      color: "from-indigo-500/20 to-blue-500/20 text-blue-400",
+    },
+    {
+      icon: Clock,
+      title: "Recurring Auto & Sticky Notices",
+      desc: "Schedule recurring hourly or daily messages, or pin dynamic sticky notices at the bottom of busy community chat channels.",
+      color: "from-teal-500/20 to-emerald-500/20 text-teal-400",
+    },
+  ];
+
+  const faqs = [
+    {
+      q: "How do I add Paradox to my Discord server?",
+      a: "Click 'Add to Discord' above, log in with your Discord account, select your server, and authorize the bot. You need 'Manage Server' or 'Administrator' permissions.",
+    },
+    {
+      q: "Do I need to type bot commands in Discord?",
+      a: "No! The entire purpose of the Paradox Dashboard is to let you manage embeds, roles, welcome greetings, and announcements through a modern web interface without typing cryptic commands.",
+    },
+    {
+      q: "How does the bot role hierarchy check work?",
+      a: "Discord requires bots to have a higher role position than the roles they assign. Paradox automatically detects role positions and warns you in the dashboard so permissions never fail.",
+    },
+    {
+      q: "Can I mention multiple channels in welcome or announcement messages?",
+      a: "Yes! The dynamic channel selector lets you insert multiple channel links (e.g. {#rules}, {#roles}, {#general}) that automatically format into clickable Discord channel pills.",
+    },
+  ];
+
   return (
-    <div className="flex-1 flex flex-col">
-      {/* Header / Navbar */}
-      <header className="border-b border-discord-card bg-discord-darker/80 backdrop-blur sticky top-0 z-50">
+    <div className="flex-1 flex flex-col bg-[#08090d] text-zinc-100 font-sans selection:bg-discord-blurple/30 selection:text-white">
+      {/* Top Navbar */}
+      <header className="sticky top-0 z-50 bg-[#08090d]/85 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src="/pfp.png"
-              alt="Paradox Bot"
-              className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-discord-blurple/25 border border-white/10 ring-1 ring-white/10"
-            />
-            <span className="font-extrabold text-xl tracking-tight text-white">
-              Paradox <span className="text-discord-blurple text-xs font-semibold px-2 py-0.5 rounded-full bg-discord-blurple/10 border border-discord-blurple/20">Bot</span>
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-discord-blurple to-indigo-700 flex items-center justify-center shadow-lg shadow-discord-blurple/20 group-hover:scale-105 transition">
+              <Bot className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-extrabold text-xl tracking-tight text-white flex items-center gap-1.5">
+              <span>PARADOX</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-discord-blurple/15 text-discord-blurple border border-discord-blurple/30">
+                PRO
+              </span>
             </span>
-          </div>
+          </Link>
 
-          <div className="flex items-center gap-4">
-            <Link
-              href="/terms"
-              className="text-xs text-discord-muted hover:text-white transition hidden md:inline-block"
-            >
-              Terms
-            </Link>
-            <Link
-              href="/privacy"
-              className="text-xs text-discord-muted hover:text-white transition hidden md:inline-block"
-            >
-              Privacy
-            </Link>
+          <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-zinc-400">
+            <a href="#features" className="hover:text-white transition">Features</a>
+            <a href="#preview" className="hover:text-white transition">Live Preview</a>
+            <a href="#faq" className="hover:text-white transition">FAQ</a>
+            <Link href="/privacy" className="hover:text-white transition">Privacy</Link>
+            <Link href="/terms" className="hover:text-white transition">Terms</Link>
+          </nav>
 
+          <div className="flex items-center gap-3">
             {sessionUser ? (
               <Link
                 href="/dashboard"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-discord-blurple hover:bg-discord-blurple/90 text-white font-medium text-sm transition shadow-md shadow-discord-blurple/25"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-discord-blurple hover:bg-indigo-600 text-white font-bold text-xs transition shadow-lg shadow-discord-blurple/25"
               >
-                Go to Dashboard <ArrowRight className="w-4 h-4" />
+                <span>Open Dashboard</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             ) : (
               <a
                 href="/api/auth/login"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-discord-blurple hover:bg-discord-blurple/90 text-white font-medium text-sm transition shadow-md shadow-discord-blurple/25"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-discord-blurple hover:bg-indigo-600 text-white font-bold text-xs transition shadow-lg shadow-discord-blurple/25"
               >
-                Sign In with Discord
+                <span>Login with Discord</span>
               </a>
             )}
           </div>
@@ -70,236 +153,189 @@ export default async function HomePage() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden py-20 lg:py-28 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex flex-col items-center text-center">
-        {/* Glow effect */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-discord-blurple/15 rounded-full blur-[120px] pointer-events-none" />
+      <section className="relative overflow-hidden pt-20 pb-16 md:pt-28 md:pb-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex flex-col items-center text-center">
+        {/* Glow Effects */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[350px] bg-discord-blurple/15 rounded-full blur-[140px] pointer-events-none" />
+        <div className="absolute top-1/3 left-1/3 w-[300px] h-[200px] bg-rose-500/10 rounded-full blur-[120px] pointer-events-none" />
 
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-discord-card border border-white/10 text-xs font-medium text-discord-muted mb-6">
-          <img src="/pfp.png" alt="Paradox" className="w-4 h-4 rounded-full object-cover" />
-          <span>Next-Generation Discord Server Management & Video Enhancements</span>
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-discord-card border border-white/10 text-xs font-semibold text-zinc-300 mb-6 shadow-sm">
+          <Sparkles className="w-3.5 h-3.5 text-discord-blurple" />
+          <span>Next-Generation Discord Server Management & Visual Studio</span>
         </div>
 
-        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white max-w-4xl">
-          Power up your Discord with{" "}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-discord-blurple via-indigo-300 to-discord-fuchsia">
-            reaction roles, embeds, and video fixes
+        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white max-w-4xl leading-[1.1]">
+          The Ultimate Visual Dashboard for{" "}
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-discord-blurple via-indigo-300 to-blue-400">
+            Discord Communities
           </span>
         </h1>
 
-        <p className="mt-6 text-lg sm:text-xl text-discord-muted max-w-2xl leading-relaxed">
-          Manage roles seamlessly with hierarchy checks, publish stunning live-previewed embeds, and fix broken social
-          media video links automatically without ever storing media files.
+        <p className="mt-6 text-base sm:text-lg text-zinc-400 max-w-2xl leading-relaxed">
+          Manage reaction roles, stage live-previewed embeds, automate dynamic welcome greetings with channel chips, publish rules, and run community giveaways through an intuitive graphical dashboard.
         </p>
 
         {/* CTA Buttons */}
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-          {sessionUser ? (
-            <Link
-              href="/dashboard"
-              className="px-6 py-3.5 rounded-xl bg-discord-blurple hover:bg-indigo-600 text-white font-semibold text-base transition shadow-xl shadow-discord-blurple/30 flex items-center gap-2"
-            >
-              Open Dashboard <ArrowRight className="w-5 h-5" />
-            </Link>
-          ) : (
-            <a
-              href="/api/auth/login"
-              className="px-6 py-3.5 rounded-xl bg-discord-blurple hover:bg-indigo-600 text-white font-semibold text-base transition shadow-xl shadow-discord-blurple/30 flex items-center gap-2"
-            >
-              Login with Discord <ArrowRight className="w-5 h-5" />
-            </a>
-          )}
-
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
           <a
             href={inviteUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-6 py-3.5 rounded-xl bg-discord-card hover:bg-discord-card/80 border border-white/10 text-white font-semibold text-base transition flex items-center gap-2"
+            className="px-6 py-3 rounded-2xl bg-white text-zinc-950 hover:bg-zinc-200 font-extrabold text-sm transition shadow-xl flex items-center gap-2 group cursor-pointer"
           >
-            Add Bot to Server <ExternalLink className="w-4 h-4 text-discord-muted" />
+            <Bot className="w-4 h-4 text-discord-blurple" />
+            <span>Add to Discord</span>
+            <ExternalLink className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-950 transition" />
           </a>
+
+          {sessionUser ? (
+            <Link
+              href="/dashboard"
+              className="px-6 py-3 rounded-2xl bg-discord-blurple hover:bg-indigo-600 text-white font-extrabold text-sm transition shadow-xl shadow-discord-blurple/25 flex items-center gap-2 cursor-pointer"
+            >
+              <span>Open Dashboard</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          ) : (
+            <a
+              href="/api/auth/login"
+              className="px-6 py-3 rounded-2xl bg-discord-blurple hover:bg-indigo-600 text-white font-extrabold text-sm transition shadow-xl shadow-discord-blurple/25 flex items-center gap-2 cursor-pointer"
+            >
+              <span>Manage Servers</span>
+              <ArrowRight className="w-4 h-4" />
+            </a>
+          )}
         </div>
 
-        {/* Feature Highlights Pills */}
-        <div className="mt-12 flex flex-wrap justify-center gap-6 text-xs text-discord-muted">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-discord-green" />
-            <span>Role Hierarchy Guard</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-discord-green" />
-            <span>Interactive Live Embed Preview</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-discord-green" />
-            <span>Zero Media Proxying / Rehosting</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-discord-green" />
-            <span>OAuth2 Strict Server Authorization</span>
+        {/* Live Interactive Embed Preview in Hero */}
+        <div id="preview" className="mt-14 w-full max-w-3xl text-left">
+          <div className="p-1 rounded-3xl bg-gradient-to-b from-white/10 to-transparent shadow-2xl">
+            <div className="p-3 sm:p-5 rounded-[22px] bg-[#12131a] border border-white/5 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-white/5 text-xs text-zinc-400">
+                <span className="font-bold text-white flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live Discord Message Preview
+                </span>
+                <span className="font-mono text-[11px] text-discord-blurple">Interactive UI</span>
+              </div>
+
+              <DiscordPreview
+                botName="Paradox"
+                content="Welcome to our community! Make sure to grab your roles below and check our guidelines 🎉"
+                title="✨ Unlock Your Roles & Perks"
+                description="Choose your notification and gaming roles. Each role grants special channel access and matchmaking pings!\n\n• Visit `{#rules}` for our guidelines\n• Head over to `{#introductions}` to say hi"
+                color="#5865F2"
+                imageUrl="https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif"
+                footerText="Paradox Role Studio • Real-time Sync"
+                timestamp={true}
+                buttons={[
+                  { label: "Gamer", emoji: "🎮", style: "PRIMARY" },
+                  { label: "Announcements", emoji: "🔔", style: "SUCCESS" },
+                  { label: "Events", emoji: "🏆", style: "SECONDARY" },
+                ]}
+              />
+            </div>
           </div>
         </div>
       </section>
 
       {/* Feature Showcase Grid */}
-      <section className="py-16 bg-discord-darker border-y border-discord-card">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl font-extrabold text-white">Production-Ready Discord Utilities</h2>
-            <p className="mt-4 text-discord-muted text-sm sm:text-base">
-              Engineered with Discord.js v14 and modern web standards. Built for speed, safety, and effortless server administration.
-            </p>
+      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12">
+        <div className="text-center space-y-3 max-w-2xl mx-auto">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-discord-blurple/10 text-discord-blurple text-[11px] font-bold">
+            <Zap className="w-3.5 h-3.5" />
+            <span>Complete Bot Capabilities</span>
           </div>
+          <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+            Everything your server needs in one dashboard
+          </h2>
+          <p className="text-sm text-zinc-400 leading-relaxed">
+            Eliminate complex syntax and manage your Discord bot through an ultra-clean, modern SaaS interface.
+          </p>
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Feature 1: Reaction Roles */}
-            <div className="p-6 rounded-2xl bg-discord-card border border-white/5 hover:border-discord-blurple/40 transition group">
-              <div className="w-12 h-12 rounded-xl bg-discord-blurple/10 border border-discord-blurple/20 flex items-center justify-center text-discord-blurple mb-5 group-hover:scale-110 transition">
-                <Smile className="w-6 h-6" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {features.map((feat, idx) => (
+            <div
+              key={idx}
+              className="p-6 rounded-3xl bg-discord-card border border-white/5 hover:border-white/15 transition-all duration-200 hover:-translate-y-1 space-y-3 group"
+            >
+              <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${feat.color} flex items-center justify-center`}>
+                <feat.icon className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">Reaction Roles</h3>
-              <p className="text-sm text-discord-muted leading-relaxed mb-4">
-                Let members assign themselves roles by reacting to messages. Full role hierarchy validation prevents accidental
-                privilege escalation, with graceful handling for deleted messages and missing permissions.
+              <h3 className="text-base font-bold text-white group-hover:text-discord-blurple transition">
+                {feat.title}
+              </h3>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                {feat.desc}
               </p>
-              <ul className="text-xs text-slate-300 space-y-2">
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-discord-blurple" />
-                  Unicode & custom emoji support
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-discord-blurple" />
-                  Bot position hierarchy enforcement
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-discord-blurple" />
-                  Real-time role revocation on unreact
-                </li>
-              </ul>
             </div>
-
-            {/* Feature 2: Rich Embeds */}
-            <div className="p-6 rounded-2xl bg-discord-card border border-white/5 hover:border-discord-blurple/40 transition group">
-              <div className="w-12 h-12 rounded-xl bg-discord-fuchsia/10 border border-discord-fuchsia/20 flex items-center justify-center text-discord-fuchsia mb-5 group-hover:scale-110 transition">
-                <Layers className="w-6 h-6" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-2">Embed Designer & Publisher</h3>
-              <p className="text-sm text-discord-muted leading-relaxed mb-4">
-                Design custom Discord embeds in an interactive live editor. Real-time character limit validation prevents API
-                errors before publishing directly to any channel.
-              </p>
-              <ul className="text-xs text-slate-300 space-y-2">
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-discord-fuchsia" />
-                  Live Discord-identical visual preview
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-discord-fuchsia" />
-                  Enforces 256/4096/6000 limit rules
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-discord-fuchsia" />
-                  Inline field grid & color palette
-                </li>
-              </ul>
-            </div>
-
-            {/* Feature 3: Link-to-Video Embeds */}
-            <div className="p-6 rounded-2xl bg-discord-card border border-white/5 hover:border-discord-blurple/40 transition group">
-              <div className="w-12 h-12 rounded-xl bg-discord-green/10 border border-discord-green/20 flex items-center justify-center text-discord-green mb-5 group-hover:scale-110 transition">
-                <Video className="w-6 h-6" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-2">Link-to-Video Embeds</h3>
-              <p className="text-sm text-discord-muted leading-relaxed mb-4">
-                Transform links from X/Twitter, TikTok, Instagram, and Reddit into inline playable video previews. No video
-                storage or proxying: pure provider rewrite routing.
-              </p>
-              <ul className="text-xs text-slate-300 space-y-2">
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-discord-green" />
-                  Provider toggles (Twitter, TikTok, Insta, Reddit)
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-discord-green" />
-                  Per-server channel ignore filters
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-discord-green" />
-                  Respects &lt;suppressed&gt; link syntax
-                </li>
-              </ul>
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
-      {/* Security & Reliability Section */}
-      <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="p-8 rounded-3xl bg-gradient-to-br from-discord-card to-discord-darker border border-white/10 flex flex-col lg:flex-row items-center justify-between gap-8">
-          <div className="space-y-4 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-              <ShieldCheck className="w-4 h-4" /> Hardened Enterprise Security
-            </div>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-white">
-              Built with server-side authorization at every level
-            </h3>
-            <p className="text-sm text-discord-muted leading-relaxed">
-              Every single dashboard API route validates that the signed-in user holds the <code>Manage Server</code> or{" "}
-              <code>Administrator</code> permission. Session secrets and Discord tokens never touch client scripts, and
-              OAuth2 callbacks are protected against CSRF via cryptographic state cookies.
-            </p>
-          </div>
+      {/* FAQ Section */}
+      <section id="faq" className="py-20 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-8">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+            Frequently Asked Questions
+          </h2>
+          <p className="text-xs text-zinc-400">
+            Common questions about setting up and configuring Paradox.
+          </p>
+        </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 flex-shrink-0">
-            {sessionUser ? (
-              <Link
-                href="/dashboard"
-                className="px-6 py-3 rounded-xl bg-discord-blurple hover:bg-discord-blurple/90 text-white font-semibold text-sm transition shadow-lg text-center"
-              >
-                Go to Server Dashboard
-              </Link>
-            ) : (
-              <a
-                href="/api/auth/login"
-                className="px-6 py-3 rounded-xl bg-discord-blurple hover:bg-discord-blurple/90 text-white font-semibold text-sm transition shadow-lg text-center"
-              >
-                Sign In with Discord
-              </a>
-            )}
-            <Link
-              href="/privacy"
-              className="px-6 py-3 rounded-xl bg-discord-dark hover:bg-discord-card text-white font-semibold text-sm transition border border-white/5 text-center"
+        <div className="space-y-4">
+          {faqs.map((faq, i) => (
+            <div
+              key={i}
+              className="p-5 rounded-2xl bg-discord-card border border-white/5 space-y-2"
             >
-              Read Privacy Policy
-            </Link>
-          </div>
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-discord-blurple flex-shrink-0" />
+                <span>{faq.q}</span>
+              </h4>
+              <p className="text-xs text-zinc-400 leading-relaxed pl-6">
+                {faq.a}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-discord-card bg-discord-darker py-8 px-4 sm:px-6 lg:px-8 text-xs text-discord-muted">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Bot className="w-4 h-4 text-discord-blurple" />
-            <span className="text-white font-semibold">Paradox Bot</span>
-            <span>&copy; {new Date().getFullYear()} [OPERATOR_LEGAL_NAME].</span>
+      <footer className="mt-auto border-t border-white/5 bg-[#050608] py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-zinc-500">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-discord-blurple flex items-center justify-center font-bold text-white">
+              P
+            </div>
+            <div>
+              <span className="font-extrabold text-white text-sm">PARADOX</span>
+              <p className="text-[11px] text-zinc-500">Next-Gen Discord Bot & Management Dashboard</p>
+            </div>
           </div>
 
           <div className="flex items-center gap-6">
-            <Link href="/terms" className="hover:text-white transition">
-              Terms of Service
+            <a href={inviteUrl} target="_blank" rel="noreferrer" className="hover:text-white transition">
+              Invite Bot
+            </a>
+            <Link href="/dashboard" className="hover:text-white transition">
+              Dashboard
             </Link>
             <Link href="/privacy" className="hover:text-white transition">
               Privacy Policy
             </Link>
-            <a
-              href="https://discord.com/developers/docs"
-              target="_blank"
-              rel="noreferrer"
-              className="hover:text-white transition"
-            >
-              Discord API Docs
+            <Link href="/terms" className="hover:text-white transition">
+              Terms of Service
+            </Link>
+            <a href="https://discord.gg" target="_blank" rel="noreferrer" className="hover:text-white transition">
+              Support Discord
             </a>
           </div>
+
+          <p className="text-[11px]">
+            &copy; {new Date().getFullYear()} Paradox. Not affiliated with Discord Inc.
+          </p>
         </div>
       </footer>
     </div>
