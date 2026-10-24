@@ -121,25 +121,44 @@ export async function POST(
       return NextResponse.json({ error: "Please select a channel first." }, { status: 400 });
     }
 
-    // Resolve variables for test
-    const formattedContent = (message || "Welcome to {server.name}, {user.mention}! 🎉 (Test Welcome Message)")
-      .replace(/{user\.mention}/g, `<@${auth.context!.user.id}>`)
-      .replace(/{user\.name}/g, auth.context!.user.username)
-      .replace(/{server\.name}/g, "Discord Server")
-      .replace(/{server\.member_count}/g, "100");
+    const userAvatarUrl = auth.context!.user.avatar
+      ? `https://cdn.discordapp.com/avatars/${auth.context!.user.id}/${auth.context!.user.avatar}.png?size=256`
+      : "https://cdn.discordapp.com/embed/avatars/0.png";
+
+    const resolveTags = (str?: string | null): string | undefined => {
+      if (!str) return undefined;
+      return str
+        .replace(/{user\.mention}/g, `<@${auth.context!.user.id}>`)
+        .replace(/{user\.name}/g, auth.context!.user.username)
+        .replace(/{user\.avatar}/g, userAvatarUrl)
+        .replace(/{user\.pfp}/g, userAvatarUrl)
+        .replace(/{user\.id}/g, auth.context!.user.id)
+        .replace(/{server\.name}/g, "Discord Server")
+        .replace(/{server\.member_count}/g, "100");
+    };
+
+    const formattedContent = resolveTags(message || "Welcome to {server.name}, {user.mention}! 🎉 (Test Welcome Message)");
 
     let embedPayload = undefined;
-    if (embed && (embed.title || embed.description)) {
+    if (embed && (embed.title || embed.description || embed.authorName || embed.thumbnailUrl)) {
+      const resolvedThumb = resolveTags(embed.thumbnailUrl);
+      const resolvedImg = resolveTags(embed.imageUrl);
+      const resolvedAuthorIcon = resolveTags(embed.authorIconUrl);
+      const resolvedAuthorName = resolveTags(embed.authorName);
+
       embedPayload = {
-        title: embed.title || undefined,
-        description: embed.description
-          ?.replace(/{user\.mention}/g, `<@${auth.context!.user.id}>`)
-          .replace(/{user\.name}/g, auth.context!.user.username)
-          .replace(/{server\.name}/g, "Discord Server"),
+        title: resolveTags(embed.title),
+        description: resolveTags(embed.description),
         color: embed.color ? parseInt(embed.color.replace("#", ""), 16) : 0x5865f2,
-        image: embed.imageUrl ? { url: embed.imageUrl } : undefined,
-        thumbnail: embed.thumbnailUrl ? { url: embed.thumbnailUrl } : undefined,
-        footer: embed.footerText ? { text: embed.footerText } : undefined,
+        author: resolvedAuthorName
+          ? {
+              name: resolvedAuthorName,
+              icon_url: resolvedAuthorIcon || undefined,
+            }
+          : undefined,
+        image: resolvedImg ? { url: resolvedImg } : undefined,
+        thumbnail: resolvedThumb ? { url: resolvedThumb } : undefined,
+        footer: embed.footerText ? { text: resolveTags(embed.footerText) || "" } : undefined,
       };
     }
 

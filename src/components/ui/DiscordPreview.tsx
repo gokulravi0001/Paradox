@@ -59,21 +59,42 @@ export function DiscordPreview({
   buttons = [],
   channelMap = {},
 }: DiscordPreviewProps) {
-  // Helper to replace <#id> with channel names if available
+  const sampleUserPfp = "https://cdn.discordapp.com/embed/avatars/1.png";
+
+  function resolveMediaUrl(urlStr?: string) {
+    if (!urlStr) return undefined;
+    if (urlStr.includes("{user.avatar}") || urlStr.includes("{user.pfp}")) {
+      return sampleUserPfp;
+    }
+    return urlStr;
+  }
+
+  // Helper to replace variables and channel mentions for preview
   function formatMentions(text?: string) {
     if (!text) return "";
-    return text.replace(/<#(\d+)>/g, (match, id) => {
+    let res = text
+      .replace(/{user\.name}/g, "Alex")
+      .replace(/{user\.mention}/g, "`@Alex`")
+      .replace(/{user\.id}/g, "1547837282109624462")
+      .replace(/{server\.name}/g, "Paradox Community")
+      .replace(/{server\.member_count}/g, "1,248");
+
+    return res.replace(/<#(\d+)>/g, (match, id) => {
       const name = channelMap[id];
       return name ? `\`#${name}\`` : match;
     });
   }
 
+  const resolvedThumbnail = resolveMediaUrl(thumbnailUrl);
+  const resolvedImage = resolveMediaUrl(imageUrl);
+  const resolvedAuthorIcon = resolveMediaUrl(authorIconUrl);
+
   const hasEmbed =
     title ||
     description ||
     authorName ||
-    thumbnailUrl ||
-    imageUrl ||
+    resolvedThumbnail ||
+    resolvedImage ||
     footerText ||
     fields.length > 0;
 
@@ -120,9 +141,9 @@ export function DiscordPreview({
               {/* Author */}
               {authorName && (
                 <div className="flex items-center gap-2">
-                  {authorIconUrl && (
+                  {resolvedAuthorIcon && (
                     <img
-                      src={authorIconUrl}
+                      src={resolvedAuthorIcon}
                       alt=""
                       className="w-5 h-5 rounded-full object-cover"
                       onError={(e) => ((e.target as HTMLElement).style.display = "none")}
@@ -135,10 +156,10 @@ export function DiscordPreview({
                       rel="noreferrer"
                       className="text-xs font-semibold text-white hover:underline"
                     >
-                      {authorName}
+                      {formatMentions(authorName)}
                     </a>
                   ) : (
-                    <span className="text-xs font-semibold text-white">{authorName}</span>
+                    <span className="text-xs font-semibold text-white">{formatMentions(authorName)}</span>
                   )}
                 </div>
               )}
@@ -155,10 +176,10 @@ export function DiscordPreview({
                           rel="noreferrer"
                           className="text-[#00a8fc] hover:underline"
                         >
-                          {title}
+                          {formatMentions(title)}
                         </a>
                       ) : (
-                        title
+                        formatMentions(title)
                       )}
                     </h4>
                   )}
@@ -172,9 +193,9 @@ export function DiscordPreview({
                 </div>
 
                 {/* Thumbnail */}
-                {thumbnailUrl && (
+                {resolvedThumbnail && (
                   <img
-                    src={thumbnailUrl}
+                    src={resolvedThumbnail}
                     alt=""
                     className="w-20 h-20 rounded-md object-cover flex-shrink-0 bg-black/20"
                     onError={(e) => ((e.target as HTMLElement).style.display = "none")}
@@ -200,10 +221,10 @@ export function DiscordPreview({
               )}
 
               {/* Main Image */}
-              {imageUrl && (
+              {resolvedImage && (
                 <div className="pt-1">
                   <img
-                    src={imageUrl}
+                    src={resolvedImage}
                     alt=""
                     className="max-h-80 w-full object-cover rounded-md bg-black/20"
                     onError={(e) => ((e.target as HTMLElement).style.display = "none")}

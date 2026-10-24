@@ -23,8 +23,10 @@ export function VariableMenu({
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
 
   const userVars = [
-    { tag: "{user.mention}", label: "User Mention", desc: "Mentions the user (@User)" },
     { tag: "{user.name}", label: "Username", desc: "User's display name or username" },
+    { tag: "{user.mention}", label: "User Mention", desc: "Mentions the user (@User)" },
+    { tag: "{user.avatar}", label: "Member Avatar / PFP", desc: "Direct CDN link to member's profile picture" },
+    { tag: "{user.pfp}", label: "Member PFP Alias", desc: "Short alias for member avatar URL" },
     { tag: "{user.id}", label: "User ID", desc: "Discord snowflake ID (e.g. 15478372...)" },
   ];
 

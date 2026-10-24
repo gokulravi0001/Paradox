@@ -40,11 +40,14 @@ export default function WelcomePage() {
   const [sendEmbed, setSendEmbed] = useState(true);
   const [embedTitle, setEmbedTitle] = useState("👋 Welcome to our Community!");
   const [embedDescription, setEmbedDescription] = useState(
-    "We are thrilled to have you here! Check out our channels to get started:\n\n• Read the rules in {#rules}\n• Grab your vanity roles in {#roles}\n• Introduce yourself in {#general}"
+    "We are thrilled to have you here, {user.mention}! Check out our channels to get started:\n\n• Read the rules in {#rules}\n• Grab your vanity roles in {#roles}\n• Introduce yourself in {#general}"
   );
   const [embedColor, setEmbedColor] = useState("#5865F2");
+  const [embedAuthorName, setEmbedAuthorName] = useState("{user.name}");
+  const [embedAuthorIconUrl, setEmbedAuthorIconUrl] = useState("{user.avatar}");
+  const [useUserAvatarThumb, setUseUserAvatarThumb] = useState(true);
   const [embedImageUrl, setEmbedImageUrl] = useState("");
-  const [embedThumbnailUrl, setEmbedThumbnailUrl] = useState("");
+  const [embedThumbnailUrl, setEmbedThumbnailUrl] = useState("{user.avatar}");
   const [embedFooter, setEmbedFooter] = useState("Member Joined • Paradox System");
 
   // Welcome DM & Auto-role
@@ -99,8 +102,16 @@ export default function WelcomePage() {
                 if (parsed.title) setEmbedTitle(parsed.title);
                 if (parsed.description) setEmbedDescription(parsed.description);
                 if (parsed.color) setEmbedColor(parsed.color);
+                if (parsed.authorName !== undefined) setEmbedAuthorName(parsed.authorName || "");
+                if (parsed.authorIconUrl !== undefined) setEmbedAuthorIconUrl(parsed.authorIconUrl || "");
                 if (parsed.imageUrl) setEmbedImageUrl(parsed.imageUrl);
-                if (parsed.thumbnailUrl) setEmbedThumbnailUrl(parsed.thumbnailUrl);
+                if (parsed.thumbnailUrl !== undefined) {
+                  setEmbedThumbnailUrl(parsed.thumbnailUrl || "");
+                  setUseUserAvatarThumb(
+                    parsed.thumbnailUrl?.includes("{user.avatar}") ||
+                    parsed.thumbnailUrl?.includes("{user.pfp}")
+                  );
+                }
                 if (parsed.footerText) setEmbedFooter(parsed.footerText);
               } catch {
                 // no-op
@@ -133,8 +144,10 @@ export default function WelcomePage() {
                 title: embedTitle,
                 description: embedDescription,
                 color: embedColor,
-                imageUrl: embedImageUrl,
-                thumbnailUrl: embedThumbnailUrl,
+                authorName: embedAuthorName || null,
+                authorIconUrl: embedAuthorIconUrl || null,
+                imageUrl: embedImageUrl || null,
+                thumbnailUrl: useUserAvatarThumb ? "{user.avatar}" : embedThumbnailUrl || null,
                 footerText: embedFooter,
               }
             : null,
@@ -174,8 +187,10 @@ export default function WelcomePage() {
                 title: embedTitle,
                 description: embedDescription,
                 color: embedColor,
-                imageUrl: embedImageUrl,
-                thumbnailUrl: embedThumbnailUrl,
+                authorName: embedAuthorName || null,
+                authorIconUrl: embedAuthorIconUrl || null,
+                imageUrl: embedImageUrl || null,
+                thumbnailUrl: useUserAvatarThumb ? "{user.avatar}" : embedThumbnailUrl || null,
                 footerText: embedFooter,
               }
             : null,
@@ -348,6 +363,73 @@ export default function WelcomePage() {
 
             {sendEmbed && (
               <div className="space-y-4 animate-in fade-in">
+                {/* Member PFP & Name Personalization Card */}
+                <div className="p-4 rounded-xl bg-discord-dark/70 border border-discord-blurple/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-white font-bold text-xs">
+                      <Sparkles className="w-4 h-4 text-discord-blurple" />
+                      <span>Member PFP &amp; Name Personalization</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-discord-blurple px-2 py-0.5 rounded bg-discord-blurple/10 border border-discord-blurple/20">
+                      Dynamic Discord Avatar
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !useUserAvatarThumb;
+                        setUseUserAvatarThumb(next);
+                        if (next) setEmbedThumbnailUrl("{user.avatar}");
+                      }}
+                      className={`p-3 rounded-xl border text-left transition cursor-pointer flex items-center justify-between ${
+                        useUserAvatarThumb
+                          ? "bg-discord-blurple/15 border-discord-blurple text-white"
+                          : "bg-discord-dark border-white/5 text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      <div>
+                        <div className="text-xs font-bold text-white">🖼️ Member PFP as Thumbnail</div>
+                        <div className="text-[10px] text-zinc-400 mt-0.5">Embed thumbnail shows newcomer&apos;s avatar</div>
+                      </div>
+                      <CheckCircle2
+                        className={`w-4 h-4 ${
+                          useUserAvatarThumb ? "text-discord-blurple" : "text-zinc-600"
+                        }`}
+                      />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (embedAuthorName) {
+                          setEmbedAuthorName("");
+                          setEmbedAuthorIconUrl("");
+                        } else {
+                          setEmbedAuthorName("{user.name}");
+                          setEmbedAuthorIconUrl("{user.avatar}");
+                        }
+                      }}
+                      className={`p-3 rounded-xl border text-left transition cursor-pointer flex items-center justify-between ${
+                        Boolean(embedAuthorName)
+                          ? "bg-discord-blurple/15 border-discord-blurple text-white"
+                          : "bg-discord-dark border-white/5 text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      <div>
+                        <div className="text-xs font-bold text-white">👤 Member Name in Header</div>
+                        <div className="text-[10px] text-zinc-400 mt-0.5">Author header displays member name &amp; avatar</div>
+                      </div>
+                      <CheckCircle2
+                        className={`w-4 h-4 ${
+                          Boolean(embedAuthorName) ? "text-discord-blurple" : "text-zinc-600"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
                 {/* Embed Title & Color */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2 space-y-1.5">
@@ -507,8 +589,10 @@ export default function WelcomePage() {
             title={sendEmbed ? embedTitle : undefined}
             description={sendEmbed ? embedDescription : undefined}
             color={embedColor}
+            authorName={sendEmbed ? embedAuthorName : undefined}
+            authorIconUrl={sendEmbed ? embedAuthorIconUrl : undefined}
             imageUrl={embedImageUrl}
-            thumbnailUrl={embedThumbnailUrl}
+            thumbnailUrl={sendEmbed ? (useUserAvatarThumb ? "{user.avatar}" : embedThumbnailUrl) : undefined}
             footerText={sendEmbed ? embedFooter : undefined}
             timestamp={true}
             channelMap={channelMap}

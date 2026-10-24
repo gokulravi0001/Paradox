@@ -7,6 +7,8 @@ import { onMessageCreate } from "./events/messageCreate";
 import { onMessageReactionAdd } from "./events/messageReactionAdd";
 import { onMessageReactionRemove } from "./events/messageReactionRemove";
 import { onInteractionCreate } from "./events/interactionCreate";
+import { onGuildMemberAdd } from "./events/guildMemberAdd";
+import { onGuildMemberRemove } from "./events/guildMemberRemove";
 
 export async function startBot() {
   const token = process.env.DISCORD_BOT_TOKEN;
@@ -28,6 +30,8 @@ export async function startBot() {
   client.on("messageReactionAdd", onMessageReactionAdd);
   client.on("messageReactionRemove", onMessageReactionRemove);
   client.on("interactionCreate", onInteractionCreate);
+  client.on("guildMemberAdd", onGuildMemberAdd);
+  client.on("guildMemberRemove", onGuildMemberRemove);
 
   // Error and Reconnect handling
   client.on("error", (error) => {
