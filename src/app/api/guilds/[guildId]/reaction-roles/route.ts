@@ -163,7 +163,46 @@ export async function DELETE(
     searchParams.get("deleteDiscord") === "true" ||
     searchParams.get("deleteDiscordMessage") === "true";
 
+  // Check for ids in query param (?ids=1,2,3) or request body ({ ids: [...] })
+  let ids: string[] = [];
+  const idsParam = searchParams.get("ids");
+  if (idsParam) {
+    ids = idsParam.split(",").map((s) => s.trim()).filter(Boolean);
+  } else {
+    try {
+      const body = await request.json().catch(() => null);
+      if (body && Array.isArray(body.ids)) {
+        ids = body.ids.filter((id: unknown): id is string => typeof id === "string" && Boolean(id));
+      }
+    } catch {
+      // no-op
+    }
+  }
+
   try {
+    if (ids.length > 0) {
+      const deleted = await prisma.reactionRole.deleteMany({
+        where: {
+          guildId,
+          id: { in: ids },
+        },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          guildId,
+          userId: auth.context!.user.id,
+          action: "DELETE_REACTION_ROLES_BULK",
+          details: JSON.stringify({ ids, count: deleted.count }),
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        deletedCount: deleted.count,
+      });
+    }
+
     if (messageId) {
       // Find all roles linked to this message/deck
       const mappings = await prisma.reactionRole.findMany({

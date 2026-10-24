@@ -144,7 +144,9 @@ export default function ReactionRolesPage() {
   const [deploying, setDeploying] = useState(false);
   const [submittingSingle, setSubmittingSingle] = useState(false);
   const [refreshingRoles, setRefreshingRoles] = useState(false);
-  const [activeMappingsView, setActiveMappingsView] = useState<"decks" | "roles">("decks");
+  const [activeMappingsView, setActiveMappingsView] = useState<"decks" | "roles">("roles");
+  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -641,11 +643,44 @@ export default function ReactionRolesPage() {
         method: "DELETE",
       });
       if (res.ok) {
-        setReactionRoles(reactionRoles.filter((item) => item.id !== id));
+        setReactionRoles((prev) => prev.filter((item) => item.id !== id));
+        setSelectedRoleIds((prev) => prev.filter((selectedId) => selectedId !== id));
         setSuccess("Role mapping removed.");
       }
     } catch {
       setError("Failed to delete role mapping.");
+    }
+  }
+
+  async function handleDeleteSelected() {
+    if (selectedRoleIds.length === 0) return;
+
+    const count = selectedRoleIds.length;
+    const confirmDelete = confirm(
+      `🗑️ Delete Selected Roles?\n\nAre you sure you want to delete ${count} selected role mapping${count > 1 ? "s" : ""}?`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      setIsBulkDeleting(true);
+      setError(null);
+      const res = await fetch(`/api/guilds/${guildId}/reaction-roles`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedRoleIds }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete selected mappings");
+
+      const removedCount = data.deletedCount || count;
+      setReactionRoles((prev) => prev.filter((item) => !selectedRoleIds.includes(item.id)));
+      setSelectedRoleIds([]);
+      setSuccess(`✅ Successfully deleted ${removedCount} selected role mapping${removedCount > 1 ? "s" : ""}!`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete selected role mappings");
+    } finally {
+      setIsBulkDeleting(false);
     }
   }
 
@@ -666,7 +701,11 @@ export default function ReactionRolesPage() {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to delete role deck");
-      setReactionRoles(reactionRoles.filter((item) => item.messageId !== messageId));
+      setReactionRoles((prev) => prev.filter((item) => item.messageId !== messageId));
+      setSelectedRoleIds((prev) => {
+        const deckItemIds = reactionRoles.filter((r) => r.messageId === messageId).map((r) => r.id);
+        return prev.filter((id) => !deckItemIds.includes(id));
+      });
       setSuccess(
         `✅ Successfully deleted entire role deck (${data.deletedCount} role mappings removed)${
           removeDiscordMsg ? " and removed message from Discord channel" : ""
@@ -695,6 +734,7 @@ export default function ReactionRolesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to purge mappings");
       setReactionRoles([]);
+      setSelectedRoleIds([]);
       setSuccess(
         `🧹 Successfully purged all role mappings (${data.deletedCount} roles removed)${
           removeDiscordMsgs ? " and removed messages from Discord" : ""
@@ -1634,7 +1674,7 @@ export default function ReactionRolesPage() {
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <span>Active Role Mappings &amp; Decks</span>
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-discord-dark text-discord-muted">
-                {reactionRoles.length} Roles • {Array.from(new Set(reactionRoles.map((r) => r.messageId))).length} Decks
+                {reactionRoles.length} Active
               </span>
             </h2>
             <p className="text-xs text-discord-muted mt-0.5">
@@ -1647,17 +1687,6 @@ export default function ReactionRolesPage() {
             <div className="p-1 rounded-xl bg-discord-dark border border-white/5 flex items-center text-xs">
               <button
                 type="button"
-                onClick={() => setActiveMappingsView("decks")}
-                className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
-                  activeMappingsView === "decks"
-                    ? "bg-discord-blurple text-white shadow"
-                    : "text-discord-muted hover:text-white"
-                }`}
-              >
-                🗂️ Decks View
-              </button>
-              <button
-                type="button"
                 onClick={() => setActiveMappingsView("roles")}
                 className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
                   activeMappingsView === "roles"
@@ -1667,22 +1696,95 @@ export default function ReactionRolesPage() {
               >
                 📋 All Roles
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveMappingsView("decks")}
+                className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                  activeMappingsView === "decks"
+                    ? "bg-discord-blurple text-white shadow"
+                    : "text-discord-muted hover:text-white"
+                }`}
+              >
+                🗂️ Decks View
+              </button>
             </div>
 
-            {/* Purge All Button */}
+            {/* Quick Select All / Deselect All */}
+            {reactionRoles.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedRoleIds.length === reactionRoles.length) {
+                    setSelectedRoleIds([]);
+                  } else {
+                    setSelectedRoleIds(reactionRoles.map((r) => r.id));
+                  }
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-discord-dark hover:bg-white/5 border border-white/10 text-xs text-discord-muted hover:text-white transition flex items-center gap-1.5 cursor-pointer font-medium"
+                title="Select or deselect all items"
+              >
+                <span>{selectedRoleIds.length === reactionRoles.length ? "Deselect All" : "Select All"}</span>
+              </button>
+            )}
+
+            {/* Delete Selected Button (Active when items selected) */}
+            {selectedRoleIds.length > 0 && (
+              <button
+                type="button"
+                onClick={handleDeleteSelected}
+                disabled={isBulkDeleting}
+                className="px-3 py-1.5 rounded-xl bg-discord-red hover:bg-red-600 text-white border border-red-500/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                title={`Delete ${selectedRoleIds.length} selected role mapping(s)`}
+              >
+                {isBulkDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                <span>Delete Selected ({selectedRoleIds.length})</span>
+              </button>
+            )}
+
+            {/* Delete All Button */}
             {reactionRoles.length > 0 && (
               <button
                 type="button"
                 onClick={handlePurgeAll}
-                className="px-3 py-1.5 rounded-xl bg-discord-red/10 hover:bg-discord-red/20 text-discord-red border border-discord-red/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-discord-red/15 hover:bg-discord-red text-discord-red hover:text-white border border-discord-red/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                 title="Delete all role mappings in server"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Purge All</span>
+                <span>Delete All</span>
               </button>
             )}
           </div>
         </div>
+
+        {/* Selected Items Floating Action Bar */}
+        {selectedRoleIds.length > 0 && (
+          <div className="flex items-center justify-between p-3 rounded-xl bg-discord-blurple/15 border border-discord-blurple/30 animate-in fade-in slide-in-from-top-1">
+            <div className="flex items-center gap-2.5 text-xs text-white">
+              <span className="w-2 h-2 rounded-full bg-discord-blurple animate-pulse" />
+              <span className="font-semibold">
+                {selectedRoleIds.length} of {reactionRoles.length} role mapping{selectedRoleIds.length > 1 ? "s" : ""} selected
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedRoleIds([])}
+                className="px-2.5 py-1 text-xs text-discord-muted hover:text-white transition font-medium"
+              >
+                Clear selection
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSelected}
+                disabled={isBulkDeleting}
+                className="px-3 py-1.5 rounded-lg bg-discord-red hover:bg-red-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer disabled:opacity-50"
+              >
+                {isBulkDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                <span>Delete Selected ({selectedRoleIds.length})</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="py-12 flex justify-center text-discord-muted">
@@ -1709,14 +1811,37 @@ export default function ReactionRolesPage() {
               const channel = channels.find((c) => c.id === deckItems[0].channelId);
               const deckType = deckItems[0].type || "BUTTON";
               const banner = deckItems.find((i) => i.bannerUrl)?.bannerUrl;
+              const allDeckSelected = deckItems.length > 0 && deckItems.every((item) => selectedRoleIds.includes(item.id));
+              const someDeckSelected = deckItems.some((item) => selectedRoleIds.includes(item.id));
 
               return (
                 <div
                   key={msgId}
-                  className="p-4 rounded-xl bg-discord-dark/70 border border-white/5 space-y-3 hover:border-white/10 transition"
+                  className={`p-4 rounded-xl bg-discord-dark/70 border space-y-3 transition ${
+                    allDeckSelected
+                      ? "border-discord-blurple/50 bg-discord-blurple/5"
+                      : "border-white/5 hover:border-white/10"
+                  }`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2.5">
                     <div className="flex items-center gap-2.5 flex-wrap">
+                      <input
+                        type="checkbox"
+                        checked={allDeckSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someDeckSelected && !allDeckSelected;
+                        }}
+                        onChange={(e) => {
+                          const deckIds = deckItems.map((i) => i.id);
+                          if (e.target.checked) {
+                            setSelectedRoleIds((prev) => Array.from(new Set([...prev, ...deckIds])));
+                          } else {
+                            setSelectedRoleIds((prev) => prev.filter((id) => !deckIds.includes(id)));
+                          }
+                        }}
+                        className="w-4 h-4 rounded bg-discord-dark border border-white/20 text-discord-blurple focus:ring-0 cursor-pointer accent-discord-blurple"
+                        title="Select all roles in this deck"
+                      />
                       <span className="font-bold text-white text-sm">
                         #{channel?.name || deckItems[0].channelId}
                       </span>
@@ -1754,23 +1879,42 @@ export default function ReactionRolesPage() {
 
                   {/* Role Chips */}
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {deckItems.map((r) => (
-                      <span
-                        key={r.id}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-discord-card border border-white/5 text-xs text-slate-200"
-                      >
-                        <span>{r.emoji}</span>
-                        <span className="font-semibold text-white">{r.roleName}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(r.id)}
-                          className="text-zinc-500 hover:text-discord-red ml-1 transition"
-                          title={`Remove ${r.roleName} from deck`}
+                    {deckItems.map((r) => {
+                      const isRoleSelected = selectedRoleIds.includes(r.id);
+                      return (
+                        <span
+                          key={r.id}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition ${
+                            isRoleSelected
+                              ? "bg-discord-blurple/20 border-discord-blurple/40 text-white"
+                              : "bg-discord-card border-white/5 text-slate-200"
+                          }`}
                         >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
+                          <input
+                            type="checkbox"
+                            checked={isRoleSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedRoleIds((prev) => [...prev, r.id]);
+                              } else {
+                                setSelectedRoleIds((prev) => prev.filter((id) => id !== r.id));
+                              }
+                            }}
+                            className="w-3.5 h-3.5 rounded bg-discord-dark border border-white/20 text-discord-blurple focus:ring-0 cursor-pointer accent-discord-blurple"
+                          />
+                          <span>{r.emoji}</span>
+                          <span className="font-semibold">{r.roleName}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(r.id)}
+                            className="text-zinc-500 hover:text-discord-red ml-1 transition"
+                            title={`Remove ${r.roleName} from deck`}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      );
+                    })}
                   </div>
 
                   {banner && (
@@ -1789,6 +1933,21 @@ export default function ReactionRolesPage() {
             <table className="w-full text-left text-xs">
               <thead className="border-b border-white/5 text-discord-muted uppercase text-[10px] tracking-wider">
                 <tr>
+                  <th className="pb-3 pl-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={reactionRoles.length > 0 && selectedRoleIds.length === reactionRoles.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedRoleIds(reactionRoles.map((r) => r.id));
+                        } else {
+                          setSelectedRoleIds([]);
+                        }
+                      }}
+                      className="w-4 h-4 rounded bg-discord-dark border border-white/20 text-discord-blurple focus:ring-0 cursor-pointer accent-discord-blurple"
+                      title="Select all roles"
+                    />
+                  </th>
                   <th className="pb-3 pl-2">Media / Icon</th>
                   <th className="pb-3">Role</th>
                   <th className="pb-3">Type</th>
@@ -1800,8 +1959,28 @@ export default function ReactionRolesPage() {
               <tbody className="divide-y divide-white/5">
                 {reactionRoles.map((item) => {
                   const channel = channels.find((c) => c.id === item.channelId);
+                  const isSelected = selectedRoleIds.includes(item.id);
                   return (
-                    <tr key={item.id} className="hover:bg-white/[0.02] transition">
+                    <tr
+                      key={item.id}
+                      className={`hover:bg-white/[0.03] transition ${
+                        isSelected ? "bg-discord-blurple/10" : ""
+                      }`}
+                    >
+                      <td className="py-3.5 pl-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedRoleIds((prev) => [...prev, item.id]);
+                            } else {
+                              setSelectedRoleIds((prev) => prev.filter((id) => id !== item.id));
+                            }
+                          }}
+                          className="w-4 h-4 rounded bg-discord-dark border border-white/20 text-discord-blurple focus:ring-0 cursor-pointer accent-discord-blurple"
+                        />
+                      </td>
                       <td className="py-3.5 pl-2">
                         <div className="flex items-center gap-2">
                           {item.imageUrl ? (
