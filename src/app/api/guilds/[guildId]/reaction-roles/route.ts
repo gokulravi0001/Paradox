@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeGuildAdmin } from "@/lib/serverAuth";
 import { prisma } from "@/lib/prisma";
 import { ReactionRoleSchema } from "@/lib/validations";
-import { fetchGuildRoles, fetchBotMember, fetchGuildChannels, DiscordChannel } from "@/lib/discord";
+import { fetchGuildRoles, fetchBotMember, fetchGuildChannels, deleteDiscordMessage, DiscordChannel } from "@/lib/discord";
 
 export const dynamic = "force-dynamic";
 
@@ -145,5 +145,106 @@ export async function POST(
   } catch (err: unknown) {
     console.error(`[API:ReactionRoles] Error creating reaction role:`, err);
     return NextResponse.json({ error: "Failed to create reaction role mapping." }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { guildId: string } }
+) {
+  const { guildId } = params;
+  const auth = await authorizeGuildAdmin(guildId);
+  if (auth.errorResponse) return auth.errorResponse;
+
+  const { searchParams } = new URL(request.url);
+  const messageId = searchParams.get("messageId");
+  const purge = searchParams.get("purge") === "true";
+  const deleteDiscord =
+    searchParams.get("deleteDiscord") === "true" ||
+    searchParams.get("deleteDiscordMessage") === "true";
+
+  try {
+    if (messageId) {
+      // Find all roles linked to this message/deck
+      const mappings = await prisma.reactionRole.findMany({
+        where: { guildId, messageId },
+      });
+
+      if (mappings.length === 0) {
+        return NextResponse.json(
+          { error: "No mappings found for this message ID" },
+          { status: 404 }
+        );
+      }
+
+      const channelId = mappings[0].channelId;
+
+      if (deleteDiscord && channelId) {
+        await deleteDiscordMessage(channelId, messageId).catch(() => null);
+      }
+
+      const deleted = await prisma.reactionRole.deleteMany({
+        where: { guildId, messageId },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          guildId,
+          userId: auth.context!.user.id,
+          action: "DELETE_ROLE_DECK",
+          details: JSON.stringify({ messageId, count: deleted.count, deleteDiscord }),
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        deletedCount: deleted.count,
+        messageId,
+      });
+    }
+
+    if (purge) {
+      if (deleteDiscord) {
+        // Collect distinct channelId & messageId pairs
+        const distinctMessages = await prisma.reactionRole.findMany({
+          where: { guildId },
+          select: { channelId: true, messageId: true },
+          distinct: ["channelId", "messageId"],
+        });
+
+        for (const m of distinctMessages) {
+          if (m.channelId && m.messageId) {
+            await deleteDiscordMessage(m.channelId, m.messageId).catch(() => null);
+          }
+        }
+      }
+
+      const deleted = await prisma.reactionRole.deleteMany({
+        where: { guildId },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          guildId,
+          userId: auth.context!.user.id,
+          action: "PURGE_REACTION_ROLES",
+          details: JSON.stringify({ count: deleted.count, deleteDiscord }),
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        deletedCount: deleted.count,
+        purged: true,
+      });
+    }
+
+    return NextResponse.json(
+      { error: "Missing messageId or purge parameter" },
+      { status: 400 }
+    );
+  } catch (err: unknown) {
+    console.error("[API:ReactionRoles:DELETE] Error:", err);
+    return NextResponse.json({ error: "Failed to delete role mappings" }, { status: 500 });
   }
 }

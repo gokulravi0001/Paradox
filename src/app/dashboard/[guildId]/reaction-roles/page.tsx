@@ -144,6 +144,7 @@ export default function ReactionRolesPage() {
   const [deploying, setDeploying] = useState(false);
   const [submittingSingle, setSubmittingSingle] = useState(false);
   const [refreshingRoles, setRefreshingRoles] = useState(false);
+  const [activeMappingsView, setActiveMappingsView] = useState<"decks" | "roles">("decks");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -645,6 +646,62 @@ export default function ReactionRolesPage() {
       }
     } catch {
       setError("Failed to delete role mapping.");
+    }
+  }
+
+  async function handleDeleteDeck(messageId: string) {
+    const alsoDeleteFromDiscord = confirm(
+      `🗑️ Delete Entire Role Deck (Message #${messageId})?\n\n• Click OK to delete all role mappings for this deck.\n• You will be prompted next whether to remove the message from your Discord channel.`
+    );
+    if (!alsoDeleteFromDiscord) return;
+
+    const removeDiscordMsg = confirm(
+      `Do you also want to remove the role deck message & buttons from the Discord channel?\n\n• OK = Yes, delete Discord message\n• Cancel = No, delete mappings only (keep message in Discord)`
+    );
+
+    try {
+      const res = await fetch(
+        `/api/guilds/${guildId}/reaction-roles?messageId=${encodeURIComponent(messageId)}&deleteDiscord=${removeDiscordMsg}`,
+        { method: "DELETE" }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete role deck");
+      setReactionRoles(reactionRoles.filter((item) => item.messageId !== messageId));
+      setSuccess(
+        `✅ Successfully deleted entire role deck (${data.deletedCount} role mappings removed)${
+          removeDiscordMsg ? " and removed message from Discord channel" : ""
+        }!`
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete role deck");
+    }
+  }
+
+  async function handlePurgeAll() {
+    const confirmPurge = confirm(
+      `⚠️ DANGER: Are you sure you want to delete ALL reaction roles and decks in this server?\n\nThis will remove all active role buttons & reaction configurations.`
+    );
+    if (!confirmPurge) return;
+
+    const removeDiscordMsgs = confirm(
+      `Do you also want to delete all associated role deck messages from Discord channels?\n\n• OK = Yes, delete messages from Discord\n• Cancel = No, delete database configurations only`
+    );
+
+    try {
+      const res = await fetch(
+        `/api/guilds/${guildId}/reaction-roles?purge=true&deleteDiscord=${removeDiscordMsgs}`,
+        { method: "DELETE" }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to purge mappings");
+      setReactionRoles([]);
+      setSuccess(
+        `🧹 Successfully purged all role mappings (${data.deletedCount} roles removed)${
+          removeDiscordMsgs ? " and removed messages from Discord" : ""
+        }!`
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to purge role mappings");
     }
   }
 
@@ -1570,14 +1627,62 @@ export default function ReactionRolesPage() {
         </div>
       )}
 
-      {/* Active Mappings Table */}
+      {/* Active Mappings Table & Decks */}
       <div className="p-6 rounded-2xl bg-discord-card border border-white/5 space-y-4">
-        <h2 className="text-lg font-bold text-white flex items-center justify-between">
-          <span>Active Role Mappings & Decks</span>
-          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-discord-dark text-discord-muted">
-            {reactionRoles.length} Active
-          </span>
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
+          <div>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <span>Active Role Mappings &amp; Decks</span>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-discord-dark text-discord-muted">
+                {reactionRoles.length} Roles • {Array.from(new Set(reactionRoles.map((r) => r.messageId))).length} Decks
+              </span>
+            </h2>
+            <p className="text-xs text-discord-muted mt-0.5">
+              Manage deployed Visual Role Decks, button menus, and reaction role mappings.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* View Mode Toggle */}
+            <div className="p-1 rounded-xl bg-discord-dark border border-white/5 flex items-center text-xs">
+              <button
+                type="button"
+                onClick={() => setActiveMappingsView("decks")}
+                className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                  activeMappingsView === "decks"
+                    ? "bg-discord-blurple text-white shadow"
+                    : "text-discord-muted hover:text-white"
+                }`}
+              >
+                🗂️ Decks View
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveMappingsView("roles")}
+                className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                  activeMappingsView === "roles"
+                    ? "bg-discord-blurple text-white shadow"
+                    : "text-discord-muted hover:text-white"
+                }`}
+              >
+                📋 All Roles
+              </button>
+            </div>
+
+            {/* Purge All Button */}
+            {reactionRoles.length > 0 && (
+              <button
+                type="button"
+                onClick={handlePurgeAll}
+                className="px-3 py-1.5 rounded-xl bg-discord-red/10 hover:bg-discord-red/20 text-discord-red border border-discord-red/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                title="Delete all role mappings in server"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Purge All</span>
+              </button>
+            )}
+          </div>
+        </div>
 
         {loading ? (
           <div className="py-12 flex justify-center text-discord-muted">
@@ -1590,7 +1695,96 @@ export default function ReactionRolesPage() {
               Use the Visual Role Deck Studio above to deploy your first interactive role panel!
             </p>
           </div>
+        ) : activeMappingsView === "decks" ? (
+          /* Decks View: Grouped by Message ID */
+          <div className="space-y-4">
+            {Array.from(
+              reactionRoles.reduce((acc, item) => {
+                const list = acc.get(item.messageId) || [];
+                list.push(item);
+                acc.set(item.messageId, list);
+                return acc;
+              }, new Map<string, ReactionRoleItem[]>())
+            ).map(([msgId, deckItems]) => {
+              const channel = channels.find((c) => c.id === deckItems[0].channelId);
+              const deckType = deckItems[0].type || "BUTTON";
+              const banner = deckItems.find((i) => i.bannerUrl)?.bannerUrl;
+
+              return (
+                <div
+                  key={msgId}
+                  className="p-4 rounded-xl bg-discord-dark/70 border border-white/5 space-y-3 hover:border-white/10 transition"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2.5">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className="font-bold text-white text-sm">
+                        #{channel?.name || deckItems[0].channelId}
+                      </span>
+                      <span className="text-xs font-mono text-discord-muted bg-discord-card px-2 py-0.5 rounded border border-white/5">
+                        ID: {msgId}
+                      </span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          deckType === "BUTTON"
+                            ? "bg-discord-blurple/20 text-discord-blurple border border-discord-blurple/30"
+                            : deckType === "SELECT_MENU"
+                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                            : "bg-zinc-700 text-zinc-300"
+                        }`}
+                      >
+                        {deckType}
+                      </span>
+                      <span className="text-[10px] text-discord-muted bg-discord-card px-2 py-0.5 rounded border border-white/5">
+                        {deckItems.length} Roles
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDeck(msgId)}
+                        className="px-3 py-1.5 rounded-lg bg-discord-red/10 hover:bg-discord-red/20 text-discord-red border border-discord-red/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                        title="Delete entire deck and role mappings"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Entire Deck</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Role Chips */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {deckItems.map((r) => (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-discord-card border border-white/5 text-xs text-slate-200"
+                      >
+                        <span>{r.emoji}</span>
+                        <span className="font-semibold text-white">{r.roleName}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(r.id)}
+                          className="text-zinc-500 hover:text-discord-red ml-1 transition"
+                          title={`Remove ${r.roleName} from deck`}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+
+                  {banner && (
+                    <div className="text-[11px] text-discord-muted flex items-center gap-1.5 pt-1">
+                      <span className="w-2 h-2 rounded-full bg-discord-fuchsia" />
+                      <span>Has header banner GIF / image attached</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         ) : (
+          /* Granular Table View */
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="border-b border-white/5 text-discord-muted uppercase text-[10px] tracking-wider">
@@ -1662,13 +1856,15 @@ export default function ReactionRolesPage() {
                         </div>
                       </td>
                       <td className="py-3.5 pr-2 text-right">
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-1.5 rounded-lg text-discord-muted hover:text-discord-red hover:bg-discord-red/10 transition"
-                          title="Delete role mapping"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="p-1.5 rounded-lg text-discord-muted hover:text-discord-red hover:bg-discord-red/10 transition"
+                            title="Delete this single role mapping"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

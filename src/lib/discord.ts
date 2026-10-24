@@ -465,3 +465,37 @@ export async function fetchDiscordMessage(
     };
   }
 }
+
+/**
+ * Delete a message from a Discord channel
+ */
+export async function deleteDiscordMessage(
+  channelId: string,
+  messageId: string
+): Promise<{ success: boolean; error?: string }> {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) {
+    return { success: false, error: "Bot token not configured or invalid." };
+  }
+
+  try {
+    const response = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}/messages/${messageId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bot ${botToken}`,
+      },
+    });
+
+    if (!response.ok && response.status !== 404) {
+      const err = await response.json().catch(() => ({ message: response.statusText }));
+      return { success: false, error: err.message || `Discord API error: ${response.status}` };
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to delete message from Discord",
+    };
+  }
+}

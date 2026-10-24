@@ -137,6 +137,16 @@ var SLASH_COMMANDS_DATA = [
     ).addRoleOption(
       (opt) => opt.setName("role").setDescription("The role to unrestrict").setRequired(true)
     )
+  ).addSubcommand(
+    (sub) => sub.setName("delete_deck").setDescription("Delete an entire role deck and all its role mappings").addStringOption(
+      (opt) => opt.setName("message_id").setDescription("The Discord Message ID").setRequired(true)
+    ).addBooleanOption(
+      (opt) => opt.setName("delete_message").setDescription("Also delete the message from the Discord channel?")
+    )
+  ).addSubcommand(
+    (sub) => sub.setName("purge").setDescription("Delete ALL reaction role mappings and decks for this server").addBooleanOption(
+      (opt) => opt.setName("delete_messages").setDescription("Also delete associated messages from Discord?")
+    )
   ),
   // 2. Specialist: Visual Role Deck Command (Interactive Clickable Buttons & Animated GIF Header)
   new import_discord2.SlashCommandBuilder().setName("roledeck").setDescription("Specialist: Deploy interactive Visual Role Deck with buttons and banner GIF").addStringOption(
@@ -384,6 +394,65 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
         content: `\u{1F513} **Restriction Removed:** Anyone can now claim **${targetRole.name}** on message \`${messageId}\`.`
       });
     }
+    if (subcommand === "delete_deck") {
+      const messageId = interaction.options.getString("message_id", true).trim();
+      const deleteMessage = interaction.options.getBoolean("delete_message") || false;
+      const mappings = await prisma.reactionRole.findMany({
+        where: { guildId, messageId }
+      });
+      if (mappings.length === 0) {
+        return interaction.reply({
+          content: `\u26A0\uFE0F No role deck found matching Message ID \`${messageId}\`.`,
+          ephemeral: true
+        });
+      }
+      const count = mappings.length;
+      const channelId = mappings[0].channelId;
+      if (deleteMessage && channelId) {
+        try {
+          const ch = await guild.channels.fetch(channelId).catch(() => null);
+          if (ch && "messages" in ch) {
+            const msg = await ch.messages.fetch(messageId).catch(() => null);
+            if (msg) await msg.delete().catch(() => null);
+          }
+        } catch {
+        }
+      }
+      await prisma.reactionRole.deleteMany({
+        where: { guildId, messageId }
+      });
+      return interaction.reply({
+        content: `\u{1F5D1}\uFE0F **Role Deck Deleted:** Removed all **${count}** role mapping(s) from message \`${messageId}\`${deleteMessage ? " and deleted the Discord message" : ""}!`
+      });
+    }
+    if (subcommand === "purge") {
+      const deleteMessages = interaction.options.getBoolean("delete_messages") || false;
+      if (deleteMessages) {
+        const distinctMessages = await prisma.reactionRole.findMany({
+          where: { guildId },
+          select: { channelId: true, messageId: true },
+          distinct: ["channelId", "messageId"]
+        });
+        for (const m of distinctMessages) {
+          if (m.channelId && m.messageId) {
+            try {
+              const ch = await guild.channels.fetch(m.channelId).catch(() => null);
+              if (ch && "messages" in ch) {
+                const msg = await ch.messages.fetch(m.messageId).catch(() => null);
+                if (msg) await msg.delete().catch(() => null);
+              }
+            } catch {
+            }
+          }
+        }
+      }
+      const deleted = await prisma.reactionRole.deleteMany({
+        where: { guildId }
+      });
+      return interaction.reply({
+        content: `\u{1F9F9} **Purge Complete:** Successfully deleted all **${deleted.count}** reaction role mappings and decks in this server${deleteMessages ? " and deleted their Discord messages" : ""}!`
+      });
+    }
   }
   if (commandName === "roledeck") {
     if (!guild || !guildId) return interaction.reply({ content: "Must be used in a server.", ephemeral: true });
@@ -608,6 +677,8 @@ Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
 \`${prefix}rr restrict <msgId> <emoji> <@role> <@reqRole>\` \u2014 Restricted role
 \`${prefix}rr setmode <msgId> <unique|onetime|multi>\` \u2014 Switch message mode
 \`${prefix}rr remove <msgId> <emoji>\` \u2014 Remove mapping
+\`${prefix}rr deletedeck <msgId> [--discord]\` \u2014 Delete entire deck & roles
+\`${prefix}rr purge [--discord]\` \u2014 Purge all role mappings in server
 \`${prefix}rr list\` \u2014 List active mappings`
       },
       {
@@ -833,6 +904,62 @@ Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
         where: { guildId: guild.id, messageId: msgId, emoji }
       });
       return message.reply(`\u2705 Removed mapping for ${emoji} on message \`${msgId}\`.`);
+    }
+    if (sub === "deletedeck" || sub === "deldeck") {
+      const msgId = args[2]?.trim();
+      const deleteMsg = args[3]?.toLowerCase() === "--discord" || args[3]?.toLowerCase() === "true";
+      if (!msgId) {
+        return message.reply(`Usage: \`${prefix}rr deletedeck <message_id> [--discord]\`
+*(Add \`--discord\` to also delete the message from the channel)*`);
+      }
+      const mappings = await prisma.reactionRole.findMany({
+        where: { guildId: guild.id, messageId: msgId }
+      });
+      if (mappings.length === 0) {
+        return message.reply(`\u26A0\uFE0F No role deck found matching Message ID \`${msgId}\`.`);
+      }
+      const count = mappings.length;
+      const channelId = mappings[0].channelId;
+      if (deleteMsg && channelId) {
+        try {
+          const ch = await guild.channels.fetch(channelId).catch(() => null);
+          if (ch && "messages" in ch) {
+            const msg = await ch.messages.fetch(msgId).catch(() => null);
+            if (msg) await msg.delete().catch(() => null);
+          }
+        } catch {
+        }
+      }
+      await prisma.reactionRole.deleteMany({
+        where: { guildId: guild.id, messageId: msgId }
+      });
+      return message.reply(`\u{1F5D1}\uFE0F **Role Deck Deleted:** Removed all **${count}** role mapping(s) from message \`${msgId}\`${deleteMsg ? " and deleted the Discord message" : ""}!`);
+    }
+    if (sub === "purge" || sub === "deleteall") {
+      const deleteMsgs = args[2]?.toLowerCase() === "--discord" || args[2]?.toLowerCase() === "true";
+      if (deleteMsgs) {
+        const distinctMessages = await prisma.reactionRole.findMany({
+          where: { guildId: guild.id },
+          select: { channelId: true, messageId: true },
+          distinct: ["channelId", "messageId"]
+        });
+        for (const m of distinctMessages) {
+          if (m.channelId && m.messageId) {
+            try {
+              const ch = await guild.channels.fetch(m.channelId).catch(() => null);
+              if (ch && "messages" in ch) {
+                const msg = await ch.messages.fetch(m.messageId).catch(() => null);
+                if (msg) await msg.delete().catch(() => null);
+              }
+            } catch {
+            }
+          }
+        }
+      }
+      const deleted = await prisma.reactionRole.deleteMany({
+        where: { guildId: guild.id }
+      });
+      return message.reply(`\u{1F9F9} **Purge Complete:** Successfully deleted all **${deleted.count}** reaction role mappings and decks in this server${deleteMsgs ? " and deleted their Discord messages" : ""}!`);
     }
     if (sub === "clean") {
       const all = await prisma.reactionRole.findMany({ where: { guildId: guild.id } });
