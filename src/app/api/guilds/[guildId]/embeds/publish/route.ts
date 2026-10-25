@@ -48,14 +48,49 @@ export async function POST(
       );
     }
 
+    // 2.5 Resolve dynamic placeholder tags ({user.avatar}, {server.name}, etc.)
+    const userAvatarUrl = auth.context!.user.avatar
+      ? `https://cdn.discordapp.com/avatars/${auth.context!.user.id}/${auth.context!.user.avatar}.png?size=256`
+      : "https://cdn.discordapp.com/embed/avatars/0.png";
+
+    const resolveTags = (str?: string | null): string | undefined => {
+      if (!str) return undefined;
+      return str
+        .replace(/{user\.mention}/g, `<@${auth.context!.user.id}>`)
+        .replace(/{user\.name}/g, auth.context!.user.username)
+        .replace(/{user\.avatar}/g, userAvatarUrl)
+        .replace(/{user\.pfp}/g, userAvatarUrl)
+        .replace(/{user\.id}/g, auth.context!.user.id)
+        .replace(/{server\.name}/g, "Discord Server")
+        .replace(/{server\.icon}/g, "https://cdn.discordapp.com/embed/avatars/0.png");
+    };
+
+    const resolvedEmbed = {
+      ...embed,
+      title: resolveTags(embed.title),
+      description: resolveTags(embed.description),
+      authorName: resolveTags(embed.authorName),
+      authorIconUrl: resolveTags(embed.authorIconUrl),
+      thumbnailUrl: resolveTags(embed.thumbnailUrl),
+      imageUrl: resolveTags(embed.imageUrl),
+      footerText: resolveTags(embed.footerText),
+      footerIconUrl: resolveTags(embed.footerIconUrl),
+      fields: embed.fields?.map((f: { name: string; value: string; inline?: boolean }) => ({
+        ...f,
+        name: resolveTags(f.name) || f.name,
+        value: resolveTags(f.value) || f.value,
+      })),
+    };
+
     // 3. Format payload for Discord API
-    const formattedEmbed = formatToDiscordEmbedApi(embed);
+    const formattedEmbed = formatToDiscordEmbedApi(resolvedEmbed);
+    const resolvedContent = resolveTags(content);
 
     // 4. Publish or Edit message
     const isEdit = Boolean(messageId && messageId.trim().length > 0);
     const result = isEdit
-      ? await editDiscordEmbed(resolvedChannelId, messageId.trim(), formattedEmbed, content)
-      : await publishDiscordEmbed(resolvedChannelId, formattedEmbed, content);
+      ? await editDiscordEmbed(resolvedChannelId, messageId.trim(), formattedEmbed, resolvedContent)
+      : await publishDiscordEmbed(resolvedChannelId, formattedEmbed, resolvedContent);
 
     if (!result.success) {
       return NextResponse.json(

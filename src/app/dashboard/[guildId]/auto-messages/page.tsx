@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { ChannelSelect, DiscordChannelItem } from "@/components/ui/ChannelSelect";
 import { VariableMenu } from "@/components/ui/VariableMenu";
+import { QuickTagsBar } from "@/components/ui/QuickTagsBar";
 import { DiscordPreview } from "@/components/ui/DiscordPreview";
 import { ToastContainer, ToastMessage } from "@/components/ui/Toast";
 
@@ -238,7 +239,7 @@ export default function AutoMessagesPage() {
                 <label className="text-xs font-semibold text-zinc-300">Message Content</label>
                 <VariableMenu
                   channels={channels}
-                  onInsert={(v) => setContent((prev) => prev + " " + v)}
+                  onInsert={(v) => setContent((prev) => (prev ? prev + " " + v : v))}
                 />
               </div>
               <textarea
@@ -246,6 +247,10 @@ export default function AutoMessagesPage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-discord-blurple leading-relaxed"
+              />
+              <QuickTagsBar
+                channels={channels}
+                onInsert={(tag) => setContent((prev) => (prev ? prev + " " + tag : tag))}
               />
             </div>
 

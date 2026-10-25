@@ -113,7 +113,8 @@ export async function POST(
         .replace(/{user\.pfp}/g, userAvatarUrl)
         .replace(/{user\.id}/g, auth.context!.user.id)
         .replace(/{server\.name}/g, "Discord Server")
-        .replace(/{server\.member_count}/g, "99");
+        .replace(/{server\.member_count}/g, "99")
+        .replace(/{server\.icon}/g, "https://cdn.discordapp.com/embed/avatars/0.png");
     };
 
     const formattedContent = resolveTags(message || "{user.name} has left {server.name}. (Test Goodbye Message)");

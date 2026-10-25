@@ -1767,9 +1767,10 @@ async function onGuildMemberAdd(member) {
     const userMention = `<@${member.id}>`;
     const serverName = member.guild.name;
     const memberCount = String(member.guild.memberCount);
+    const serverIcon = member.guild.iconURL({ extension: "png", size: 256 }) || "https://cdn.discordapp.com/embed/avatars/0.png";
     const replaceTags = (text) => {
       if (!text) return "";
-      return text.replace(/{user\.mention}/g, userMention).replace(/{user\.name}/g, userName).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount);
+      return text.replace(/{user\.mention}/g, userMention).replace(/{user\.name}/g, userName).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount).replace(/{server\.icon}/g, serverIcon);
     };
     if (config.welcomeRoleId) {
       await member.roles.add(config.welcomeRoleId).catch((err) => {
@@ -1850,9 +1851,10 @@ async function onGuildMemberRemove(member) {
     const userName = member.user?.username || "A member";
     const serverName = member.guild.name;
     const memberCount = String(member.guild.memberCount);
+    const serverIcon = member.guild.iconURL({ extension: "png", size: 256 }) || "https://cdn.discordapp.com/embed/avatars/0.png";
     const replaceTags = (text) => {
       if (!text) return "";
-      return text.replace(/{user\.mention}/g, userName).replace(/{user\.name}/g, userName).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount);
+      return text.replace(/{user\.mention}/g, userName).replace(/{user\.name}/g, userName).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount).replace(/{server\.icon}/g, serverIcon);
     };
     const messageContent = config.goodbyeMessage ? replaceTags(config.goodbyeMessage) : void 0;
     let embed = void 0;

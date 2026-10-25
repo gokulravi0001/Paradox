@@ -134,7 +134,8 @@ export async function POST(
         .replace(/{user\.pfp}/g, userAvatarUrl)
         .replace(/{user\.id}/g, auth.context!.user.id)
         .replace(/{server\.name}/g, "Discord Server")
-        .replace(/{server\.member_count}/g, "100");
+        .replace(/{server\.member_count}/g, "100")
+        .replace(/{server\.icon}/g, "https://cdn.discordapp.com/embed/avatars/0.png");
     };
 
     const formattedContent = resolveTags(message || "Welcome to {server.name}, {user.mention}! 🎉 (Test Welcome Message)");

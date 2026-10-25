@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { ChannelSelect, DiscordChannelItem } from "@/components/ui/ChannelSelect";
 import { VariableMenu } from "@/components/ui/VariableMenu";
+import { QuickTagsBar } from "@/components/ui/QuickTagsBar";
 import { DiscordPreview } from "@/components/ui/DiscordPreview";
 import { ToastContainer, ToastMessage } from "@/components/ui/Toast";
 
@@ -283,7 +284,7 @@ export default function RulesPage() {
                 <label className="text-[11px] font-semibold text-zinc-400">Rule Description</label>
                 <VariableMenu
                   channels={channels}
-                  onInsert={(v) => setNewDesc((prev) => prev + " " + v)}
+                  onInsert={(v) => setNewDesc((prev) => (prev ? prev + " " + v : v))}
                   label="Mention Channel"
                 />
               </div>
@@ -293,6 +294,10 @@ export default function RulesPage() {
                 onChange={(e) => setNewDesc(e.target.value)}
                 placeholder="Harassment, hate speech, spam, or toxic behavior will not be tolerated..."
                 className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-discord-blurple leading-relaxed"
+              />
+              <QuickTagsBar
+                channels={channels}
+                onInsert={(tag) => setNewDesc((prev) => (prev ? prev + " " + tag : tag))}
               />
             </div>
 

@@ -18,6 +18,9 @@ import {
 } from "lucide-react";
 import { DISCORD_LIMITS } from "@/lib/validations";
 import { DiscordMarkdown } from "@/lib/discordMarkdown";
+import { QuickTagsBar } from "@/components/ui/QuickTagsBar";
+import { VariableMenu } from "@/components/ui/VariableMenu";
+import { DiscordChannelItem } from "@/components/ui/ChannelSelect";
 
 interface Channel {
   id: string;
@@ -57,6 +60,29 @@ const PRESET_COLORS = [
   { name: "Fuchsia", hex: "#EB459E" },
   { name: "Dark", hex: "#2B2D31" },
 ];
+
+const sampleUserPfp = "https://cdn.discordapp.com/embed/avatars/1.png";
+const sampleServerIcon = "https://cdn.discordapp.com/embed/avatars/0.png";
+
+function resolvePreviewMedia(urlStr?: string | null) {
+  if (!urlStr) return "";
+  if (urlStr.includes("{user.avatar}") || urlStr.includes("{user.pfp}")) return sampleUserPfp;
+  if (urlStr.includes("{server.icon}")) return sampleServerIcon;
+  return urlStr;
+}
+
+function resolvePreviewText(text?: string | null) {
+  if (!text) return "";
+  return text
+    .replace(/{user\.name}/g, "Alex")
+    .replace(/{user\.mention}/g, "@Alex")
+    .replace(/{user\.id}/g, "1547837282109624462")
+    .replace(/{user\.avatar}/g, sampleUserPfp)
+    .replace(/{user\.pfp}/g, sampleUserPfp)
+    .replace(/{server\.name}/g, "Paradox Community")
+    .replace(/{server\.member_count}/g, "1,248")
+    .replace(/{server\.icon}/g, sampleServerIcon);
+}
 
 export default function EmbedBuilderPage() {
   const params = useParams();
@@ -493,7 +519,25 @@ export default function EmbedBuilderPage() {
 
             {/* Author Section */}
             <div className="space-y-3">
-              <h3 className="text-xs font-bold text-discord-muted uppercase tracking-wider">Author</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-discord-muted uppercase tracking-wider">Author</h3>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setAuthorName("{user.name}")}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-discord-dark hover:bg-white/10 text-discord-blurple border border-discord-blurple/30 font-mono transition cursor-pointer"
+                  >
+                    👤 {"{user.name}"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAuthorName("{server.name}")}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-discord-dark hover:bg-white/10 text-emerald-400 border border-emerald-500/30 font-mono transition cursor-pointer"
+                  >
+                    🏠 {"{server.name}"}
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <input
                   type="text"
@@ -510,13 +554,20 @@ export default function EmbedBuilderPage() {
                   onChange={(e) => setAuthorUrl(e.target.value)}
                   className="px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-discord-muted focus:outline-none focus:border-discord-fuchsia"
                 />
-                <input
-                  type="text"
-                  placeholder="Author Icon URL"
-                  value={authorIconUrl}
-                  onChange={(e) => setAuthorIconUrl(e.target.value)}
-                  className="px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-discord-muted focus:outline-none focus:border-discord-fuchsia"
-                />
+                <div className="space-y-1">
+                  <input
+                    type="text"
+                    placeholder="Author Icon URL or {user.avatar}"
+                    value={authorIconUrl}
+                    onChange={(e) => setAuthorIconUrl(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-discord-muted focus:outline-none focus:border-discord-fuchsia"
+                  />
+                  <QuickTagsBar
+                    variant="media-url"
+                    activeValue={authorIconUrl}
+                    onInsert={(v) => setAuthorIconUrl(v)}
+                  />
+                </div>
               </div>
             </div>
 
@@ -524,9 +575,27 @@ export default function EmbedBuilderPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-discord-muted uppercase tracking-wider">Title</h3>
-                <span className="text-[11px] text-discord-muted font-mono">
-                  {title.length}/{DISCORD_LIMITS.TITLE_MAX}
-                </span>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setTitle((prev) => (prev ? prev + " {user.name}" : "Announcement for {user.name}"))}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-discord-dark hover:bg-white/10 text-discord-blurple border border-discord-blurple/30 font-mono transition cursor-pointer"
+                    >
+                      + {"{user.name}"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTitle((prev) => (prev ? prev + " {server.name}" : "{server.name}"))}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-discord-dark hover:bg-white/10 text-emerald-400 border border-emerald-500/30 font-mono transition cursor-pointer"
+                    >
+                      + {"{server.name}"}
+                    </button>
+                  </div>
+                  <span className="text-[11px] text-discord-muted font-mono">
+                    {title.length}/{DISCORD_LIMITS.TITLE_MAX}
+                  </span>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
@@ -551,9 +620,15 @@ export default function EmbedBuilderPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-discord-muted uppercase tracking-wider">Description</h3>
-                <span className="text-[11px] text-discord-muted font-mono">
-                  {description.length}/{DISCORD_LIMITS.DESCRIPTION_MAX}
-                </span>
+                <div className="flex items-center gap-2">
+                  <VariableMenu
+                    channels={channels.map((c) => ({ id: c.id, name: c.name, type: 0 }))}
+                    onInsert={(v) => setDescription((prev) => (prev ? prev + " " + v : v))}
+                  />
+                  <span className="text-[11px] text-discord-muted font-mono">
+                    {description.length}/{DISCORD_LIMITS.DESCRIPTION_MAX}
+                  </span>
+                </div>
               </div>
               <textarea
                 rows={4}
@@ -562,6 +637,10 @@ export default function EmbedBuilderPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-sm text-white placeholder-discord-muted focus:outline-none focus:border-discord-fuchsia"
+              />
+              <QuickTagsBar
+                channels={channels.map((c) => ({ id: c.id, name: c.name, type: 0 }))}
+                onInsert={(tag) => setDescription((prev) => (prev ? prev + " " + tag : tag))}
               />
             </div>
 
@@ -600,20 +679,34 @@ export default function EmbedBuilderPage() {
             <div className="space-y-3">
               <h3 className="text-xs font-bold text-discord-muted uppercase tracking-wider">Media URLs</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  placeholder="Thumbnail URL (top-right small icon)"
-                  value={thumbnailUrl}
-                  onChange={(e) => setThumbnailUrl(e.target.value)}
-                  className="px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-discord-muted focus:outline-none focus:border-discord-fuchsia"
-                />
-                <input
-                  type="text"
-                  placeholder="Image URL (large banner image)"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  className="px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-discord-muted focus:outline-none focus:border-discord-fuchsia"
-                />
+                <div className="space-y-1">
+                  <input
+                    type="text"
+                    placeholder="Thumbnail URL (or {user.avatar})"
+                    value={thumbnailUrl}
+                    onChange={(e) => setThumbnailUrl(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-discord-muted focus:outline-none focus:border-discord-fuchsia"
+                  />
+                  <QuickTagsBar
+                    variant="media-url"
+                    activeValue={thumbnailUrl}
+                    onInsert={(v) => setThumbnailUrl(v)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <input
+                    type="text"
+                    placeholder="Image URL (large banner image)"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-discord-muted focus:outline-none focus:border-discord-fuchsia"
+                  />
+                  <QuickTagsBar
+                    variant="media-url"
+                    activeValue={imageUrl}
+                    onInsert={(v) => setImageUrl(v)}
+                  />
+                </div>
               </div>
             </div>
 
@@ -681,7 +774,25 @@ export default function EmbedBuilderPage() {
 
             {/* Footer & Timestamp */}
             <div className="space-y-3">
-              <h3 className="text-xs font-bold text-discord-muted uppercase tracking-wider">Footer</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-discord-muted uppercase tracking-wider">Footer</h3>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setFooterText((prev) => (prev ? prev + " • {server.name}" : "{server.name}"))}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-discord-dark hover:bg-white/10 text-emerald-400 border border-emerald-500/30 font-mono transition cursor-pointer"
+                  >
+                    + {"{server.name}"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFooterText((prev) => (prev ? prev + " • {server.member_count} members" : "{server.member_count} members"))}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-discord-dark hover:bg-white/10 text-amber-400 border border-amber-500/30 font-mono transition cursor-pointer"
+                  >
+                    + {"{server.member_count}"}
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="text"
@@ -691,13 +802,20 @@ export default function EmbedBuilderPage() {
                   onChange={(e) => setFooterText(e.target.value)}
                   className="px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-discord-muted focus:outline-none focus:border-discord-fuchsia"
                 />
-                <input
-                  type="text"
-                  placeholder="Footer Icon URL"
-                  value={footerIconUrl}
-                  onChange={(e) => setFooterIconUrl(e.target.value)}
-                  className="px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-discord-muted focus:outline-none focus:border-discord-fuchsia"
-                />
+                <div className="space-y-1">
+                  <input
+                    type="text"
+                    placeholder="Footer Icon URL or {server.icon}"
+                    value={footerIconUrl}
+                    onChange={(e) => setFooterIconUrl(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-discord-muted focus:outline-none focus:border-discord-fuchsia"
+                  />
+                  <QuickTagsBar
+                    variant="media-url"
+                    activeValue={footerIconUrl}
+                    onInsert={(v) => setFooterIconUrl(v)}
+                  />
+                </div>
               </div>
 
               <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer pt-1">
@@ -890,21 +1008,31 @@ export default function EmbedBuilderPage() {
 
               {/* The Embed Box */}
               <div
-                className="ml-11 border-l-4 rounded bg-[#2b2d31] p-3.5 space-y-3 max-w-full"
+                className="ml-11 border-l-4 rounded bg-[#2b2d31] p-3.5 space-y-3 max-w-full overflow-hidden"
                 style={{ borderLeftColor: color || "#5865F2" }}
               >
+                {/* Thumbnail (Top-right corner in Discord embeds) */}
+                {thumbnailUrl && (
+                  <img
+                    src={resolvePreviewMedia(thumbnailUrl)}
+                    alt=""
+                    className="w-16 h-16 rounded-lg object-cover float-right ml-3 mb-2 ring-1 ring-white/10"
+                    onError={(e) => (e.currentTarget.style.display = "none")}
+                  />
+                )}
+
                 {/* Author */}
                 {authorName && (
                   <div className="flex items-center gap-2 text-xs font-semibold text-white">
                     {authorIconUrl && (
                       <img
-                        src={authorIconUrl}
+                        src={resolvePreviewMedia(authorIconUrl)}
                         alt=""
                         className="w-5 h-5 rounded-full object-cover"
                         onError={(e) => (e.currentTarget.style.display = "none")}
                       />
                     )}
-                    <span>{authorName}</span>
+                    <span>{resolvePreviewText(authorName)}</span>
                   </div>
                 )}
 
@@ -913,10 +1041,10 @@ export default function EmbedBuilderPage() {
                   <div className="font-bold text-white text-base">
                     {url ? (
                       <span className="text-[#00a8fc] hover:underline cursor-pointer">
-                        {title}
+                        {resolvePreviewText(title)}
                       </span>
                     ) : (
-                      title
+                      resolvePreviewText(title)
                     )}
                   </div>
                 )}
@@ -924,21 +1052,23 @@ export default function EmbedBuilderPage() {
                 {/* Description */}
                 {description && (
                   <div className="text-xs text-[#dbdee1] leading-relaxed">
-                    <DiscordMarkdown content={description} />
+                    <DiscordMarkdown content={resolvePreviewText(description)} />
                   </div>
                 )}
 
                 {/* Fields */}
                 {fields.length > 0 && (
-                  <div className="grid grid-cols-12 gap-2 pt-1">
+                  <div className="grid grid-cols-12 gap-2 pt-1 clear-both">
                     {fields.map((f, i) => (
                       <div
                         key={i}
                         className={`${f.inline ? "col-span-4" : "col-span-12"} space-y-0.5`}
                       >
-                        <div className="text-[11px] font-bold text-[#dbdee1]">{f.name}</div>
+                        <div className="text-[11px] font-bold text-[#dbdee1]">
+                          {resolvePreviewText(f.name)}
+                        </div>
                         <div className="text-xs text-[#b5bac1]">
-                          <DiscordMarkdown content={f.value} />
+                          <DiscordMarkdown content={resolvePreviewText(f.value)} />
                         </div>
                       </div>
                     ))}
@@ -947,9 +1077,9 @@ export default function EmbedBuilderPage() {
 
                 {/* Image Banner */}
                 {imageUrl && (
-                  <div className="pt-2">
+                  <div className="pt-2 clear-both">
                     <img
-                      src={imageUrl}
+                      src={resolvePreviewMedia(imageUrl)}
                       alt=""
                       className="rounded-lg max-h-48 w-full object-cover"
                       onError={(e) => (e.currentTarget.style.display = "none")}
@@ -959,16 +1089,16 @@ export default function EmbedBuilderPage() {
 
                 {/* Footer & Timestamp */}
                 {(footerText || timestamp) && (
-                  <div className="flex items-center gap-2 pt-2 text-[10px] text-[#949ba4]">
+                  <div className="flex items-center gap-2 pt-2 text-[10px] text-[#949ba4] clear-both">
                     {footerIconUrl && (
                       <img
-                        src={footerIconUrl}
+                        src={resolvePreviewMedia(footerIconUrl)}
                         alt=""
                         className="w-4 h-4 rounded-full object-cover"
                         onError={(e) => (e.currentTarget.style.display = "none")}
                       />
                     )}
-                    <span>{footerText}</span>
+                    <span>{resolvePreviewText(footerText)}</span>
                     {footerText && timestamp && <span>•</span>}
                     {timestamp && <span>Today at 12:00 PM</span>}
                   </div>

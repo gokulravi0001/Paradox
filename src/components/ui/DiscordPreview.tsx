@@ -60,11 +60,15 @@ export function DiscordPreview({
   channelMap = {},
 }: DiscordPreviewProps) {
   const sampleUserPfp = "https://cdn.discordapp.com/embed/avatars/1.png";
+  const sampleServerIcon = "https://cdn.discordapp.com/embed/avatars/0.png";
 
   function resolveMediaUrl(urlStr?: string) {
     if (!urlStr) return undefined;
     if (urlStr.includes("{user.avatar}") || urlStr.includes("{user.pfp}")) {
       return sampleUserPfp;
+    }
+    if (urlStr.includes("{server.icon}")) {
+      return sampleServerIcon;
     }
     return urlStr;
   }
@@ -75,9 +79,12 @@ export function DiscordPreview({
     let res = text
       .replace(/{user\.name}/g, "Alex")
       .replace(/{user\.mention}/g, "`@Alex`")
+      .replace(/{user\.avatar}/g, sampleUserPfp)
+      .replace(/{user\.pfp}/g, sampleUserPfp)
       .replace(/{user\.id}/g, "1547837282109624462")
       .replace(/{server\.name}/g, "Paradox Community")
-      .replace(/{server\.member_count}/g, "1,248");
+      .replace(/{server\.member_count}/g, "1,248")
+      .replace(/{server\.icon}/g, sampleServerIcon);
 
     return res.replace(/<#(\d+)>/g, (match, id) => {
       const name = channelMap[id];

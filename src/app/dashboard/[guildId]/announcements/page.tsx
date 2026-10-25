@@ -16,6 +16,7 @@ import {
 import { ChannelSelect, DiscordChannelItem } from "@/components/ui/ChannelSelect";
 import { RoleSelect, DiscordRoleItem } from "@/components/ui/RoleSelect";
 import { VariableMenu } from "@/components/ui/VariableMenu";
+import { QuickTagsBar } from "@/components/ui/QuickTagsBar";
 import { DiscordPreview } from "@/components/ui/DiscordPreview";
 import { ToastContainer, ToastMessage } from "@/components/ui/Toast";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -312,7 +313,7 @@ export default function AnnouncementsPage() {
               <label className="text-xs font-bold text-white">Announcement Message Text</label>
               <VariableMenu
                 channels={channels}
-                onInsert={(v) => setContent((prev) => prev + " " + v)}
+                onInsert={(v) => setContent((prev) => (prev ? prev + " " + v : v))}
               />
             </div>
             <textarea
@@ -320,6 +321,10 @@ export default function AnnouncementsPage() {
               value={content}
               onChange={(e) => setContent(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-discord-blurple leading-relaxed"
+            />
+            <QuickTagsBar
+              channels={channels}
+              onInsert={(tag) => setContent((prev) => (prev ? prev + " " + tag : tag))}
             />
           </div>
 
@@ -379,12 +384,22 @@ export default function AnnouncementsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-300">Description</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-zinc-300">Description</label>
+                    <VariableMenu
+                      channels={channels}
+                      onInsert={(v) => setEmbedDescription((prev) => (prev ? prev + " " + v : v))}
+                    />
+                  </div>
                   <textarea
                     rows={4}
                     value={embedDescription}
                     onChange={(e) => setEmbedDescription(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-discord-blurple leading-relaxed"
+                  />
+                  <QuickTagsBar
+                    channels={channels}
+                    onInsert={(tag) => setEmbedDescription((prev) => (prev ? prev + " " + tag : tag))}
                   />
                 </div>
 

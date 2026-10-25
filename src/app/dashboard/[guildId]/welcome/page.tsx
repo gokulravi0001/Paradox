@@ -17,6 +17,7 @@ import {
 import { ChannelSelect, DiscordChannelItem } from "@/components/ui/ChannelSelect";
 import { RoleSelect, DiscordRoleItem } from "@/components/ui/RoleSelect";
 import { VariableMenu } from "@/components/ui/VariableMenu";
+import { QuickTagsBar } from "@/components/ui/QuickTagsBar";
 import { DiscordPreview } from "@/components/ui/DiscordPreview";
 import { ToastContainer, ToastMessage } from "@/components/ui/Toast";
 
@@ -322,7 +323,7 @@ export default function WelcomePage() {
               </label>
               <VariableMenu
                 channels={channels}
-                onInsert={(v) => setMessage((prev) => prev + " " + v)}
+                onInsert={(v) => setMessage((prev) => (prev ? prev + " " + v : v))}
               />
             </div>
             <textarea
@@ -332,9 +333,11 @@ export default function WelcomePage() {
               placeholder="e.g. Welcome {user.mention} to {server.name}!! 🎉"
               className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-discord-blurple leading-relaxed"
             />
-            <p className="text-[11px] text-zinc-500">
-              Tip: Use the Insert Variable button to mention users, server stats, or insert multiple channel links!
-            </p>
+            {/* 1-Click Quick Tags Bar */}
+            <QuickTagsBar
+              channels={channels}
+              onInsert={(tag) => setMessage((prev) => (prev ? prev + " " + tag : tag))}
+            />
           </div>
 
           {/* Rich Embed Toggle & Customizer */}
@@ -433,7 +436,27 @@ export default function WelcomePage() {
                 {/* Embed Title & Color */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-300">Embed Title</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-zinc-300">Embed Title</label>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEmbedTitle((prev) => (prev ? prev + " {user.name}" : "👋 Welcome {user.name}!"))}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-discord-dark hover:bg-white/10 text-discord-blurple border border-discord-blurple/30 font-mono transition cursor-pointer"
+                          title="Add {user.name} to Title"
+                        >
+                          + {"{user.name}"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEmbedTitle((prev) => (prev ? prev + " {server.name}" : "Welcome to {server.name}!"))}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-discord-dark hover:bg-white/10 text-emerald-400 border border-emerald-500/30 font-mono transition cursor-pointer"
+                          title="Add {server.name} to Title"
+                        >
+                          + {"{server.name}"}
+                        </button>
+                      </div>
+                    </div>
                     <input
                       type="text"
                       value={embedTitle}
@@ -467,7 +490,7 @@ export default function WelcomePage() {
                     <label className="text-xs font-semibold text-zinc-300">Description</label>
                     <VariableMenu
                       channels={channels}
-                      onInsert={(v) => setEmbedDescription((prev) => prev + " " + v)}
+                      onInsert={(v) => setEmbedDescription((prev) => (prev ? prev + " " + v : v))}
                     />
                   </div>
                   <textarea
@@ -477,9 +500,13 @@ export default function WelcomePage() {
                     placeholder="Provide onboarding instructions and channel links..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-discord-blurple leading-relaxed"
                   />
+                  <QuickTagsBar
+                    channels={channels}
+                    onInsert={(tag) => setEmbedDescription((prev) => (prev ? prev + " " + tag : tag))}
+                  />
                 </div>
 
-                {/* Media Links */}
+                {/* Media Links with 1-Click PFP and Icon Insert */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-300">Banner Image URL</label>
@@ -490,21 +517,59 @@ export default function WelcomePage() {
                       placeholder="https://.../banner.gif"
                       className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-discord-blurple"
                     />
+                    <QuickTagsBar
+                      variant="media-url"
+                      activeValue={embedImageUrl}
+                      onInsert={(v) => setEmbedImageUrl(v)}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-300">Thumbnail URL</label>
                     <input
                       type="url"
                       value={embedThumbnailUrl}
-                      onChange={(e) => setEmbedThumbnailUrl(e.target.value)}
-                      placeholder="https://.../logo.png"
+                      onChange={(e) => {
+                        setEmbedThumbnailUrl(e.target.value);
+                        setUseUserAvatarThumb(
+                          e.target.value.includes("{user.avatar}") || e.target.value.includes("{user.pfp}")
+                        );
+                      }}
+                      placeholder="https://.../logo.png or {user.avatar}"
                       className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-discord-blurple"
+                    />
+                    <QuickTagsBar
+                      variant="media-url"
+                      activeValue={embedThumbnailUrl}
+                      onInsert={(v) => {
+                        setEmbedThumbnailUrl(v);
+                        if (v.includes("{user.avatar}") || v.includes("{user.pfp}")) {
+                          setUseUserAvatarThumb(true);
+                        }
+                      }}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-300">Footer Text</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-zinc-300">Footer Text</label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setEmbedFooter((prev) => (prev ? prev + " • {server.name}" : "{server.name}"))}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-discord-dark hover:bg-white/10 text-emerald-400 border border-emerald-500/30 font-mono transition cursor-pointer"
+                      >
+                        + {"{server.name}"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEmbedFooter((prev) => (prev ? prev + " • Member #{server.member_count}" : "Member #{server.member_count}"))}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-discord-dark hover:bg-white/10 text-amber-400 border border-amber-500/30 font-mono transition cursor-pointer"
+                      >
+                        + {"{server.member_count}"}
+                      </button>
+                    </div>
+                  </div>
                   <input
                     type="text"
                     value={embedFooter}
@@ -561,13 +626,19 @@ export default function WelcomePage() {
                 Send a private direct message greeting to user in DMs.
               </p>
               {dmEnabled && (
-                <textarea
-                  rows={2}
-                  value={dmMessage}
-                  onChange={(e) => setDmMessage(e.target.value)}
-                  placeholder="Direct message greeting..."
-                  className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-emerald-500"
-                />
+                <div className="space-y-2">
+                  <textarea
+                    rows={2}
+                    value={dmMessage}
+                    onChange={(e) => setDmMessage(e.target.value)}
+                    placeholder="Direct message greeting..."
+                    className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                  <QuickTagsBar
+                    channels={channels}
+                    onInsert={(tag) => setDmMessage((prev) => (prev ? prev + " " + tag : tag))}
+                  />
+                </div>
               )}
             </div>
           </div>

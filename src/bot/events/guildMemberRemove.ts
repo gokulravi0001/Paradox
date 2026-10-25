@@ -22,6 +22,7 @@ export async function onGuildMemberRemove(member: GuildMember | PartialGuildMemb
     const userName = member.user?.username || "A member";
     const serverName = member.guild.name;
     const memberCount = String(member.guild.memberCount);
+    const serverIcon = member.guild.iconURL({ extension: "png", size: 256 }) || "https://cdn.discordapp.com/embed/avatars/0.png";
 
     const replaceTags = (text?: string | null): string => {
       if (!text) return "";
@@ -32,7 +33,8 @@ export async function onGuildMemberRemove(member: GuildMember | PartialGuildMemb
         .replace(/{user\.pfp}/g, userPfp)
         .replace(/{user\.id}/g, member.id)
         .replace(/{server\.name}/g, serverName)
-        .replace(/{server\.member_count}/g, memberCount);
+        .replace(/{server\.member_count}/g, memberCount)
+        .replace(/{server\.icon}/g, serverIcon);
     };
 
     const messageContent = config.goodbyeMessage ? replaceTags(config.goodbyeMessage) : undefined;
