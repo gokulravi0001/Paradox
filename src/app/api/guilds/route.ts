@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { fetchUserGuilds, hasManagePermission, checkBotInGuild, getBotInviteUrl } from "@/lib/discord";
+import {
+  fetchUserGuilds,
+  hasManagePermission,
+  checkBotInGuild,
+  getBotInviteUrl,
+  DISCORD_PERMISSIONS,
+} from "@/lib/discord";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +21,7 @@ export async function GET() {
     // 1. Fetch user guilds from Discord
     const userGuilds = await fetchUserGuilds(user.accessToken);
 
-    // 2. Filter only guilds where user has MANAGE_GUILD or ADMINISTRATOR
+    // 2. Filter only guilds where user has MANAGE_GUILD, ADMINISTRATOR, or is Owner
     const manageableGuilds = userGuilds.filter((g) =>
       hasManagePermission(g.permissions, g.owner)
     );
@@ -54,16 +60,37 @@ export async function GET() {
           ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.webp?size=128`
           : null;
 
+        let isAdmin = false;
+        let canManage = false;
+        try {
+          const permBits = BigInt(guild.permissions || "0");
+          isAdmin = (permBits & DISCORD_PERMISSIONS.ADMINISTRATOR) === DISCORD_PERMISSIONS.ADMINISTRATOR;
+          canManage = (permBits & DISCORD_PERMISSIONS.MANAGE_GUILD) === DISCORD_PERMISSIONS.MANAGE_GUILD;
+        } catch {
+          // no-op
+        }
+
         return {
           id: guild.id,
           name: guild.name,
           icon: iconUrl,
-          owner: guild.owner,
+          owner: Boolean(guild.owner),
+          isAdmin: Boolean(guild.owner || isAdmin),
+          canManage,
           botInstalled,
           inviteUrl: getBotInviteUrl(guild.id),
         };
       })
     );
+
+    // Sort: Owned servers first, then Admin servers, then alphabetized
+    results.sort((a, b) => {
+      if (a.owner && !b.owner) return -1;
+      if (!a.owner && b.owner) return 1;
+      if (a.botInstalled && !b.botInstalled) return -1;
+      if (!a.botInstalled && b.botInstalled) return 1;
+      return a.name.localeCompare(b.name);
+    });
 
     return NextResponse.json({ guilds: results });
   } catch (err: unknown) {
