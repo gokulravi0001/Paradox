@@ -119,16 +119,32 @@ export function ChannelSelect({
             onClick={() => setIsOpen(false)}
           />
           <div className="absolute left-0 right-0 top-full mt-1.5 z-50 p-2 rounded-xl bg-discord-card border border-white/10 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100 max-h-72 flex flex-col space-y-2">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-              <input
-                type="text"
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search channels..."
-                className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
-              />
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search channels..."
+                  className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
+                />
+              </div>
+              {onRefresh && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRefresh();
+                  }}
+                  disabled={refreshing}
+                  title="Refresh server channels"
+                  className="p-2 rounded-lg bg-discord-dark hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition cursor-pointer flex-shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-discord-blurple" : ""}`} />
+                </button>
+              )}
             </div>
 
             <div className="overflow-y-auto space-y-0.5 divide-y divide-white/[0.03] pr-1">

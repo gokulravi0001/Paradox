@@ -16,9 +16,13 @@ import {
   Plus,
   Trash2,
   ChevronDown,
+  ChevronUp,
   Search,
   X,
   Shield,
+  Palette,
+  RefreshCw,
+  Check,
 } from "lucide-react";
 import { ChannelSelect, DiscordChannelItem } from "@/components/ui/ChannelSelect";
 import { VariableMenu } from "@/components/ui/VariableMenu";
@@ -44,6 +48,64 @@ const PRESET_COLORS = [
   { name: "Pitch Dark", hex: "#2B2D31" },
 ];
 
+const GOODBYE_QUICK_TEMPLATES = [
+  {
+    id: "standard",
+    name: "👋 Standard Farewell",
+    badge: "Recommended",
+    desc: "Polite departure message wishing member all the best.",
+    title: "👋 Farewell {user.name}!",
+    description:
+      "{user.name} has departed from our server. We wish them all the best on their journey!",
+    color: "#DA373C",
+    authorName: "{user.name}",
+    authorIconUrl: "{user.avatar}",
+    thumbnailUrl: "{user.avatar}",
+    imageUrl: "",
+    footerText: "Member Left • Paradox System",
+    footerIconUrl: "{server.icon}",
+    fields: [
+      { name: "📊 Server Stats", value: "{server.member_count} members remaining", inline: true },
+      { name: "🛡️ Notice", value: "Roles & permissions revoked", inline: true },
+    ],
+  },
+  {
+    id: "stats",
+    name: "📊 Member Stats Log",
+    badge: "Detailed",
+    desc: "Clean audit log style departure with current community count.",
+    title: "Member Departed",
+    description:
+      "**{user.name}** left the server.\nTotal community members remaining: **{server.member_count}**.",
+    color: "#ED4245",
+    authorName: "Server Audit Logs",
+    authorIconUrl: "{server.icon}",
+    thumbnailUrl: "{server.icon}",
+    imageUrl: "",
+    footerText: "Departure Logged • Paradox Moderation",
+    footerIconUrl: "{server.icon}",
+    fields: [
+      { name: "👥 Members Count", value: "{server.member_count}", inline: true },
+    ],
+  },
+  {
+    id: "minimal",
+    name: "✨ Clean & Minimal",
+    badge: "Simple",
+    desc: "Short single-line departure message without heavy fields.",
+    title: "Goodbye {user.name}",
+    description: "{user.name} left {server.name}.",
+    color: "#2B2D31",
+    authorName: "{user.name}",
+    authorIconUrl: "{user.avatar}",
+    thumbnailUrl: "{user.avatar}",
+    imageUrl: "",
+    footerText: "Farewell",
+    footerIconUrl: "{server.icon}",
+    fields: [],
+  },
+];
+
 const SAMPLE_USER_AVATAR = "https://cdn.discordapp.com/embed/avatars/1.png";
 const SAMPLE_SERVER_ICON = "https://cdn.discordapp.com/embed/avatars/0.png";
 const BOT_AVATAR = "/pfp.png";
@@ -53,11 +115,16 @@ export default function GoodbyePage() {
   const guildId = params.guildId as string;
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [channels, setChannels] = useState<DiscordChannelItem[]>([]);
   const [roles, setRoles] = useState<{ id: string; name: string; color?: number }[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Template selection & Simplified mode
+  const [selectedTemplateId, setSelectedTemplateId] = useState("standard");
+  const [showAdvancedStyling, setShowAdvancedStyling] = useState(false);
 
   // Goodbye settings
   const [enabled, setEnabled] = useState(false);
@@ -82,7 +149,7 @@ export default function GoodbyePage() {
   // Embed Fields State
   const [fields, setFields] = useState<EmbedField[]>([
     { name: "📊 Server Stats", value: "{server.member_count} members remaining", inline: true },
-    { name: "🛡️ Notice", value: "Roles and permissions revoked", inline: true },
+    { name: "🛡️ Notice", value: "Roles & permissions revoked", inline: true },
   ]);
 
   // 3-Plus Dropdown States for Embed Description
@@ -109,6 +176,29 @@ export default function GoodbyePage() {
   const textChannels = channels.filter(
     (c) => c.type === 0 || c.type === 5 || c.type === undefined
   );
+
+  async function refreshChannels() {
+    try {
+      setRefreshing(true);
+      const [cRes, rRes] = await Promise.all([
+        fetch(`/api/guilds/${guildId}/channels`),
+        fetch(`/api/guilds/${guildId}/roles`),
+      ]);
+      if (cRes.ok) {
+        const cData = await cRes.json();
+        setChannels(cData.channels || []);
+      }
+      if (rRes.ok) {
+        const rData = await rRes.json();
+        setRoles(rData.roles || []);
+      }
+      addToast("success", "Channels and roles refreshed!");
+    } catch {
+      addToast("error", "Failed to refresh channels.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   useEffect(() => {
     async function init() {
@@ -169,6 +259,23 @@ export default function GoodbyePage() {
 
     if (guildId) init();
   }, [guildId]);
+
+  function applyGoodbyeTemplate(tplId: string) {
+    setSelectedTemplateId(tplId);
+    const tpl = GOODBYE_QUICK_TEMPLATES.find((t) => t.id === tplId);
+    if (!tpl) return;
+    setEmbedTitle(tpl.title);
+    setEmbedDescription(tpl.description);
+    setEmbedColor(tpl.color);
+    setEmbedAuthorName(tpl.authorName);
+    setEmbedAuthorIconUrl(tpl.authorIconUrl);
+    setEmbedThumbnailUrl(tpl.thumbnailUrl);
+    setEmbedImageUrl(tpl.imageUrl);
+    setEmbedFooter(tpl.footerText);
+    setEmbedFooterIconUrl(tpl.footerIconUrl);
+    setFields(tpl.fields);
+    addToast("info", `Applied ${tpl.name} template!`);
+  }
 
   // Insert helper for description textarea
   function insertIntoDescription(textToInsert: string) {
@@ -372,6 +479,16 @@ export default function GoodbyePage() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
+            onClick={refreshChannels}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-discord-dark hover:bg-white/5 border border-white/10 text-xs font-semibold text-zinc-300 hover:text-white transition cursor-pointer"
+            title="Refresh channels from Discord"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-discord-blurple" : ""}`} />
+            <span>Sync</span>
+          </button>
+          <button
+            type="button"
             onClick={handleTest}
             disabled={testing || !channelId}
             className="px-4 py-2 rounded-xl bg-discord-dark hover:bg-white/5 border border-white/10 text-xs font-semibold text-zinc-200 hover:text-white transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
@@ -437,6 +554,8 @@ export default function GoodbyePage() {
               channels={channels}
               selectedChannelId={channelId}
               onSelect={(id) => setChannelId(id)}
+              onRefresh={refreshChannels}
+              refreshing={refreshing}
               placeholder="Select a goodbye text channel..."
             />
           </div>
@@ -471,7 +590,7 @@ export default function GoodbyePage() {
               <div>
                 <span className="text-xs font-bold text-white">Attach Rich Discord Embed</span>
                 <p className="text-[11px] text-zinc-400 mt-0.5">
-                  Display a clean farewell embed card with channel chips, fields, and images.
+                  Pick a ready-to-use farewell template or customize colors and fields.
                 </p>
               </div>
               <button
@@ -491,173 +610,55 @@ export default function GoodbyePage() {
 
             {sendEmbed && (
               <div className="space-y-5 animate-in fade-in">
-                {/* 1. DEDICATED PROFILE PICTURE (PFP) & ICON BAR */}
-                <div className="p-4 rounded-2xl bg-discord-dark/70 border border-rose-500/25 space-y-3">
+                {/* 1. READY-TO-USE TEMPLATES (1-CLICK) */}
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-rose-400" />
-                      Profile Picture (PFP) &amp; Icon Fast Picker
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+                      Choose Ready Template (1-Click)
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-medium border border-rose-500/30">
-                      1-Click Apply
+                    <span className="text-[10px] text-zinc-400">
+                      Instantly configures farewell text, colors &amp; fields
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-                    {/* User Avatar */}
-                    <div className="p-2.5 rounded-xl bg-rose-950/20 border border-rose-500/20 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={SAMPLE_USER_AVATAR}
-                          alt="User Avatar"
-                          className="w-7 h-7 rounded-full bg-black/40 border border-white/10"
-                        />
-                        <div className="min-w-0">
-                          <span className="text-xs font-semibold text-white block truncate">
-                            Departing Member
-                          </span>
-                          <span className="text-[10px] text-zinc-400 font-mono">{"{user.avatar}"}</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {GOODBYE_QUICK_TEMPLATES.map((tpl) => {
+                      const isSelected = selectedTemplateId === tpl.id;
+                      return (
                         <button
+                          key={tpl.id}
                           type="button"
-                          onClick={() => {
-                            setEmbedThumbnailUrl("{user.avatar}");
-                            addToast("success", "Set Member PFP as Thumbnail");
-                          }}
-                          className="text-[10px] py-1 rounded bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/30 font-medium transition cursor-pointer text-center"
+                          onClick={() => applyGoodbyeTemplate(tpl.id)}
+                          className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between gap-2 ${
+                            isSelected
+                              ? "bg-rose-600/20 border-rose-500 shadow-md shadow-rose-600/10 ring-1 ring-rose-500/50"
+                              : "bg-discord-dark/60 border-white/5 hover:border-white/20"
+                          }`}
                         >
-                          As Thumbnail
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-bold text-white">{tpl.name}</span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30">
+                                {tpl.badge}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
+                              {tpl.desc}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] text-rose-300 font-medium">
+                            <Check className={`w-3 h-3 ${isSelected ? "opacity-100" : "opacity-0"}`} />
+                            <span>{isSelected ? "Active Preset" : "Apply Preset"}</span>
+                          </div>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmbedAuthorIconUrl("{user.avatar}");
-                            if (!embedAuthorName) setEmbedAuthorName("{user.name}");
-                            addToast("success", "Set Member PFP as Author Icon");
-                          }}
-                          className="text-[10px] py-1 rounded bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/30 font-medium transition cursor-pointer text-center"
-                        >
-                          As Header
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Server Icon */}
-                    <div className="p-2.5 rounded-xl bg-rose-950/20 border border-rose-500/20 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={SAMPLE_SERVER_ICON}
-                          alt="Server Icon"
-                          className="w-7 h-7 rounded-full bg-black/40 border border-white/10"
-                        />
-                        <div className="min-w-0">
-                          <span className="text-xs font-semibold text-white block truncate">
-                            Server Icon
-                          </span>
-                          <span className="text-[10px] text-zinc-400 font-mono">{"{server.icon}"}</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmbedThumbnailUrl("{server.icon}");
-                            addToast("success", "Set Server Icon as Thumbnail");
-                          }}
-                          className="text-[10px] py-1 rounded bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/30 font-medium transition cursor-pointer text-center"
-                        >
-                          As Thumbnail
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmbedFooterIconUrl("{server.icon}");
-                            addToast("success", "Set Server Icon as Footer");
-                          }}
-                          className="text-[10px] py-1 rounded bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/30 font-medium transition cursor-pointer text-center"
-                        >
-                          As Footer
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Bot Avatar */}
-                    <div className="p-2.5 rounded-xl bg-rose-950/20 border border-rose-500/20 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={BOT_AVATAR}
-                          alt="Bot PFP"
-                          className="w-7 h-7 rounded-full bg-black/40 border border-white/10"
-                          onError={(e) => {
-                            (e.target as any).src = SAMPLE_SERVER_ICON;
-                          }}
-                        />
-                        <div className="min-w-0">
-                          <span className="text-xs font-semibold text-white block truncate">
-                            Paradox Bot
-                          </span>
-                          <span className="text-[10px] text-zinc-400 font-mono">/pfp.png</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmbedThumbnailUrl(BOT_AVATAR);
-                            addToast("success", "Set Paradox Bot PFP as Thumbnail");
-                          }}
-                          className="text-[10px] py-1 rounded bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/30 font-medium transition cursor-pointer text-center"
-                        >
-                          As Thumbnail
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmbedAuthorIconUrl(BOT_AVATAR);
-                            setEmbedAuthorName("Paradox System");
-                            addToast("success", "Set Paradox Bot as Header");
-                          }}
-                          className="text-[10px] py-1 rounded bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/30 font-medium transition cursor-pointer text-center"
-                        >
-                          As Header
-                        </button>
-                      </div>
-                    </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Author Header */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-zinc-300">
-                      Author Header Name
-                    </label>
-                    <input
-                      type="text"
-                      value={embedAuthorName}
-                      onChange={(e) => setEmbedAuthorName(e.target.value)}
-                      placeholder="e.g. {user.name} or Member Left"
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-zinc-300">
-                      Author Header Icon URL
-                    </label>
-                    <input
-                      type="text"
-                      value={embedAuthorIconUrl}
-                      onChange={(e) => setEmbedAuthorIconUrl(e.target.value)}
-                      placeholder="e.g. {user.avatar} or image URL"
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 font-mono"
-                    />
-                  </div>
-                </div>
-
-                {/* Embed Title & Accent Color */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* 2. EMBED TITLE & COLOR */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-white/5">
                   <div className="sm:col-span-2 space-y-1">
                     <label className="text-xs font-semibold text-zinc-300">Embed Title</label>
                     <input
@@ -687,29 +688,8 @@ export default function GoodbyePage() {
                   </div>
                 </div>
 
-                {/* Preset Color Pills */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mr-1">
-                    Colors:
-                  </span>
-                  {PRESET_COLORS.map((c) => (
-                    <button
-                      key={c.hex}
-                      type="button"
-                      onClick={() => setEmbedColor(c.hex)}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-discord-dark hover:bg-white/10 text-[10px] font-medium text-zinc-300 border border-white/5 transition cursor-pointer"
-                    >
-                      <span
-                        className="w-2.5 h-2.5 rounded-full inline-block"
-                        style={{ backgroundColor: c.hex }}
-                      />
-                      <span>{c.name}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Description & 3 PLUS TOOLBAR */}
-                <div className="space-y-2 pt-2 border-t border-white/5">
+                {/* 3. DESCRIPTION & 3 PLUS TOOLBAR */}
+                <div className="space-y-2">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <label className="text-xs font-semibold text-zinc-300">
                       Embed Description
@@ -740,13 +720,24 @@ export default function GoodbyePage() {
                                 <Hash className="w-3.5 h-3.5 text-indigo-400" />
                                 Insert Channel Mention
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => setShowChannelDropdown(false)}
-                                className="text-zinc-500 hover:text-white"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={refreshChannels}
+                                  disabled={refreshing}
+                                  title="Refresh channels from Discord"
+                                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowChannelDropdown(false)}
+                                  className="text-zinc-500 hover:text-white"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
 
                             <div className="relative">
@@ -878,7 +869,7 @@ export default function GoodbyePage() {
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>Add Variable / Tag</span>
+                          <span>Add Variable</span>
                         </button>
 
                         {showTagDropdown && (
@@ -903,7 +894,7 @@ export default function GoodbyePage() {
                                 👤 User Tags:
                               </span>
                               <div className="flex flex-wrap gap-1">
-                                {["{user.mention}", "{user.name}", "{user.avatar}", "{user.id}", "{user.pfp}"].map((t) => (
+                                {["{user.mention}", "{user.name}", "{user.avatar}", "{user.id}"].map((t) => (
                                   <button
                                     key={t}
                                     type="button"
@@ -925,7 +916,7 @@ export default function GoodbyePage() {
                                 🏰 Server Tags:
                               </span>
                               <div className="flex flex-wrap gap-1">
-                                {["{server.name}", "{server.icon}", "{server.member_count}", "{server.id}"].map((t) => (
+                                {["{server.name}", "{server.icon}", "{server.member_count}"].map((t) => (
                                   <button
                                     key={t}
                                     type="button"
@@ -959,9 +950,39 @@ export default function GoodbyePage() {
                     <span>Supports Discord markdown, variables, and channel mentions</span>
                     <span>{embedDescription.length}/4096</span>
                   </div>
+
+                  {/* 1-Click Server Channel Quick Chips */}
+                  {textChannels.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                      <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1">
+                        <Hash className="w-3 h-3 text-indigo-400" />
+                        Quick Insert Channel:
+                      </span>
+                      {textChannels.slice(0, 6).map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => insertIntoDescription(`{#${c.name}}`)}
+                          className="text-[10px] px-2 py-0.5 rounded-md bg-discord-dark hover:bg-indigo-600/30 hover:text-indigo-200 text-zinc-300 border border-white/5 transition cursor-pointer font-medium"
+                          title={`Insert {#${c.name}}`}
+                        >
+                          #{c.name}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={refreshChannels}
+                        disabled={refreshing}
+                        className="text-[10px] p-1 rounded-md text-zinc-500 hover:text-white transition"
+                        title="Refresh channels"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* 2. EMBED FIELDS SECTION (PRO BUILDER) */}
+                {/* 4. EMBED FIELDS SECTION */}
                 <div className="space-y-3 pt-3 border-t border-white/5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
@@ -1001,13 +1022,24 @@ export default function GoodbyePage() {
                                 <Hash className="w-3.5 h-3.5 text-indigo-400" />
                                 Select Channel for Field
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => setShowAddChannelFieldDropdown(false)}
-                                className="text-zinc-500 hover:text-white"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={refreshChannels}
+                                  disabled={refreshing}
+                                  title="Refresh channels from Discord"
+                                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAddChannelFieldDropdown(false)}
+                                  className="text-zinc-500 hover:text-white"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
 
                             <div className="relative">
@@ -1108,23 +1140,34 @@ export default function GoodbyePage() {
                             </div>
 
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                              {/* Channel Select Dropdown */}
-                              <div className="flex-1 relative">
-                                <select
-                                  value={linkedChannelName}
-                                  onChange={(e) => linkChannelToField(idx, e.target.value)}
-                                  className="w-full px-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-rose-500 cursor-pointer appearance-none"
-                                >
-                                  <option value="">Choose channel to link to this field...</option>
-                                  {textChannels.map((c) => (
-                                    <option key={c.id} value={c.name}>
-                                      #{c.name} {c.type === 5 ? "(Announcement)" : ""}
-                                    </option>
-                                  ))}
-                                </select>
-                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
-                                  <ChevronDown className="w-3.5 h-3.5" />
+                              {/* Channel Select Dropdown + Refresh Button */}
+                              <div className="flex-1 flex items-center gap-1.5">
+                                <div className="flex-1 relative">
+                                  <select
+                                    value={linkedChannelName}
+                                    onChange={(e) => linkChannelToField(idx, e.target.value)}
+                                    className="w-full px-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-rose-500 cursor-pointer appearance-none"
+                                  >
+                                    <option value="">Choose channel to link to this field...</option>
+                                    {textChannels.map((c) => (
+                                      <option key={c.id} value={c.name}>
+                                        #{c.name} {c.type === 5 ? "(Announcement)" : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  </div>
                                 </div>
+                                <button
+                                  type="button"
+                                  onClick={refreshChannels}
+                                  disabled={refreshing}
+                                  title="Refresh channels from Discord"
+                                  className="p-1.5 rounded-lg bg-discord-dark border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition cursor-pointer flex-shrink-0"
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-rose-400" : ""}`} />
+                                </button>
                               </div>
 
                               {/* Quick Action Buttons */}
@@ -1179,70 +1222,198 @@ export default function GoodbyePage() {
                   </div>
                 </div>
 
-                {/* Media Links with PFP and Icon Fast Insert */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-white/5">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-300">
-                      Thumbnail Image URL (Top Right)
-                    </label>
-                    <input
-                      type="text"
-                      value={embedThumbnailUrl}
-                      onChange={(e) => setEmbedThumbnailUrl(e.target.value)}
-                      placeholder="e.g. {user.avatar} or image URL..."
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-300">
-                      Large Banner Image URL
-                    </label>
-                    <input
-                      type="text"
-                      value={embedImageUrl}
-                      onChange={(e) => setEmbedImageUrl(e.target.value)}
-                      placeholder="https://.../banner.gif"
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 font-mono"
-                    />
-                  </div>
-                </div>
+                {/* 5. COLLAPSIBLE ADVANCED STYLING & MEDIA */}
+                <div className="pt-2 border-t border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedStyling(!showAdvancedStyling)}
+                    className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 text-xs font-semibold text-zinc-200 transition cursor-pointer select-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-rose-400" />
+                      <span>Advanced Media &amp; Custom Styling</span>
+                      <span className="text-[10px] text-zinc-500 font-normal">
+                        (Avatars, Banners, Author Header &amp; Footer)
+                      </span>
+                    </div>
+                    {showAdvancedStyling ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
 
-                {/* Footer and Timestamp */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-300">Footer Text</label>
-                    <input
-                      type="text"
-                      value={embedFooter}
-                      onChange={(e) => setEmbedFooter(e.target.value.slice(0, 2048))}
-                      placeholder="e.g. Member Left • Paradox Goodbye"
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-300">
-                      Footer Icon URL
-                    </label>
-                    <input
-                      type="text"
-                      value={embedFooterIconUrl}
-                      onChange={(e) => setEmbedFooterIconUrl(e.target.value)}
-                      placeholder="e.g. {server.icon} or image URL..."
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 font-mono"
-                    />
-                  </div>
-                </div>
+                  {showAdvancedStyling && (
+                    <div className="mt-3 p-4 rounded-2xl bg-discord-dark/50 border border-white/5 space-y-4 animate-in fade-in duration-150">
+                      {/* PFP & Icon Bar */}
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-bold text-white uppercase tracking-wider block">
+                          Profile Picture (PFP) &amp; Icon Fast Picker:
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmbedThumbnailUrl("{user.avatar}");
+                              addToast("success", "Set Member PFP as Thumbnail");
+                            }}
+                            className="p-2.5 rounded-xl bg-rose-950/20 border border-rose-500/20 text-left hover:border-rose-500/40 transition cursor-pointer flex items-center gap-2"
+                          >
+                            <img src={SAMPLE_USER_AVATAR} alt="User Avatar" className="w-6 h-6 rounded-full" />
+                            <div>
+                              <span className="text-xs font-semibold text-white block">Departing Member</span>
+                              <span className="text-[10px] text-zinc-400">As Thumbnail</span>
+                            </div>
+                          </button>
 
-                <div className="flex items-center justify-between pt-1">
-                  <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={embedTimestamp}
-                      onChange={(e) => setEmbedTimestamp(e.target.checked)}
-                      className="rounded border-zinc-700 text-rose-600 focus:ring-0"
-                    />
-                    <span>Include Timestamp in Footer</span>
-                  </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmbedThumbnailUrl("{server.icon}");
+                              addToast("success", "Set Server Icon as Thumbnail");
+                            }}
+                            className="p-2.5 rounded-xl bg-rose-950/20 border border-rose-500/20 text-left hover:border-rose-500/40 transition cursor-pointer flex items-center gap-2"
+                          >
+                            <img src={SAMPLE_SERVER_ICON} alt="Server Icon" className="w-6 h-6 rounded-full" />
+                            <div>
+                              <span className="text-xs font-semibold text-white block">Server Icon</span>
+                              <span className="text-[10px] text-zinc-400">As Thumbnail</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmbedThumbnailUrl(BOT_AVATAR);
+                              addToast("success", "Set Paradox Bot as Thumbnail");
+                            }}
+                            className="p-2.5 rounded-xl bg-rose-950/20 border border-rose-500/20 text-left hover:border-rose-500/40 transition cursor-pointer flex items-center gap-2"
+                          >
+                            <img src={BOT_AVATAR} alt="Bot Avatar" className="w-6 h-6 rounded-full" onError={(e) => { (e.target as any).src = SAMPLE_SERVER_ICON; }} />
+                            <div>
+                              <span className="text-xs font-semibold text-white block">Paradox Bot</span>
+                              <span className="text-[10px] text-zinc-400">As Thumbnail</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Author Header */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">
+                            Author Header Name
+                          </label>
+                          <input
+                            type="text"
+                            value={embedAuthorName}
+                            onChange={(e) => setEmbedAuthorName(e.target.value)}
+                            placeholder="e.g. {user.name} or Member Left"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">
+                            Author Header Icon URL
+                          </label>
+                          <input
+                            type="text"
+                            value={embedAuthorIconUrl}
+                            onChange={(e) => setEmbedAuthorIconUrl(e.target.value)}
+                            placeholder="e.g. {user.avatar} or image URL"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Preset Color Pills */}
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[11px] font-semibold text-zinc-300 block">Preset Colors</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {PRESET_COLORS.map((c) => (
+                            <button
+                              key={c.hex}
+                              type="button"
+                              onClick={() => setEmbedColor(c.hex)}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-discord-dark hover:bg-white/10 text-[10px] font-medium text-zinc-300 border border-white/5 transition cursor-pointer"
+                            >
+                              <span
+                                className="w-2.5 h-2.5 rounded-full inline-block"
+                                style={{ backgroundColor: c.hex }}
+                              />
+                              <span>{c.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Thumbnail & Banner Image URLs */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">
+                            Thumbnail URL (Top Right)
+                          </label>
+                          <input
+                            type="text"
+                            value={embedThumbnailUrl}
+                            onChange={(e) => setEmbedThumbnailUrl(e.target.value)}
+                            placeholder="e.g. {user.avatar} or image URL"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 font-mono"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">
+                            Large Banner Image URL
+                          </label>
+                          <input
+                            type="text"
+                            value={embedImageUrl}
+                            onChange={(e) => setEmbedImageUrl(e.target.value)}
+                            placeholder="https://.../banner.gif"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Footer and Timestamp */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">Footer Text</label>
+                          <input
+                            type="text"
+                            value={embedFooter}
+                            onChange={(e) => setEmbedFooter(e.target.value.slice(0, 2048))}
+                            placeholder="e.g. Member Left • Paradox Goodbye"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">
+                            Footer Icon URL
+                          </label>
+                          <input
+                            type="text"
+                            value={embedFooterIconUrl}
+                            onChange={(e) => setEmbedFooterIconUrl(e.target.value)}
+                            placeholder="e.g. {server.icon} or image URL"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={embedTimestamp}
+                            onChange={(e) => setEmbedTimestamp(e.target.checked)}
+                            className="rounded border-zinc-700 text-rose-600 focus:ring-0"
+                          />
+                          <span>Include Timestamp in Footer</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

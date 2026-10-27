@@ -1232,6 +1232,8 @@ function EmbedBuilderContent() {
                     selectedChannelId={welcomeRulesChannelId}
                     placeholder="Pick rules channel..."
                     onSelect={(id, name) => handleSelectMentionedChannel("rules", id, name)}
+                    onRefresh={loadData}
+                    refreshing={refreshing}
                   />
                 </div>
 
@@ -1245,6 +1247,8 @@ function EmbedBuilderContent() {
                     selectedChannelId={welcomeRolesChannelId}
                     placeholder="Pick roles channel..."
                     onSelect={(id, name) => handleSelectMentionedChannel("roles", id, name)}
+                    onRefresh={loadData}
+                    refreshing={refreshing}
                   />
                 </div>
 
@@ -1258,6 +1262,8 @@ function EmbedBuilderContent() {
                     selectedChannelId={welcomeChatChannelId}
                     placeholder="Pick general chat..."
                     onSelect={(id, name) => handleSelectMentionedChannel("chat", id, name)}
+                    onRefresh={loadData}
+                    refreshing={refreshing}
                   />
                 </div>
               </div>
@@ -1499,16 +1505,28 @@ function EmbedBuilderContent() {
                     {showChannelDropdown && (
                       <div className="absolute left-0 mt-2 w-64 p-2.5 rounded-2xl bg-[#1e1f22] border border-white/15 shadow-2xl z-50 space-y-2 animate-in fade-in duration-100">
                         <div className="flex items-center justify-between px-1">
-                          <span className="text-[11px] font-bold text-white uppercase tracking-wider">
+                          <span className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                            <Hash className="w-3.5 h-3.5 text-discord-blurple" />
                             Select Channel to Insert
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => setShowChannelDropdown(false)}
-                            className="text-zinc-500 hover:text-white"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={loadData}
+                              disabled={refreshing}
+                              title="Refresh channels from Discord"
+                              className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-discord-blurple" : ""}`} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowChannelDropdown(false)}
+                              className="text-zinc-500 hover:text-white"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
 
                         <input
@@ -1754,6 +1772,36 @@ function EmbedBuilderContent() {
                   <span>Supports Discord markdown, variables, and channel mentions</span>
                   <span>{description.length}/4096</span>
                 </div>
+
+                {/* 1-Click Server Channel Quick Chips */}
+                {textChannels.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1 px-1">
+                    <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1">
+                      <Hash className="w-3 h-3 text-indigo-400" />
+                      Quick Insert Channel:
+                    </span>
+                    {textChannels.slice(0, 7).map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => insertIntoDescription(`{#${c.name}}`)}
+                        className="text-[10px] px-2 py-0.5 rounded-md bg-discord-dark hover:bg-indigo-600/30 hover:text-indigo-200 text-zinc-300 border border-white/5 transition cursor-pointer font-medium"
+                        title={`Insert {#${c.name}}`}
+                      >
+                        #{c.name}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={loadData}
+                      disabled={refreshing}
+                      className="text-[10px] p-1 rounded-md text-zinc-500 hover:text-white transition"
+                      title="Refresh channels"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1802,13 +1850,24 @@ function EmbedBuilderContent() {
                             <Hash className="w-3.5 h-3.5 text-indigo-400" />
                             Select Channel for Field
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => setShowAddChannelFieldDropdown(false)}
-                            className="text-zinc-500 hover:text-white"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={loadData}
+                              disabled={refreshing}
+                              title="Refresh channels from Discord"
+                              className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowAddChannelFieldDropdown(false)}
+                              className="text-zinc-500 hover:text-white"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
 
                         <div className="relative">
@@ -1957,23 +2016,34 @@ function EmbedBuilderContent() {
                         </div>
 
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                          {/* Channel Select Dropdown */}
-                          <div className="flex-1 relative">
-                            <select
-                              value={linkedChannelName}
-                              onChange={(e) => linkChannelToField(idx, e.target.value)}
-                              className="w-full px-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-purple-500 cursor-pointer appearance-none"
-                            >
-                              <option value="">Choose channel to link to this field...</option>
-                              {textChannels.map((c) => (
-                                <option key={c.id} value={c.name}>
-                                  #{c.name} {c.type === 5 ? "(Announcement)" : ""}
-                                </option>
-                              ))}
-                            </select>
-                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
-                              <ChevronDown className="w-3.5 h-3.5" />
+                          {/* Channel Select Dropdown + Refresh Button */}
+                          <div className="flex-1 flex items-center gap-1.5">
+                            <div className="flex-1 relative">
+                              <select
+                                value={linkedChannelName}
+                                onChange={(e) => linkChannelToField(idx, e.target.value)}
+                                className="w-full px-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-purple-500 cursor-pointer appearance-none"
+                              >
+                                <option value="">Choose channel to link to this field...</option>
+                                {textChannels.map((c) => (
+                                  <option key={c.id} value={c.name}>
+                                    #{c.name} {c.type === 5 ? "(Announcement)" : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </div>
                             </div>
+                            <button
+                              type="button"
+                              onClick={loadData}
+                              disabled={refreshing}
+                              title="Refresh channels from Discord"
+                              className="p-1.5 rounded-lg bg-discord-dark border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition cursor-pointer flex-shrink-0"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-purple-400" : ""}`} />
+                            </button>
                           </div>
 
                           {/* Quick Action Buttons */}

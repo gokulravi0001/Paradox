@@ -19,9 +19,13 @@ import {
   Plus,
   Trash2,
   ChevronDown,
+  ChevronUp,
   Search,
   X,
   Palette,
+  RefreshCw,
+  Check,
+  Sliders,
 } from "lucide-react";
 import { ChannelSelect, DiscordChannelItem } from "@/components/ui/ChannelSelect";
 import { RoleSelect, DiscordRoleItem } from "@/components/ui/RoleSelect";
@@ -48,6 +52,69 @@ const PRESET_COLORS = [
   { name: "Pitch Dark", hex: "#2B2D31" },
 ];
 
+const WELCOME_QUICK_TEMPLATES = [
+  {
+    id: "friendly",
+    name: "🎉 Friendly Welcome",
+    badge: "Recommended",
+    desc: "Warm greeting with guidelines, role selection, and general chat links.",
+    title: "👋 Welcome to {server.name}!",
+    description:
+      "Hey {user.mention}, welcome to the server! We are thrilled to have you here 🎉\n\nMake sure to read the guidelines in {#rules-and-info} and grab your roles in {#roles} to unlock community channels!",
+    color: "#5865F2",
+    authorName: "New Member Arrived",
+    authorIconUrl: "{user.avatar}",
+    thumbnailUrl: "{user.avatar}",
+    imageUrl: "",
+    footerText: "Member #{server.member_count} • Enjoy your stay!",
+    footerIconUrl: "{server.icon}",
+    fields: [
+      { name: "📜 Read Rules", value: "Visit {#rules-and-info}", inline: true },
+      { name: "🎭 Get Roles", value: "Head to {#roles}", inline: true },
+      { name: "💬 Chat Now", value: "Say hi in {#general}", inline: true },
+    ],
+  },
+  {
+    id: "rules",
+    name: "🛡️ Rules & Verify",
+    badge: "Structured",
+    desc: "Directs new members to complete verification and review rules.",
+    title: "🛡️ Welcome to {server.name} Guidelines",
+    description:
+      "Welcome {user.mention}! Before chatting, please check our server guidelines in {#rules-and-info} and review the announcements in {#announcements}.",
+    color: "#57F287",
+    authorName: "{server.name} Staff",
+    authorIconUrl: "{server.icon}",
+    thumbnailUrl: "{server.icon}",
+    imageUrl: "",
+    footerText: "Follow rules & enjoy • Paradox Security",
+    footerIconUrl: "{server.icon}",
+    fields: [
+      { name: "📜 Server Rules", value: "Check {#rules-and-info}", inline: true },
+      { name: "📢 Announcements", value: "Follow {#announcements}", inline: true },
+      { name: "💬 General Chat", value: "Say hi in {#general}", inline: true },
+    ],
+  },
+  {
+    id: "minimal",
+    name: "✨ Clean & Minimal",
+    badge: "Simple",
+    desc: "Compact embed without heavy clutter, fast and beautiful.",
+    title: "Welcome {user.name}!",
+    description: "Welcome {user.mention} to {server.name}! Glad to have you with us.",
+    color: "#8B5CF6",
+    authorName: "{user.name}",
+    authorIconUrl: "{user.avatar}",
+    thumbnailUrl: "{user.avatar}",
+    imageUrl: "",
+    footerText: "Member #{server.member_count}",
+    footerIconUrl: "{server.icon}",
+    fields: [
+      { name: "💬 General Chat", value: "Say hi in {#general}", inline: true },
+    ],
+  },
+];
+
 const SAMPLE_USER_AVATAR = "https://cdn.discordapp.com/embed/avatars/1.png";
 const SAMPLE_SERVER_ICON = "https://cdn.discordapp.com/embed/avatars/0.png";
 const BOT_AVATAR = "/pfp.png";
@@ -57,11 +124,16 @@ export default function WelcomePage() {
   const guildId = params.guildId as string;
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [channels, setChannels] = useState<DiscordChannelItem[]>([]);
   const [roles, setRoles] = useState<DiscordRoleItem[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Template selection & Simplified mode
+  const [selectedTemplateId, setSelectedTemplateId] = useState("friendly");
+  const [showAdvancedStyling, setShowAdvancedStyling] = useState(false);
 
   // Welcome settings state
   const [enabled, setEnabled] = useState(false);
@@ -72,10 +144,10 @@ export default function WelcomePage() {
   const [sendEmbed, setSendEmbed] = useState(true);
   const [embedTitle, setEmbedTitle] = useState("👋 Welcome to our Community!");
   const [embedDescription, setEmbedDescription] = useState(
-    "We are thrilled to have you here, {user.mention}! Check out our channels to get started:\n\n• Read the guidelines in {#rules}\n• Grab your vanity roles in {#roles}\n• Introduce yourself in {#general}"
+    "We are thrilled to have you here, {user.mention}! Check out our channels to get started:\n\n• Read the guidelines in {#rules-and-info}\n• Grab your vanity roles in {#roles}\n• Introduce yourself in {#general}"
   );
   const [embedColor, setEmbedColor] = useState("#5865F2");
-  const [embedAuthorName, setEmbedAuthorName] = useState("{user.name}");
+  const [embedAuthorName, setEmbedAuthorName] = useState("New Member Arrived");
   const [embedAuthorIconUrl, setEmbedAuthorIconUrl] = useState("{user.avatar}");
   const [embedThumbnailUrl, setEmbedThumbnailUrl] = useState("{user.avatar}");
   const [embedImageUrl, setEmbedImageUrl] = useState("");
@@ -122,6 +194,29 @@ export default function WelcomePage() {
   const textChannels = channels.filter(
     (c) => c.type === 0 || c.type === 5 || c.type === undefined
   );
+
+  async function refreshChannels() {
+    try {
+      setRefreshing(true);
+      const [cRes, rRes] = await Promise.all([
+        fetch(`/api/guilds/${guildId}/channels`),
+        fetch(`/api/guilds/${guildId}/roles`),
+      ]);
+      if (cRes.ok) {
+        const cData = await cRes.json();
+        setChannels(cData.channels || []);
+      }
+      if (rRes.ok) {
+        const rData = await rRes.json();
+        setRoles(rData.roles || []);
+      }
+      addToast("success", "Channels and roles refreshed from Discord!");
+    } catch {
+      addToast("error", "Failed to refresh channels.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   useEffect(() => {
     async function init() {
@@ -185,6 +280,24 @@ export default function WelcomePage() {
 
     if (guildId) init();
   }, [guildId]);
+
+  // Apply a ready-to-use template
+  function applyWelcomeTemplate(tplId: string) {
+    setSelectedTemplateId(tplId);
+    const tpl = WELCOME_QUICK_TEMPLATES.find((t) => t.id === tplId);
+    if (!tpl) return;
+    setEmbedTitle(tpl.title);
+    setEmbedDescription(tpl.description);
+    setEmbedColor(tpl.color);
+    setEmbedAuthorName(tpl.authorName);
+    setEmbedAuthorIconUrl(tpl.authorIconUrl);
+    setEmbedThumbnailUrl(tpl.thumbnailUrl);
+    setEmbedImageUrl(tpl.imageUrl);
+    setEmbedFooter(tpl.footerText);
+    setEmbedFooterIconUrl(tpl.footerIconUrl);
+    setFields(tpl.fields);
+    addToast("info", `Applied ${tpl.name} template!`);
+  }
 
   // Insert helper for description textarea
   function insertIntoDescription(textToInsert: string) {
@@ -386,7 +499,6 @@ export default function WelcomePage() {
     }
   }
 
-  // Build channel map for preview
   const channelMap = channels.reduce<Record<string, string>>((acc, c) => {
     acc[c.id] = c.name;
     return acc;
@@ -416,11 +528,21 @@ export default function WelcomePage() {
             Welcome Message Builder
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Greet new members automatically with custom text, rich embeds, channel chips, and auto-roles.
+            Greet new members automatically with ready-to-use templates, channel chips, and auto-roles.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={refreshChannels}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-discord-dark hover:bg-white/5 border border-white/10 text-xs font-semibold text-zinc-300 hover:text-white transition cursor-pointer"
+            title="Refresh channels from Discord"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-discord-blurple" : ""}`} />
+            <span>Sync</span>
+          </button>
           <button
             type="button"
             onClick={handleTest}
@@ -488,6 +610,8 @@ export default function WelcomePage() {
               channels={channels}
               selectedChannelId={channelId}
               onSelect={(id) => setChannelId(id)}
+              onRefresh={refreshChannels}
+              refreshing={refreshing}
               placeholder="Select a welcome text channel..."
             />
           </div>
@@ -523,7 +647,7 @@ export default function WelcomePage() {
               <div>
                 <span className="text-xs font-bold text-white">Attach Rich Discord Embed</span>
                 <p className="text-[11px] text-zinc-400 mt-0.5">
-                  Send a formatted visual card with title, description, channel chips, and images.
+                  Pick a ready-to-use template or customize colors, channels, and images.
                 </p>
               </div>
               <button
@@ -543,173 +667,55 @@ export default function WelcomePage() {
 
             {sendEmbed && (
               <div className="space-y-5 animate-in fade-in">
-                {/* 1. DEDICATED PROFILE PICTURE (PFP) & ICON BAR */}
-                <div className="p-4 rounded-2xl bg-discord-dark/70 border border-purple-500/25 space-y-3">
+                {/* 1. READY-TO-USE 1-CLICK TEMPLATES */}
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-purple-400" />
-                      Profile Picture (PFP) &amp; Icon Fast Picker
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                      Choose Ready Template (1-Click)
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium border border-purple-500/30">
-                      1-Click Apply
+                    <span className="text-[10px] text-zinc-400">
+                      Instantly configures text, colors &amp; fields
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-                    {/* User Avatar */}
-                    <div className="p-2.5 rounded-xl bg-purple-950/20 border border-purple-500/20 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={SAMPLE_USER_AVATAR}
-                          alt="User Avatar"
-                          className="w-7 h-7 rounded-full bg-black/40 border border-white/10"
-                        />
-                        <div className="min-w-0">
-                          <span className="text-xs font-semibold text-white block truncate">
-                            Member PFP
-                          </span>
-                          <span className="text-[10px] text-zinc-400 font-mono">{"{user.avatar}"}</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {WELCOME_QUICK_TEMPLATES.map((tpl) => {
+                      const isSelected = selectedTemplateId === tpl.id;
+                      return (
                         <button
+                          key={tpl.id}
                           type="button"
-                          onClick={() => {
-                            setEmbedThumbnailUrl("{user.avatar}");
-                            addToast("success", "Set Member PFP as Thumbnail");
-                          }}
-                          className="text-[10px] py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/30 font-medium transition cursor-pointer text-center"
+                          onClick={() => applyWelcomeTemplate(tpl.id)}
+                          className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between gap-2 ${
+                            isSelected
+                              ? "bg-indigo-600/20 border-indigo-500 shadow-md shadow-indigo-600/10 ring-1 ring-indigo-500/50"
+                              : "bg-discord-dark/60 border-white/5 hover:border-white/20"
+                          }`}
                         >
-                          As Thumbnail
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-bold text-white">{tpl.name}</span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+                                {tpl.badge}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
+                              {tpl.desc}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] text-indigo-300 font-medium">
+                            <Check className={`w-3 h-3 ${isSelected ? "opacity-100" : "opacity-0"}`} />
+                            <span>{isSelected ? "Active Preset" : "Apply Preset"}</span>
+                          </div>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmbedAuthorIconUrl("{user.avatar}");
-                            if (!embedAuthorName) setEmbedAuthorName("{user.name}");
-                            addToast("success", "Set Member PFP as Author Icon");
-                          }}
-                          className="text-[10px] py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/30 font-medium transition cursor-pointer text-center"
-                        >
-                          As Header
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Server Icon */}
-                    <div className="p-2.5 rounded-xl bg-purple-950/20 border border-purple-500/20 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={SAMPLE_SERVER_ICON}
-                          alt="Server Icon"
-                          className="w-7 h-7 rounded-full bg-black/40 border border-white/10"
-                        />
-                        <div className="min-w-0">
-                          <span className="text-xs font-semibold text-white block truncate">
-                            Server Icon
-                          </span>
-                          <span className="text-[10px] text-zinc-400 font-mono">{"{server.icon}"}</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmbedThumbnailUrl("{server.icon}");
-                            addToast("success", "Set Server Icon as Thumbnail");
-                          }}
-                          className="text-[10px] py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/30 font-medium transition cursor-pointer text-center"
-                        >
-                          As Thumbnail
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmbedFooterIconUrl("{server.icon}");
-                            addToast("success", "Set Server Icon as Footer");
-                          }}
-                          className="text-[10px] py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/30 font-medium transition cursor-pointer text-center"
-                        >
-                          As Footer
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Bot Avatar */}
-                    <div className="p-2.5 rounded-xl bg-purple-950/20 border border-purple-500/20 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={BOT_AVATAR}
-                          alt="Bot PFP"
-                          className="w-7 h-7 rounded-full bg-black/40 border border-white/10"
-                          onError={(e) => {
-                            (e.target as any).src = SAMPLE_SERVER_ICON;
-                          }}
-                        />
-                        <div className="min-w-0">
-                          <span className="text-xs font-semibold text-white block truncate">
-                            Paradox Bot
-                          </span>
-                          <span className="text-[10px] text-zinc-400 font-mono">/pfp.png</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmbedThumbnailUrl(BOT_AVATAR);
-                            addToast("success", "Set Paradox Bot PFP as Thumbnail");
-                          }}
-                          className="text-[10px] py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/30 font-medium transition cursor-pointer text-center"
-                        >
-                          As Thumbnail
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmbedAuthorIconUrl(BOT_AVATAR);
-                            setEmbedAuthorName("Paradox System");
-                            addToast("success", "Set Paradox Bot as Header");
-                          }}
-                          className="text-[10px] py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/30 font-medium transition cursor-pointer text-center"
-                        >
-                          As Header
-                        </button>
-                      </div>
-                    </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Author Header */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-zinc-300">
-                      Author Header Name
-                    </label>
-                    <input
-                      type="text"
-                      value={embedAuthorName}
-                      onChange={(e) => setEmbedAuthorName(e.target.value)}
-                      placeholder="e.g. {user.name} or New Member"
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-zinc-300">
-                      Author Header Icon URL
-                    </label>
-                    <input
-                      type="text"
-                      value={embedAuthorIconUrl}
-                      onChange={(e) => setEmbedAuthorIconUrl(e.target.value)}
-                      placeholder="e.g. {user.avatar} or image URL"
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
-                    />
-                  </div>
-                </div>
-
-                {/* Embed Title & Accent Color */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* 2. EMBED TITLE & COLOR */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-white/5">
                   <div className="sm:col-span-2 space-y-1">
                     <label className="text-xs font-semibold text-zinc-300">Embed Title</label>
                     <input
@@ -739,29 +745,8 @@ export default function WelcomePage() {
                   </div>
                 </div>
 
-                {/* Preset Color Pills */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mr-1">
-                    Colors:
-                  </span>
-                  {PRESET_COLORS.map((c) => (
-                    <button
-                      key={c.hex}
-                      type="button"
-                      onClick={() => setEmbedColor(c.hex)}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-discord-dark hover:bg-white/10 text-[10px] font-medium text-zinc-300 border border-white/5 transition cursor-pointer"
-                    >
-                      <span
-                        className="w-2.5 h-2.5 rounded-full inline-block"
-                        style={{ backgroundColor: c.hex }}
-                      />
-                      <span>{c.name}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Description & 3 PLUS TOOLBAR */}
-                <div className="space-y-2 pt-2 border-t border-white/5">
+                {/* 3. DESCRIPTION & 3 PLUS TOOLBAR */}
+                <div className="space-y-2">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <label className="text-xs font-semibold text-zinc-300">
                       Embed Description
@@ -792,13 +777,24 @@ export default function WelcomePage() {
                                 <Hash className="w-3.5 h-3.5 text-indigo-400" />
                                 Insert Channel Mention
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => setShowChannelDropdown(false)}
-                                className="text-zinc-500 hover:text-white"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={refreshChannels}
+                                  disabled={refreshing}
+                                  title="Refresh channels from Discord"
+                                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowChannelDropdown(false)}
+                                  className="text-zinc-500 hover:text-white"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
 
                             <div className="relative">
@@ -930,7 +926,7 @@ export default function WelcomePage() {
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>Add Variable / Tag</span>
+                          <span>Add Variable</span>
                         </button>
 
                         {showTagDropdown && (
@@ -955,7 +951,7 @@ export default function WelcomePage() {
                                 👤 User Tags:
                               </span>
                               <div className="flex flex-wrap gap-1">
-                                {["{user.mention}", "{user.name}", "{user.avatar}", "{user.id}", "{user.pfp}"].map((t) => (
+                                {["{user.mention}", "{user.name}", "{user.avatar}", "{user.id}"].map((t) => (
                                   <button
                                     key={t}
                                     type="button"
@@ -977,7 +973,7 @@ export default function WelcomePage() {
                                 🏰 Server Tags:
                               </span>
                               <div className="flex flex-wrap gap-1">
-                                {["{server.name}", "{server.icon}", "{server.member_count}", "{server.id}"].map((t) => (
+                                {["{server.name}", "{server.icon}", "{server.member_count}"].map((t) => (
                                   <button
                                     key={t}
                                     type="button"
@@ -988,34 +984,6 @@ export default function WelcomePage() {
                                     className="text-[11px] px-2 py-0.5 rounded bg-discord-dark hover:bg-purple-600 hover:text-white text-zinc-300 border border-white/5 font-mono transition cursor-pointer"
                                   >
                                     {t}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Markdown formatting */}
-                            <div className="space-y-1 border-t border-white/10 pt-2">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
-                                📝 Formatting:
-                              </span>
-                              <div className="flex flex-wrap gap-1">
-                                {[
-                                  { label: "Bold", tag: "**text**" },
-                                  { label: "Italic", tag: "*text*" },
-                                  { label: "Underline", tag: "__text__" },
-                                  { label: "Quote", tag: "> " },
-                                  { label: "Code", tag: "`code`" },
-                                ].map((m) => (
-                                  <button
-                                    key={m.label}
-                                    type="button"
-                                    onClick={() => {
-                                      insertIntoDescription(m.tag);
-                                      setShowTagDropdown(false);
-                                    }}
-                                    className="text-[11px] px-2 py-0.5 rounded bg-discord-dark hover:bg-white/15 text-zinc-300 border border-white/5 transition cursor-pointer"
-                                  >
-                                    {m.label}
                                   </button>
                                 ))}
                               </div>
@@ -1039,15 +1007,45 @@ export default function WelcomePage() {
                     <span>Supports Discord markdown, variables, and channel mentions</span>
                     <span>{embedDescription.length}/4096</span>
                   </div>
+
+                  {/* 1-Click Server Channel Quick Chips */}
+                  {textChannels.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                      <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1">
+                        <Hash className="w-3 h-3 text-indigo-400" />
+                        Quick Insert Channel:
+                      </span>
+                      {textChannels.slice(0, 6).map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => insertIntoDescription(`{#${c.name}}`)}
+                          className="text-[10px] px-2 py-0.5 rounded-md bg-discord-dark hover:bg-indigo-600/30 hover:text-indigo-200 text-zinc-300 border border-white/5 transition cursor-pointer font-medium"
+                          title={`Insert {#${c.name}}`}
+                        >
+                          #{c.name}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={refreshChannels}
+                        disabled={refreshing}
+                        className="text-[10px] p-1 rounded-md text-zinc-500 hover:text-white transition"
+                        title="Refresh channels"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* 2. EMBED FIELDS SECTION (PRO BUILDER) */}
+                {/* 4. EMBED FIELDS SECTION (PRO BUILDER) */}
                 <div className="space-y-3 pt-3 border-t border-white/5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
                       <span>Embed Fields ({fields.length}/{DISCORD_LIMITS.FIELDS_MAX})</span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
-                        Welcome Channels
+                        Guide New Members
                       </span>
                     </label>
 
@@ -1084,13 +1082,24 @@ export default function WelcomePage() {
                                 <Hash className="w-3.5 h-3.5 text-indigo-400" />
                                 Select Channel for Field
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => setShowAddChannelFieldDropdown(false)}
-                                className="text-zinc-500 hover:text-white"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={refreshChannels}
+                                  disabled={refreshing}
+                                  title="Refresh channels from Discord"
+                                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAddChannelFieldDropdown(false)}
+                                  className="text-zinc-500 hover:text-white"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
 
                             <div className="relative">
@@ -1144,10 +1153,10 @@ export default function WelcomePage() {
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-white flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                        Welcome Guide Channel Fields
+                        Quick Add Guidance Channels
                       </span>
                       <span className="text-[10px] text-indigo-300">
-                        1-click add guidance channels for new members
+                        1-click add guidance channels for newcomers
                       </span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -1156,21 +1165,21 @@ export default function WelcomePage() {
                         onClick={() => addQuickWelcomeField("rules", "📜 Read Rules", "Visit {#rules}")}
                         className="text-xs px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-500/30 transition flex items-center gap-1 cursor-pointer font-medium"
                       >
-                        + 📜 Rules Channel Field
+                        + 📜 Rules Field
                       </button>
                       <button
                         type="button"
                         onClick={() => addQuickWelcomeField("roles", "🎭 Pick Roles", "Head to {#roles}")}
                         className="text-xs px-2.5 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 transition flex items-center gap-1 cursor-pointer font-medium"
                       >
-                        + 🎭 Roles Channel Field
+                        + 🎭 Roles Field
                       </button>
                       <button
                         type="button"
                         onClick={() => addQuickWelcomeField("general", "💬 Say Hi", "Say hi in {#general}")}
                         className="text-xs px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/30 transition flex items-center gap-1 cursor-pointer font-medium"
                       >
-                        + 💬 Chat Channel Field
+                        + 💬 Chat Field
                       </button>
                       <button
                         type="button"
@@ -1237,23 +1246,34 @@ export default function WelcomePage() {
                             </div>
 
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                              {/* Channel Select Dropdown */}
-                              <div className="flex-1 relative">
-                                <select
-                                  value={linkedChannelName}
-                                  onChange={(e) => linkChannelToField(idx, e.target.value)}
-                                  className="w-full px-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-purple-500 cursor-pointer appearance-none"
-                                >
-                                  <option value="">Choose channel to link to this field...</option>
-                                  {textChannels.map((c) => (
-                                    <option key={c.id} value={c.name}>
-                                      #{c.name} {c.type === 5 ? "(Announcement)" : ""}
-                                    </option>
-                                  ))}
-                                </select>
-                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
-                                  <ChevronDown className="w-3.5 h-3.5" />
+                              {/* Channel Select Dropdown + Refresh Button */}
+                              <div className="flex-1 flex items-center gap-1.5">
+                                <div className="flex-1 relative">
+                                  <select
+                                    value={linkedChannelName}
+                                    onChange={(e) => linkChannelToField(idx, e.target.value)}
+                                    className="w-full px-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-purple-500 cursor-pointer appearance-none"
+                                  >
+                                    <option value="">Choose channel to link to this field...</option>
+                                    {textChannels.map((c) => (
+                                      <option key={c.id} value={c.name}>
+                                        #{c.name} {c.type === 5 ? "(Announcement)" : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  </div>
                                 </div>
+                                <button
+                                  type="button"
+                                  onClick={refreshChannels}
+                                  disabled={refreshing}
+                                  title="Refresh channels from Discord"
+                                  className="p-1.5 rounded-lg bg-discord-dark border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition cursor-pointer flex-shrink-0"
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-purple-400" : ""}`} />
+                                </button>
                               </div>
 
                               {/* Quick Action Buttons */}
@@ -1329,70 +1349,198 @@ export default function WelcomePage() {
                   </div>
                 </div>
 
-                {/* Media Links with PFP and Icon Fast Insert */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-white/5">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-300">
-                      Thumbnail Image URL (Top Right)
-                    </label>
-                    <input
-                      type="text"
-                      value={embedThumbnailUrl}
-                      onChange={(e) => setEmbedThumbnailUrl(e.target.value)}
-                      placeholder="e.g. {user.avatar} or image URL..."
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-300">
-                      Large Banner Image URL
-                    </label>
-                    <input
-                      type="text"
-                      value={embedImageUrl}
-                      onChange={(e) => setEmbedImageUrl(e.target.value)}
-                      placeholder="https://.../banner.gif"
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
-                    />
-                  </div>
-                </div>
+                {/* 5. COLLAPSIBLE ADVANCED STYLING & MEDIA (Keeps the form simple & uncluttered!) */}
+                <div className="pt-2 border-t border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedStyling(!showAdvancedStyling)}
+                    className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 text-xs font-semibold text-zinc-200 transition cursor-pointer select-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-purple-400" />
+                      <span>Advanced Media &amp; Custom Styling</span>
+                      <span className="text-[10px] text-zinc-500 font-normal">
+                        (Avatars, Banners, Author Header &amp; Footer)
+                      </span>
+                    </div>
+                    {showAdvancedStyling ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
 
-                {/* Footer and Timestamp */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-300">Footer Text</label>
-                    <input
-                      type="text"
-                      value={embedFooter}
-                      onChange={(e) => setEmbedFooter(e.target.value.slice(0, 2048))}
-                      placeholder="e.g. Member Joined • Paradox Welcome"
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-300">
-                      Footer Icon URL
-                    </label>
-                    <input
-                      type="text"
-                      value={embedFooterIconUrl}
-                      onChange={(e) => setEmbedFooterIconUrl(e.target.value)}
-                      placeholder="e.g. {server.icon} or image URL..."
-                      className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
-                    />
-                  </div>
-                </div>
+                  {showAdvancedStyling && (
+                    <div className="mt-3 p-4 rounded-2xl bg-discord-dark/50 border border-white/5 space-y-4 animate-in fade-in duration-150">
+                      {/* PFP & Icon Bar */}
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-bold text-white uppercase tracking-wider block">
+                          Profile Picture (PFP) &amp; Icon Fast Picker:
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmbedThumbnailUrl("{user.avatar}");
+                              addToast("success", "Set Member PFP as Thumbnail");
+                            }}
+                            className="p-2.5 rounded-xl bg-purple-950/20 border border-purple-500/20 text-left hover:border-purple-500/40 transition cursor-pointer flex items-center gap-2"
+                          >
+                            <img src={SAMPLE_USER_AVATAR} alt="User Avatar" className="w-6 h-6 rounded-full" />
+                            <div>
+                              <span className="text-xs font-semibold text-white block">Member Avatar</span>
+                              <span className="text-[10px] text-zinc-400">As Thumbnail</span>
+                            </div>
+                          </button>
 
-                <div className="flex items-center justify-between pt-1">
-                  <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={embedTimestamp}
-                      onChange={(e) => setEmbedTimestamp(e.target.checked)}
-                      className="rounded border-zinc-700 text-purple-600 focus:ring-0"
-                    />
-                    <span>Include Timestamp in Footer</span>
-                  </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmbedThumbnailUrl("{server.icon}");
+                              addToast("success", "Set Server Icon as Thumbnail");
+                            }}
+                            className="p-2.5 rounded-xl bg-purple-950/20 border border-purple-500/20 text-left hover:border-purple-500/40 transition cursor-pointer flex items-center gap-2"
+                          >
+                            <img src={SAMPLE_SERVER_ICON} alt="Server Icon" className="w-6 h-6 rounded-full" />
+                            <div>
+                              <span className="text-xs font-semibold text-white block">Server Icon</span>
+                              <span className="text-[10px] text-zinc-400">As Thumbnail</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmbedThumbnailUrl(BOT_AVATAR);
+                              addToast("success", "Set Paradox Bot as Thumbnail");
+                            }}
+                            className="p-2.5 rounded-xl bg-purple-950/20 border border-purple-500/20 text-left hover:border-purple-500/40 transition cursor-pointer flex items-center gap-2"
+                          >
+                            <img src={BOT_AVATAR} alt="Bot Avatar" className="w-6 h-6 rounded-full" onError={(e) => { (e.target as any).src = SAMPLE_SERVER_ICON; }} />
+                            <div>
+                              <span className="text-xs font-semibold text-white block">Paradox Bot</span>
+                              <span className="text-[10px] text-zinc-400">As Thumbnail</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Author Header */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">
+                            Author Header Name
+                          </label>
+                          <input
+                            type="text"
+                            value={embedAuthorName}
+                            onChange={(e) => setEmbedAuthorName(e.target.value)}
+                            placeholder="e.g. {user.name} or New Member"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">
+                            Author Header Icon URL
+                          </label>
+                          <input
+                            type="text"
+                            value={embedAuthorIconUrl}
+                            onChange={(e) => setEmbedAuthorIconUrl(e.target.value)}
+                            placeholder="e.g. {user.avatar} or image URL"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Preset Color Pills */}
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[11px] font-semibold text-zinc-300 block">Preset Colors</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {PRESET_COLORS.map((c) => (
+                            <button
+                              key={c.hex}
+                              type="button"
+                              onClick={() => setEmbedColor(c.hex)}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-discord-dark hover:bg-white/10 text-[10px] font-medium text-zinc-300 border border-white/5 transition cursor-pointer"
+                            >
+                              <span
+                                className="w-2.5 h-2.5 rounded-full inline-block"
+                                style={{ backgroundColor: c.hex }}
+                              />
+                              <span>{c.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Thumbnail & Banner Image URLs */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">
+                            Thumbnail URL (Top Right)
+                          </label>
+                          <input
+                            type="text"
+                            value={embedThumbnailUrl}
+                            onChange={(e) => setEmbedThumbnailUrl(e.target.value)}
+                            placeholder="e.g. {user.avatar} or image URL"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">
+                            Large Banner Image URL
+                          </label>
+                          <input
+                            type="text"
+                            value={embedImageUrl}
+                            onChange={(e) => setEmbedImageUrl(e.target.value)}
+                            placeholder="https://.../banner.gif"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Footer and Timestamp */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">Footer Text</label>
+                          <input
+                            type="text"
+                            value={embedFooter}
+                            onChange={(e) => setEmbedFooter(e.target.value.slice(0, 2048))}
+                            placeholder="e.g. Member Joined • Paradox Welcome"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-300">
+                            Footer Icon URL
+                          </label>
+                          <input
+                            type="text"
+                            value={embedFooterIconUrl}
+                            onChange={(e) => setEmbedFooterIconUrl(e.target.value)}
+                            placeholder="e.g. {server.icon} or image URL"
+                            className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={embedTimestamp}
+                            onChange={(e) => setEmbedTimestamp(e.target.checked)}
+                            className="rounded border-zinc-700 text-purple-600 focus:ring-0"
+                          />
+                          <span>Include Timestamp in Footer</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
