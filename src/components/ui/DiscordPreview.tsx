@@ -221,7 +221,9 @@ export function DiscordPreview({
                       key={i}
                       className={f.inline ? "col-span-1" : "col-span-full"}
                     >
-                      <div className="text-xs font-bold text-white break-words">{f.name}</div>
+                      <div className="text-xs font-bold text-white break-words">
+                        {formatMentions(f.name)}
+                      </div>
                       <div className="text-xs text-[#dbdee1] break-words whitespace-pre-wrap mt-0.5">
                         <DiscordMarkdown content={formatMentions(f.value)} />
                       </div>

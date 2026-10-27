@@ -1770,7 +1770,28 @@ async function onGuildMemberAdd(member) {
     const serverIcon = member.guild.iconURL({ extension: "png", size: 256 }) || "https://cdn.discordapp.com/embed/avatars/0.png";
     const replaceTags = (text) => {
       if (!text) return "";
-      return text.replace(/{user\.mention}/g, userMention).replace(/{user\.name}/g, userName).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount).replace(/{server\.icon}/g, serverIcon);
+      let s = text.replace(/{user\.mention}/g, userMention).replace(/{user\.name}/g, userName).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount).replace(/{server\.icon}/g, serverIcon);
+      for (const [, ch] of member.guild.channels.cache) {
+        if (!ch) continue;
+        const escaped = ch.name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+        const regex = new RegExp(`\\{#[ ]*${escaped}[ ]*\\}`, "gi");
+        s = s.replace(regex, `<#${ch.id}>`);
+      }
+      if (/\{#[^}]+\}/.test(s)) {
+        const findChannel = (kw) => member.guild.channels.cache.find(
+          (c) => c.isTextBased() && c.name.toLowerCase().includes(kw.toLowerCase())
+        );
+        const rulesCh = findChannel("rule");
+        if (rulesCh) s = s.replace(/\{#[ ]*rules[^}]*[ ]*\}/gi, `<#${rulesCh.id}>`);
+        const rolesCh = findChannel("role");
+        if (rolesCh) s = s.replace(/\{#[ ]*roles[^}]*[ ]*\}/gi, `<#${rolesCh.id}>`);
+        const chatCh = findChannel("chat") || findChannel("general");
+        if (chatCh) s = s.replace(/\{#[ ]*(general|chat)[^}]*[ ]*\}/gi, `<#${chatCh.id}>`);
+        const announceCh = findChannel("announc");
+        if (announceCh) s = s.replace(/\{#[ ]*announc[^}]*[ ]*\}/gi, `<#${announceCh.id}>`);
+        s = s.replace(/\{#(\d+)\}/g, "<#$1>");
+      }
+      return s;
     };
     if (config.welcomeRoleId) {
       await member.roles.add(config.welcomeRoleId).catch((err) => {
@@ -1809,6 +1830,15 @@ async function onGuildMemberAdd(member) {
             }
             if (raw.footerText) {
               embed.setFooter({ text: replaceTags(raw.footerText) });
+            }
+            if (raw.fields && Array.isArray(raw.fields) && raw.fields.length > 0) {
+              embed.addFields(
+                raw.fields.map((f) => ({
+                  name: replaceTags(f.name) || f.name,
+                  value: replaceTags(f.value) || f.value,
+                  inline: Boolean(f.inline)
+                }))
+              );
             }
             embed.setTimestamp();
           } catch (err) {
@@ -1854,7 +1884,24 @@ async function onGuildMemberRemove(member) {
     const serverIcon = member.guild.iconURL({ extension: "png", size: 256 }) || "https://cdn.discordapp.com/embed/avatars/0.png";
     const replaceTags = (text) => {
       if (!text) return "";
-      return text.replace(/{user\.mention}/g, userName).replace(/{user\.name}/g, userName).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount).replace(/{server\.icon}/g, serverIcon);
+      let s = text.replace(/{user\.mention}/g, userName).replace(/{user\.name}/g, userName).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount).replace(/{server\.icon}/g, serverIcon);
+      for (const [, ch] of member.guild.channels.cache) {
+        if (!ch) continue;
+        const escaped = ch.name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+        const regex = new RegExp(`\\{#[ ]*${escaped}[ ]*\\}`, "gi");
+        s = s.replace(regex, `<#${ch.id}>`);
+      }
+      if (/\{#[^}]+\}/.test(s)) {
+        const findChannel = (kw) => member.guild.channels.cache.find(
+          (c) => c.isTextBased() && c.name.toLowerCase().includes(kw.toLowerCase())
+        );
+        const rulesCh = findChannel("rule");
+        if (rulesCh) s = s.replace(/\{#[ ]*rules[^}]*[ ]*\}/gi, `<#${rulesCh.id}>`);
+        const chatCh = findChannel("chat") || findChannel("general");
+        if (chatCh) s = s.replace(/\{#[ ]*(general|chat)[^}]*[ ]*\}/gi, `<#${chatCh.id}>`);
+        s = s.replace(/\{#(\d+)\}/g, "<#$1>");
+      }
+      return s;
     };
     const messageContent = config.goodbyeMessage ? replaceTags(config.goodbyeMessage) : void 0;
     let embed = void 0;
@@ -1885,6 +1932,15 @@ async function onGuildMemberRemove(member) {
         }
         if (raw.footerText) {
           embed.setFooter({ text: replaceTags(raw.footerText) });
+        }
+        if (raw.fields && Array.isArray(raw.fields) && raw.fields.length > 0) {
+          embed.addFields(
+            raw.fields.map((f) => ({
+              name: replaceTags(f.name) || f.name,
+              value: replaceTags(f.value) || f.value,
+              inline: Boolean(f.inline)
+            }))
+          );
         }
         embed.setTimestamp();
       } catch (err) {

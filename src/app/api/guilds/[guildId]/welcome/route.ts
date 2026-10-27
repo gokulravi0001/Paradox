@@ -145,6 +145,26 @@ export async function POST(
         s = s.replace(regex, `<#${ch.id}>`);
       }
 
+      // Fuzzy fallback for preset template tags
+      if (/\{#[^}]+\}/.test(s)) {
+        const findChannel = (kw: string) =>
+          channels.find((c) => c.name.toLowerCase().includes(kw.toLowerCase()));
+
+        const rulesCh = findChannel("rule");
+        if (rulesCh) s = s.replace(/\{#[ ]*rules[^}]*[ ]*\}/gi, `<#${rulesCh.id}>`);
+
+        const rolesCh = findChannel("role");
+        if (rolesCh) s = s.replace(/\{#[ ]*roles[^}]*[ ]*\}/gi, `<#${rolesCh.id}>`);
+
+        const chatCh = findChannel("chat") || findChannel("general");
+        if (chatCh) s = s.replace(/\{#[ ]*(general|chat)[^}]*[ ]*\}/gi, `<#${chatCh.id}>`);
+
+        const announceCh = findChannel("announc");
+        if (announceCh) s = s.replace(/\{#[ ]*announc[^}]*[ ]*\}/gi, `<#${announceCh.id}>`);
+
+        s = s.replace(/\{#(\d+)\}/g, "<#$1>");
+      }
+
       return s;
     };
 

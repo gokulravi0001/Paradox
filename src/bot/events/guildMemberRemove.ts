@@ -26,7 +26,7 @@ export async function onGuildMemberRemove(member: GuildMember | PartialGuildMemb
 
     const replaceTags = (text?: string | null): string => {
       if (!text) return "";
-      return text
+      let s = text
         .replace(/{user\.mention}/g, userName)
         .replace(/{user\.name}/g, userName)
         .replace(/{user\.avatar}/g, userPfp)
@@ -35,6 +35,32 @@ export async function onGuildMemberRemove(member: GuildMember | PartialGuildMemb
         .replace(/{server\.name}/g, serverName)
         .replace(/{server\.member_count}/g, memberCount)
         .replace(/{server\.icon}/g, serverIcon);
+
+      // Resolve exact channel name tags {#channel-name} to native Discord ping <#channelId>
+      for (const [, ch] of member.guild.channels.cache) {
+        if (!ch) continue;
+        const escaped = ch.name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+        const regex = new RegExp(`\\{#[ ]*${escaped}[ ]*\\}`, "gi");
+        s = s.replace(regex, `<#${ch.id}>`);
+      }
+
+      // Fallback matching for common channel tags
+      if (/\{#[^}]+\}/.test(s)) {
+        const findChannel = (kw: string) =>
+          member.guild.channels.cache.find(
+            (c) => c.isTextBased() && c.name.toLowerCase().includes(kw.toLowerCase())
+          );
+
+        const rulesCh = findChannel("rule");
+        if (rulesCh) s = s.replace(/\{#[ ]*rules[^}]*[ ]*\}/gi, `<#${rulesCh.id}>`);
+
+        const chatCh = findChannel("chat") || findChannel("general");
+        if (chatCh) s = s.replace(/\{#[ ]*(general|chat)[^}]*[ ]*\}/gi, `<#${chatCh.id}>`);
+
+        s = s.replace(/\{#(\d+)\}/g, "<#$1>");
+      }
+
+      return s;
     };
 
     const messageContent = config.goodbyeMessage ? replaceTags(config.goodbyeMessage) : undefined;
@@ -75,6 +101,18 @@ export async function onGuildMemberRemove(member: GuildMember | PartialGuildMemb
         if (raw.footerText) {
           embed.setFooter({ text: replaceTags(raw.footerText) });
         }
+
+        // Embed Fields
+        if (raw.fields && Array.isArray(raw.fields) && raw.fields.length > 0) {
+          embed.addFields(
+            raw.fields.map((f: { name: string; value: string; inline?: boolean }) => ({
+              name: replaceTags(f.name) || f.name,
+              value: replaceTags(f.value) || f.value,
+              inline: Boolean(f.inline),
+            }))
+          );
+        }
+
         embed.setTimestamp();
       } catch (err) {
         console.error("[Bot:Goodbye] Error parsing goodbye embed:", err);

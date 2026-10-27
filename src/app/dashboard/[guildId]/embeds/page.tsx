@@ -478,47 +478,47 @@ function EmbedBuilderContent() {
     }
   }
 
-  // Helper: auto-replaces referenced channels in Welcome description and fields
+  // Helper: auto-replaces referenced channels in Welcome description and fields with native Discord pings
   function handleSelectMentionedChannel(type: "rules" | "roles" | "chat", chId: string, chName: string) {
     if (type === "rules") {
       setWelcomeRulesChannelId(chId);
       setDescription((prev) =>
-        prev.replace(/\{#rules[^}]*\}|\{#rules-and-info\}/g, `{#${chName}}`)
+        prev.replace(/<#\d+>|\{#rules[^}]*\}|\{#rules-and-info\}/g, `<#${chId}>`)
       );
       setFields((prev) =>
         prev.map((f) =>
           f.name.toLowerCase().includes("rule")
-            ? { ...f, value: `Visit {#${chName}}` }
+            ? { ...f, value: `Visit <#${chId}>` }
             : f
         )
       );
-      addToast("success", `Connected rules channel: #${chName}`);
+      addToast("success", `Connected rules channel: #${chName} (ping)`);
     } else if (type === "roles") {
       setWelcomeRolesChannelId(chId);
       setDescription((prev) =>
-        prev.replace(/\{#roles[^}]*\}/g, `{#${chName}}`)
+        prev.replace(/<#\d+>|\{#roles[^}]*\}/g, `<#${chId}>`)
       );
       setFields((prev) =>
         prev.map((f) =>
           f.name.toLowerCase().includes("role")
-            ? { ...f, value: `Head to {#${chName}}` }
+            ? { ...f, value: `Head to <#${chId}>` }
             : f
         )
       );
-      addToast("success", `Connected reaction roles channel: #${chName}`);
+      addToast("success", `Connected reaction roles channel: #${chName} (ping)`);
     } else if (type === "chat") {
       setWelcomeChatChannelId(chId);
       setDescription((prev) =>
-        prev.replace(/\{#general[^}]*\}|\{#chat[^}]*\}/g, `{#${chName}}`)
+        prev.replace(/<#\d+>|\{#general[^}]*\}|\{#chat[^}]*\}/g, `<#${chId}>`)
       );
       setFields((prev) =>
         prev.map((f) =>
           f.name.toLowerCase().includes("chat")
-            ? { ...f, value: `Say hi in {#${chName}}` }
+            ? { ...f, value: `Say hi in <#${chId}>` }
             : f
         )
       );
-      addToast("success", `Connected general chat channel: #${chName}`);
+      addToast("success", `Connected general chat channel: #${chName} (ping)`);
     }
   }
 
@@ -595,11 +595,15 @@ function EmbedBuilderContent() {
     setFields([...fields, { name: "New Field", value: "Field content", inline: true }]);
   }
 
-  function addChannelField(chName: string) {
+  function addChannelField(target: DiscordChannelItem | string) {
     if (fields.length >= DISCORD_LIMITS.FIELDS_MAX) {
       addToast("warning", `Maximum ${DISCORD_LIMITS.FIELDS_MAX} fields allowed.`);
       return;
     }
+    const ch = typeof target === "string" ? channels.find((c) => c.id === target || c.name === target) : target;
+    const chName = ch ? ch.name : (typeof target === "string" ? target : target.name);
+    const chId = ch ? ch.id : (typeof target === "string" ? "" : target.id);
+    const mention = chId ? `<#${chId}>` : `{#${chName}}`;
     const isRule = chName.includes("rule");
     const isRole = chName.includes("role");
     const isAnnounce = chName.includes("announc");
@@ -607,11 +611,11 @@ function EmbedBuilderContent() {
     const icon = isRule ? "📜" : isRole ? "🎭" : isAnnounce ? "📢" : isChat ? "💬" : "🔗";
     const newField: EmbedField = {
       name: `${icon} #${chName}`,
-      value: `Visit {#${chName}}`,
+      value: `Visit ${mention}`,
       inline: true,
     };
     setFields([...fields, newField]);
-    addToast("success", `Added field for #${chName}`);
+    addToast("success", `Added pinged field for #${chName}`);
   }
 
   function addQuickWelcomeField(fallbackKeyword: string, title: string, templateVal: string) {
@@ -622,8 +626,9 @@ function EmbedBuilderContent() {
     const matched = channels.find((c) =>
       c.name.toLowerCase().includes(fallbackKeyword.toLowerCase())
     );
+    const mention = matched ? `<#${matched.id}>` : `{#${fallbackKeyword}}`;
     const chName = matched ? matched.name : fallbackKeyword;
-    const finalVal = templateVal.replace(/\{#[^}]+\}/, `{#${chName}}`);
+    const finalVal = templateVal.replace(/<#\d+>|\{#[^}]+\}/, mention);
     setFields([
       ...fields,
       {
@@ -632,22 +637,25 @@ function EmbedBuilderContent() {
         inline: true,
       },
     ]);
-    addToast("success", `Added "${title}" linking to #${chName}`);
+    addToast("success", `Added "${title}" pinging #${chName}`);
   }
 
-  function linkChannelToField(index: number, chName: string) {
-    if (!chName) return;
+  function linkChannelToField(index: number, chIdentifier: string) {
+    if (!chIdentifier) return;
     const current = fields[index];
     if (!current) return;
 
-    const tag = `{#${chName}}`;
+    const ch = channels.find((c) => c.id === chIdentifier || c.name.toLowerCase() === chIdentifier.toLowerCase());
+    const chName = ch ? ch.name : chIdentifier;
+    const mention = ch ? `<#${ch.id}>` : `{#${chIdentifier}}`;
+
     let newValue = current.value;
-    if (/\{#[^}]+\}/.test(newValue)) {
-      newValue = newValue.replace(/\{#[^}]+\}/g, tag);
+    if (/<#\d+>|\{#[^}]+\}/.test(newValue)) {
+      newValue = newValue.replace(/<#\d+>|\{#[^}]+\}/g, mention);
     } else if (!newValue.trim() || newValue === "Field content") {
-      newValue = `Visit ${tag}`;
+      newValue = `Visit ${mention}`;
     } else {
-      newValue = `${newValue} (Visit ${tag})`;
+      newValue = `${newValue} (Visit ${mention})`;
     }
 
     let newName = current.name;
@@ -663,7 +671,7 @@ function EmbedBuilderContent() {
     const updated = [...fields];
     updated[index] = { ...updated[index], name: newName, value: newValue };
     setFields(updated);
-    addToast("success", `Linked #${chName} to Field #${index + 1}`);
+    addToast("success", `Linked #${chName} (ping) to Field #${index + 1}`);
   }
 
   function updateField(index: number, key: keyof EmbedField, val: any) {
@@ -903,6 +911,12 @@ function EmbedBuilderContent() {
       .replace(/{event\.name}/g, "Community Hangout")
       .replace(/{event\.date}/g, "Saturday @ 8:00 PM EST")
       .replace(/{event\.location}/g, "Stage Channel");
+
+    // Replace native channel mentions <#123456> with #channel-name
+    res = res.replace(/<#(\d+)>/g, (match, id) => {
+      const ch = channels.find((c) => c.id === id);
+      return ch ? `#${ch.name}` : match;
+    });
 
     // Replace channel mention tags {#channel-name} with #channel-name
     res = res.replace(/\{#([a-zA-Z0-9_\-]+)\}/g, "#$1");
@@ -1547,7 +1561,7 @@ function EmbedBuilderContent() {
                                 key={c.id}
                                 type="button"
                                 onClick={() => {
-                                  insertIntoDescription(`{#${c.name}}`);
+                                  insertIntoDescription(`<#${c.id}>`);
                                   setShowChannelDropdown(false);
                                 }}
                                 className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left text-xs text-zinc-200 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
@@ -1784,9 +1798,9 @@ function EmbedBuilderContent() {
                       <button
                         key={c.id}
                         type="button"
-                        onClick={() => insertIntoDescription(`{#${c.name}}`)}
+                        onClick={() => insertIntoDescription(`<#${c.id}>`)}
                         className="text-[10px] px-2 py-0.5 rounded-md bg-discord-dark hover:bg-indigo-600/30 hover:text-indigo-200 text-zinc-300 border border-white/5 transition cursor-pointer font-medium"
-                        title={`Insert {#${c.name}}`}
+                        title={`Mention #${c.name}`}
                       >
                         #{c.name}
                       </button>
@@ -1893,7 +1907,7 @@ function EmbedBuilderContent() {
                                 key={c.id}
                                 type="button"
                                 onClick={() => {
-                                  addChannelField(c.name);
+                                  addChannelField(c);
                                   setShowAddChannelFieldDropdown(false);
                                   setChannelFieldSearch("");
                                 }}
@@ -1964,8 +1978,20 @@ function EmbedBuilderContent() {
               {/* Fields List */}
               <div className="space-y-3">
                 {fields.map((f, idx) => {
-                  const channelMatch = f.value.match(/\{#([a-zA-Z0-9_\-]+)\}/);
-                  const linkedChannelName = channelMatch ? channelMatch[1] : "";
+                  const idMatch = f.value.match(/<#(\d+)>/);
+                  const tagMatch = f.value.match(/\{#([a-zA-Z0-9_\-]+)\}/);
+                  let linkedChannelId = "";
+                  let linkedChannelName = "";
+
+                  if (idMatch) {
+                    linkedChannelId = idMatch[1];
+                    const found = channels.find((c) => c.id === idMatch[1]);
+                    linkedChannelName = found ? found.name : idMatch[1];
+                  } else if (tagMatch) {
+                    const found = channels.find((c) => c.name.toLowerCase() === tagMatch[1].toLowerCase());
+                    linkedChannelId = found ? found.id : "";
+                    linkedChannelName = tagMatch[1];
+                  }
 
                   return (
                     <div
@@ -2004,14 +2030,14 @@ function EmbedBuilderContent() {
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
                             <Hash className="w-3.5 h-3.5 text-purple-400" />
-                            Select Channel for this Field
+                            Select Channel for this Field (Ping)
                           </span>
                           {linkedChannelName ? (
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
-                              Linked: #{linkedChannelName}
+                              Linked Ping: #{linkedChannelName}
                             </span>
                           ) : (
-                            <span className="text-[10px] text-zinc-500">Optional channel link</span>
+                            <span className="text-[10px] text-zinc-500">Optional channel ping</span>
                           )}
                         </div>
 
@@ -2020,13 +2046,13 @@ function EmbedBuilderContent() {
                           <div className="flex-1 flex items-center gap-1.5">
                             <div className="flex-1 relative">
                               <select
-                                value={linkedChannelName}
+                                value={linkedChannelId || linkedChannelName}
                                 onChange={(e) => linkChannelToField(idx, e.target.value)}
                                 className="w-full px-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-purple-500 cursor-pointer appearance-none"
                               >
-                                <option value="">Choose channel to link to this field...</option>
+                                <option value="">Choose channel to ping in this field...</option>
                                 {textChannels.map((c) => (
-                                  <option key={c.id} value={c.name}>
+                                  <option key={c.id} value={c.id}>
                                     #{c.name} {c.type === 5 ? "(Announcement)" : ""}
                                   </option>
                                 ))}
@@ -2051,9 +2077,11 @@ function EmbedBuilderContent() {
                             <button
                               type="button"
                               onClick={() => {
-                                const targetCh = linkedChannelName || (textChannels[0]?.name ?? "general");
-                                updateField(idx, "value", `Visit {#${targetCh}}`);
-                                addToast("success", `Set Field #${idx + 1} to Visit #${targetCh}`);
+                                const ch = linkedChannelId ? channels.find((c) => c.id === linkedChannelId) : textChannels[0];
+                                const mention = ch ? `<#${ch.id}>` : (linkedChannelName ? `{#${linkedChannelName}}` : "channel");
+                                const chName = ch ? ch.name : (linkedChannelName || "channel");
+                                updateField(idx, "value", `Visit ${mention}`);
+                                addToast("success", `Set Field #${idx + 1} to Visit #${chName}`);
                               }}
                               disabled={!linkedChannelName && textChannels.length === 0}
                               className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 text-[11px] font-medium transition cursor-pointer disabled:opacity-40"
@@ -2063,11 +2091,11 @@ function EmbedBuilderContent() {
                             <button
                               type="button"
                               onClick={() => {
-                                const targetCh = linkedChannelName || (textChannels[0]?.name ?? "general");
-                                const tag = `{#${targetCh}}`;
+                                const ch = linkedChannelId ? channels.find((c) => c.id === linkedChannelId) : textChannels[0];
+                                const mention = ch ? `<#${ch.id}>` : `{#${linkedChannelName || "channel"}}`;
                                 const cur = f.value || "";
-                                updateField(idx, "value", cur ? `${cur} ${tag}` : tag);
-                                addToast("success", `Inserted ${tag}`);
+                                updateField(idx, "value", cur ? `${cur} ${mention}` : mention);
+                                addToast("success", `Inserted channel ping`);
                               }}
                               disabled={!linkedChannelName && textChannels.length === 0}
                               className="px-2.5 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 text-[11px] font-semibold transition cursor-pointer disabled:opacity-40"
@@ -2085,9 +2113,9 @@ function EmbedBuilderContent() {
                               <button
                                 key={c.id}
                                 type="button"
-                                onClick={() => linkChannelToField(idx, c.name)}
+                                onClick={() => linkChannelToField(idx, c.id)}
                                 className={`text-[10px] px-2 py-0.5 rounded-md border transition cursor-pointer ${
-                                  linkedChannelName === c.name
+                                  linkedChannelId === c.id || linkedChannelName === c.name
                                     ? "bg-purple-600 text-white border-purple-500"
                                     : "bg-discord-dark hover:bg-purple-600/30 hover:text-white text-zinc-400 border-white/5"
                                 }`}
