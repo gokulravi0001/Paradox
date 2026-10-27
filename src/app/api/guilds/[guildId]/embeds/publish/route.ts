@@ -53,6 +53,12 @@ export async function POST(
       ? `https://cdn.discordapp.com/avatars/${auth.context!.user.id}/${auth.context!.user.avatar}.png?size=256`
       : "https://cdn.discordapp.com/embed/avatars/0.png";
 
+    const targetGuild = auth.context!.guild;
+    const serverName = targetGuild?.name || "Discord Server";
+    const serverIconUrl = targetGuild?.icon
+      ? `https://cdn.discordapp.com/icons/${targetGuild.id}/${targetGuild.icon}.png?size=256`
+      : "https://cdn.discordapp.com/embed/avatars/0.png";
+
     const resolveTags = (str?: string | null): string | undefined => {
       if (!str) return undefined;
       return str
@@ -61,8 +67,8 @@ export async function POST(
         .replace(/{user\.avatar}/g, userAvatarUrl)
         .replace(/{user\.pfp}/g, userAvatarUrl)
         .replace(/{user\.id}/g, auth.context!.user.id)
-        .replace(/{server\.name}/g, "Discord Server")
-        .replace(/{server\.icon}/g, "https://cdn.discordapp.com/embed/avatars/0.png");
+        .replace(/{server\.name}/g, serverName)
+        .replace(/{server\.icon}/g, serverIconUrl);
     };
 
     const resolvedEmbed = {

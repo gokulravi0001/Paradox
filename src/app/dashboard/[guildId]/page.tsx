@@ -271,6 +271,110 @@ export default function GuildOverviewPage() {
         </div>
       </div>
 
+      {/* Primary Studio Builders: Reaction Roles & Embed Hub */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Reaction Roles Studio Card */}
+        <div className="p-6 rounded-3xl bg-gradient-to-br from-[#181a24] to-[#12141c] border border-indigo-500/20 hover:border-indigo-500/40 transition shadow-xl space-y-4 relative overflow-hidden group">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                <Smile className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-white">Reaction Roles Studio</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    5-Step Wizard
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400">
+                  Build auto-swapping roles, interactive buttons, and dropdown menus.
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href={`/dashboard/${guildId}/reaction-roles`}
+              className="px-4 py-2 rounded-xl bg-discord-blurple hover:bg-discord-blurple/90 text-white font-bold text-xs shadow-md shadow-discord-blurple/25 transition flex items-center gap-1.5 flex-shrink-0"
+            >
+              <span>Open Studio</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            <span className="text-[11px] px-2.5 py-1 rounded-lg bg-discord-dark border border-white/5 text-zinc-300 flex items-center gap-1">
+              📍 Step 1: Channel
+            </span>
+            <span className="text-[11px] px-2.5 py-1 rounded-lg bg-discord-dark border border-white/5 text-zinc-300 flex items-center gap-1">
+              🔘 Step 2: Buttons / Menus
+            </span>
+            <span className="text-[11px] px-2.5 py-1 rounded-lg bg-discord-dark border border-white/5 text-zinc-300 flex items-center gap-1">
+              👑 Step 3: Unique / Multi-Choice
+            </span>
+            <span className="text-[11px] px-2.5 py-1 rounded-lg bg-discord-dark border border-white/5 text-zinc-300 flex items-center gap-1">
+              🎭 Max 25 Roles
+            </span>
+          </div>
+        </div>
+
+        {/* Visual Embeds Studio Card with Embed Type Launchers */}
+        <div className="p-6 rounded-3xl bg-gradient-to-br from-[#1e172a] to-[#12141c] border border-purple-500/20 hover:border-purple-500/40 transition shadow-xl space-y-4 relative overflow-hidden group">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                <Palette className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-white">Visual Embeds Studio</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    Live Simulator
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400">
+                  Craft rich Discord embeds with avatar/server PFP bars and tag tools.
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href={`/dashboard/${guildId}/embeds`}
+              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/25 transition flex items-center gap-1.5 flex-shrink-0"
+            >
+              <span>Open Studio</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {/* Direct Embed Type Options */}
+          <div className="space-y-1.5 pt-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block">
+              Launch With Tailored Embed Type:
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { label: "👋 Welcome", type: "welcome", color: "hover:border-indigo-500/50 hover:text-indigo-300" },
+                { label: "👋 Goodbye", type: "goodbye", color: "hover:border-rose-500/50 hover:text-rose-300" },
+                { label: "📢 Announcement", type: "announcement", color: "hover:border-amber-500/50 hover:text-amber-300" },
+                { label: "📜 Rules", type: "rules", color: "hover:border-emerald-500/50 hover:text-emerald-300" },
+                { label: "📅 Event", type: "event", color: "hover:border-cyan-500/50 hover:text-cyan-300" },
+                { label: "🎁 Giveaway", type: "giveaway", color: "hover:border-pink-500/50 hover:text-pink-300" },
+                { label: "🛡️ Verify / Roles", type: "verify", color: "hover:border-purple-500/50 hover:text-purple-300" },
+              ].map((opt) => (
+                <Link
+                  key={opt.type}
+                  href={`/dashboard/${guildId}/embeds?type=${opt.type}`}
+                  className={`text-xs px-2.5 py-1 rounded-lg bg-discord-dark border border-white/10 text-zinc-300 transition ${opt.color}`}
+                >
+                  {opt.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Quick Actions Bar */}
       <div className="space-y-3">
         <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
