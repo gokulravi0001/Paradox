@@ -61,7 +61,7 @@ export async function POST(
 
     const resolveTags = (str?: string | null): string | undefined => {
       if (!str) return undefined;
-      return str
+      let s = str
         .replace(/{user\.mention}/g, `<@${auth.context!.user.id}>`)
         .replace(/{user\.name}/g, auth.context!.user.username)
         .replace(/{user\.avatar}/g, userAvatarUrl)
@@ -69,6 +69,15 @@ export async function POST(
         .replace(/{user\.id}/g, auth.context!.user.id)
         .replace(/{server\.name}/g, serverName)
         .replace(/{server\.icon}/g, serverIconUrl);
+
+      // Resolve channel name tags like {#rules} to Discord's native <#channelId>
+      for (const ch of channels) {
+        const escaped = ch.name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+        const regex = new RegExp(`\\{#[ ]*${escaped}[ ]*\\}`, "gi");
+        s = s.replace(regex, `<#${ch.id}>`);
+      }
+
+      return s;
     };
 
     const resolvedEmbed = {

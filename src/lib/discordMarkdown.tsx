@@ -29,7 +29,8 @@ function formatInline(text: string): React.ReactNode[] {
   // ~~strike~~
   // *italic*
   // _italic_
-  const tokenRegex = /(\[.*?\]\(https?:\/\/[^\s)]+\)|`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_)/g;
+  // #channel or <#123> or @user or <@123>
+  const tokenRegex = /(\[.*?\]\(https?:\/\/[^\s)]+\)|`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_|#[a-zA-Z0-9_\-]+|<#[0-9]+>|@[a-zA-Z0-9_\-]+|<@[0-9]+>)/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -98,6 +99,21 @@ function formatInline(text: string): React.ReactNode[] {
         <em key={key++} className="italic text-[#dbdee1]">
           {token.slice(1, -1)}
         </em>
+      );
+    } else if (
+      token.startsWith("#") ||
+      token.startsWith("<#") ||
+      token.startsWith("@") ||
+      token.startsWith("<@")
+    ) {
+      const cleanLabel = token.replace(/[<>]/g, "");
+      parts.push(
+        <span
+          key={key++}
+          className="px-1.5 py-0.5 rounded bg-[#5865F2]/20 hover:bg-[#5865F2]/30 text-[#c9cdfb] font-semibold text-[11px] transition inline-block select-none cursor-pointer"
+        >
+          {cleanLabel}
+        </span>
       );
     } else {
       parts.push(token);

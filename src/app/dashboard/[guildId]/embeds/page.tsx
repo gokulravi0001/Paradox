@@ -399,6 +399,10 @@ function EmbedBuilderContent() {
   const [roleSearch, setRoleSearch] = useState("");
   const [showTagDropdown, setShowTagDropdown] = useState(false);
 
+  // Add Channel Field State
+  const [showAddChannelFieldDropdown, setShowAddChannelFieldDropdown] = useState(false);
+  const [channelFieldSearch, setChannelFieldSearch] = useState("");
+
   // Ref to description textarea for precise cursor insertion
   const descTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -577,14 +581,89 @@ function EmbedBuilderContent() {
   }
 
   // -------------------------------------------------------------
-  // Field Management
+  // Field Management & Channel Selectors
   // -------------------------------------------------------------
+  const textChannels = channels.filter(
+    (c) => c.type === 0 || c.type === 5 || c.type === undefined
+  );
+
   function addField() {
     if (fields.length >= DISCORD_LIMITS.FIELDS_MAX) {
       addToast("warning", `Maximum ${DISCORD_LIMITS.FIELDS_MAX} fields allowed by Discord.`);
       return;
     }
     setFields([...fields, { name: "New Field", value: "Field content", inline: true }]);
+  }
+
+  function addChannelField(chName: string) {
+    if (fields.length >= DISCORD_LIMITS.FIELDS_MAX) {
+      addToast("warning", `Maximum ${DISCORD_LIMITS.FIELDS_MAX} fields allowed.`);
+      return;
+    }
+    const isRule = chName.includes("rule");
+    const isRole = chName.includes("role");
+    const isAnnounce = chName.includes("announc");
+    const isChat = chName.includes("chat") || chName.includes("general");
+    const icon = isRule ? "📜" : isRole ? "🎭" : isAnnounce ? "📢" : isChat ? "💬" : "🔗";
+    const newField: EmbedField = {
+      name: `${icon} #${chName}`,
+      value: `Visit {#${chName}}`,
+      inline: true,
+    };
+    setFields([...fields, newField]);
+    addToast("success", `Added field for #${chName}`);
+  }
+
+  function addQuickWelcomeField(fallbackKeyword: string, title: string, templateVal: string) {
+    if (fields.length >= DISCORD_LIMITS.FIELDS_MAX) {
+      addToast("warning", `Maximum ${DISCORD_LIMITS.FIELDS_MAX} fields allowed.`);
+      return;
+    }
+    const matched = channels.find((c) =>
+      c.name.toLowerCase().includes(fallbackKeyword.toLowerCase())
+    );
+    const chName = matched ? matched.name : fallbackKeyword;
+    const finalVal = templateVal.replace(/\{#[^}]+\}/, `{#${chName}}`);
+    setFields([
+      ...fields,
+      {
+        name: title,
+        value: finalVal,
+        inline: true,
+      },
+    ]);
+    addToast("success", `Added "${title}" linking to #${chName}`);
+  }
+
+  function linkChannelToField(index: number, chName: string) {
+    if (!chName) return;
+    const current = fields[index];
+    if (!current) return;
+
+    const tag = `{#${chName}}`;
+    let newValue = current.value;
+    if (/\{#[^}]+\}/.test(newValue)) {
+      newValue = newValue.replace(/\{#[^}]+\}/g, tag);
+    } else if (!newValue.trim() || newValue === "Field content") {
+      newValue = `Visit ${tag}`;
+    } else {
+      newValue = `${newValue} (Visit ${tag})`;
+    }
+
+    let newName = current.name;
+    if (!newName.trim() || newName === "New Field") {
+      const isRule = chName.includes("rule");
+      const isRole = chName.includes("role");
+      const isAnnounce = chName.includes("announc");
+      const isChat = chName.includes("chat") || chName.includes("general");
+      const icon = isRule ? "📜" : isRole ? "🎭" : isAnnounce ? "📢" : isChat ? "💬" : "🔗";
+      newName = `${icon} #${chName}`;
+    }
+
+    const updated = [...fields];
+    updated[index] = { ...updated[index], name: newName, value: newValue };
+    setFields(updated);
+    addToast("success", `Linked #${chName} to Field #${index + 1}`);
   }
 
   function updateField(index: number, key: keyof EmbedField, val: any) {
@@ -813,7 +892,7 @@ function EmbedBuilderContent() {
 
   function resolvePreviewText(text?: string | null) {
     if (!text) return "";
-    return text
+    let res = text
       .replace(/{user\.name}/g, "Alex")
       .replace(/{user\.mention}/g, "@Alex")
       .replace(/{user\.id}/g, "1547837282109624462")
@@ -824,6 +903,10 @@ function EmbedBuilderContent() {
       .replace(/{event\.name}/g, "Community Hangout")
       .replace(/{event\.date}/g, "Saturday @ 8:00 PM EST")
       .replace(/{event\.location}/g, "Stage Channel");
+
+    // Replace channel mention tags {#channel-name} with #channel-name
+    res = res.replace(/\{#([a-zA-Z0-9_\-]+)\}/g, "#$1");
+    return res;
   }
 
   const totalCharacters =
@@ -1676,62 +1759,293 @@ function EmbedBuilderContent() {
 
             {/* Fields Section (Inline / Stacked) */}
             <div className="space-y-3 pt-3 border-t border-white/5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-                  Embed Fields ({fields.length}/{DISCORD_LIMITS.FIELDS_MAX})
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                  <span>Embed Fields ({fields.length}/{DISCORD_LIMITS.FIELDS_MAX})</span>
+                  {selectedCategory === "welcome" && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
+                      Welcome Channels
+                    </span>
+                  )}
                 </label>
-                <button
-                  type="button"
-                  onClick={addField}
-                  disabled={fields.length >= DISCORD_LIMITS.FIELDS_MAX}
-                  className="text-xs px-3 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-40"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Field
-                </button>
+
+                <div className="flex items-center gap-2 relative">
+                  {/* Standard Add Field */}
+                  <button
+                    type="button"
+                    onClick={addField}
+                    disabled={fields.length >= DISCORD_LIMITS.FIELDS_MAX}
+                    className="text-xs px-3 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-40"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Field</span>
+                  </button>
+
+                  {/* Add Channel Field with Searchable Dropdown */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddChannelFieldDropdown(!showAddChannelFieldDropdown)}
+                      disabled={fields.length >= DISCORD_LIMITS.FIELDS_MAX}
+                      className="text-xs px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 font-bold border border-indigo-500/30 transition flex items-center gap-1 cursor-pointer disabled:opacity-40"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <Hash className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Add Channel Field</span>
+                      <ChevronDown className="w-3 h-3 text-indigo-300 ml-0.5" />
+                    </button>
+
+                    {showAddChannelFieldDropdown && (
+                      <div className="absolute right-0 mt-2 w-72 p-3 rounded-2xl bg-[#1e1f22] border border-white/15 shadow-2xl z-50 space-y-2 animate-in fade-in duration-100">
+                        <div className="flex items-center justify-between px-1 border-b border-white/10 pb-2">
+                          <span className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                            <Hash className="w-3.5 h-3.5 text-indigo-400" />
+                            Select Channel for Field
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddChannelFieldDropdown(false)}
+                            className="text-zinc-500 hover:text-white"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={channelFieldSearch}
+                            onChange={(e) => setChannelFieldSearch(e.target.value)}
+                            placeholder="Search server channels..."
+                            className="w-full pl-8 pr-2 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+
+                        <div className="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                          {textChannels
+                            .filter(
+                              (c) =>
+                                !channelFieldSearch.trim() ||
+                                c.name.toLowerCase().includes(channelFieldSearch.toLowerCase())
+                            )
+                            .map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => {
+                                  addChannelField(c.name);
+                                  setShowAddChannelFieldDropdown(false);
+                                  setChannelFieldSearch("");
+                                }}
+                                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-indigo-600/30 hover:text-indigo-200 text-zinc-300 text-xs transition cursor-pointer text-left"
+                              >
+                                <Hash className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                                <span className="truncate flex-1 font-medium">#{c.name}</span>
+                                {c.type === 5 && (
+                                  <span className="text-[10px] text-zinc-500 flex-shrink-0">Announce</span>
+                                )}
+                              </button>
+                            ))}
+                          {textChannels.length === 0 && (
+                            <p className="text-xs text-zinc-500 text-center py-2">No channels found</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-3">
-                {fields.map((f, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3.5 rounded-2xl bg-discord-dark/70 border border-white/10 space-y-2.5"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <input
-                        type="text"
-                        value={f.name}
-                        onChange={(e) => updateField(idx, "name", e.target.value.slice(0, 256))}
-                        placeholder="Field Title (e.g. 📜 Rules)..."
-                        className="w-full px-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-white text-xs font-semibold focus:outline-none focus:border-purple-500"
-                      />
-                      <label className="flex items-center gap-1.5 text-xs text-zinc-400 select-none cursor-pointer flex-shrink-0">
-                        <input
-                          type="checkbox"
-                          checked={f.inline}
-                          onChange={(e) => updateField(idx, "inline", e.target.checked)}
-                          className="rounded border-zinc-700 text-purple-600 focus:ring-0"
-                        />
-                        Inline
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => removeField(idx)}
-                        className="p-1.5 text-zinc-500 hover:text-rose-400 transition cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <textarea
-                      value={f.value}
-                      onChange={(e) => updateField(idx, "value", e.target.value.slice(0, 1024))}
-                      rows={2}
-                      placeholder="Field content..."
-                      className="w-full px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-purple-500 resize-y"
-                    />
+              {/* Welcome Embed Quick Channel Field Shortcuts */}
+              {selectedCategory === "welcome" && (
+                <div className="p-3 rounded-2xl bg-indigo-950/30 border border-indigo-500/25 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                      Welcome Guide Channel Fields
+                    </span>
+                    <span className="text-[10px] text-indigo-300">
+                      1-click add guidance channels for new members
+                    </span>
                   </div>
-                ))}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => addQuickWelcomeField("rules", "📜 Read Rules", "Visit {#rules}")}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-500/30 transition flex items-center gap-1 cursor-pointer font-medium"
+                    >
+                      + 📜 Rules Channel Field
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addQuickWelcomeField("roles", "🎭 Pick Roles", "Head to {#roles}")}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 transition flex items-center gap-1 cursor-pointer font-medium"
+                    >
+                      + 🎭 Roles Channel Field
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addQuickWelcomeField("general", "💬 Say Hi", "Say hi in {#general}")}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/30 transition flex items-center gap-1 cursor-pointer font-medium"
+                    >
+                      + 💬 Chat Channel Field
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addQuickWelcomeField("announcements", "📢 Announcements", "Check {#announcements}")}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 transition flex items-center gap-1 cursor-pointer font-medium"
+                    >
+                      + 📢 Announcements Field
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Fields List */}
+              <div className="space-y-3">
+                {fields.map((f, idx) => {
+                  const channelMatch = f.value.match(/\{#([a-zA-Z0-9_\-]+)\}/);
+                  const linkedChannelName = channelMatch ? channelMatch[1] : "";
+
+                  return (
+                    <div
+                      key={idx}
+                      className="p-3.5 rounded-2xl bg-discord-dark/70 border border-white/10 space-y-3"
+                    >
+                      {/* Field Title & Inline & Delete */}
+                      <div className="flex items-center justify-between gap-2">
+                        <input
+                          type="text"
+                          value={f.name}
+                          onChange={(e) => updateField(idx, "name", e.target.value.slice(0, 256))}
+                          placeholder="Field Title (e.g. 📜 Rules)..."
+                          className="w-full px-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-white text-xs font-semibold focus:outline-none focus:border-purple-500"
+                        />
+                        <label className="flex items-center gap-1.5 text-xs text-zinc-400 select-none cursor-pointer flex-shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={f.inline}
+                            onChange={(e) => updateField(idx, "inline", e.target.checked)}
+                            className="rounded border-zinc-700 text-purple-600 focus:ring-0"
+                          />
+                          Inline
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => removeField(idx)}
+                          className="p-1.5 text-zinc-500 hover:text-rose-400 transition cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Channel Selecting Option for this Field */}
+                      <div className="p-2.5 rounded-xl bg-purple-950/20 border border-purple-500/20 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <Hash className="w-3.5 h-3.5 text-purple-400" />
+                            Select Channel for this Field
+                          </span>
+                          {linkedChannelName ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
+                              Linked: #{linkedChannelName}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-zinc-500">Optional channel link</span>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                          {/* Channel Select Dropdown */}
+                          <div className="flex-1 relative">
+                            <select
+                              value={linkedChannelName}
+                              onChange={(e) => linkChannelToField(idx, e.target.value)}
+                              className="w-full px-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-purple-500 cursor-pointer appearance-none"
+                            >
+                              <option value="">Choose channel to link to this field...</option>
+                              {textChannels.map((c) => (
+                                <option key={c.id} value={c.name}>
+                                  #{c.name} {c.type === 5 ? "(Announcement)" : ""}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </div>
+                          </div>
+
+                          {/* Quick Action Buttons */}
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const targetCh = linkedChannelName || (textChannels[0]?.name ?? "general");
+                                updateField(idx, "value", `Visit {#${targetCh}}`);
+                                addToast("success", `Set Field #${idx + 1} to Visit #${targetCh}`);
+                              }}
+                              disabled={!linkedChannelName && textChannels.length === 0}
+                              className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 text-[11px] font-medium transition cursor-pointer disabled:opacity-40"
+                            >
+                              Set "Visit #{linkedChannelName || "channel"}"
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const targetCh = linkedChannelName || (textChannels[0]?.name ?? "general");
+                                const tag = `{#${targetCh}}`;
+                                const cur = f.value || "";
+                                updateField(idx, "value", cur ? `${cur} ${tag}` : tag);
+                                addToast("success", `Inserted ${tag}`);
+                              }}
+                              disabled={!linkedChannelName && textChannels.length === 0}
+                              className="px-2.5 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 text-[11px] font-semibold transition cursor-pointer disabled:opacity-40"
+                            >
+                              Insert Mention
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Quick Channel Chips */}
+                        {textChannels.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                            <span className="text-[10px] text-zinc-500 font-medium">Quick link:</span>
+                            {textChannels.slice(0, 6).map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => linkChannelToField(idx, c.name)}
+                                className={`text-[10px] px-2 py-0.5 rounded-md border transition cursor-pointer ${
+                                  linkedChannelName === c.name
+                                    ? "bg-purple-600 text-white border-purple-500"
+                                    : "bg-discord-dark hover:bg-purple-600/30 hover:text-white text-zinc-400 border-white/5"
+                                }`}
+                              >
+                                #{c.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Field Content textarea */}
+                      <div className="space-y-1">
+                        <textarea
+                          value={f.value}
+                          onChange={(e) => updateField(idx, "value", e.target.value.slice(0, 1024))}
+                          rows={2}
+                          placeholder="Field content (e.g. Visit {#rules-and-info} to get started)..."
+                          className="w-full px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-purple-500 resize-y"
+                        />
+                        <div className="flex items-center justify-between text-[11px] text-zinc-500 px-1">
+                          <span>Supports Discord markdown and channel mentions like {'{#'}channel{'}'}</span>
+                          <span>{f.value.length}/1024</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
