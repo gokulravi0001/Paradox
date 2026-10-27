@@ -176,6 +176,7 @@ export async function POST(
       const resolvedImg = resolveTags(embed.imageUrl);
       const resolvedAuthorIcon = resolveTags(embed.authorIconUrl);
       const resolvedAuthorName = resolveTags(embed.authorName);
+      const resolvedFooterIcon = resolveTags(embed.footerIconUrl);
 
       embedPayload = {
         title: resolveTags(embed.title),
@@ -189,7 +190,13 @@ export async function POST(
           : undefined,
         image: resolvedImg ? { url: resolvedImg } : undefined,
         thumbnail: resolvedThumb ? { url: resolvedThumb } : undefined,
-        footer: embed.footerText ? { text: resolveTags(embed.footerText) || "" } : undefined,
+        footer: embed.footerText
+          ? {
+              text: resolveTags(embed.footerText) || "",
+              icon_url: resolvedFooterIcon || undefined,
+            }
+          : undefined,
+        timestamp: embed.timestamp ? new Date().toISOString() : undefined,
         fields: embed.fields?.map((f: { name: string; value: string; inline?: boolean }) => ({
           name: resolveTags(f.name) || f.name,
           value: resolveTags(f.value) || f.value,

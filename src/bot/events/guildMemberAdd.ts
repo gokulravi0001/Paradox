@@ -113,21 +113,30 @@ export async function onGuildMemberAdd(member: GuildMember) {
             }
 
             if (raw.footerText) {
-              embed.setFooter({ text: replaceTags(raw.footerText) });
+              embed.setFooter({
+                text: replaceTags(raw.footerText),
+                iconURL: raw.footerIconUrl ? replaceTags(raw.footerIconUrl) : undefined,
+              });
             }
 
             // Embed Fields (Rules, Roles, Chat channel pings, etc.)
             if (raw.fields && Array.isArray(raw.fields) && raw.fields.length > 0) {
-              embed.addFields(
-                raw.fields.map((f: { name: string; value: string; inline?: boolean }) => ({
-                  name: replaceTags(f.name) || f.name,
-                  value: replaceTags(f.value) || f.value,
+              const validFields = raw.fields
+                .map((f: { name: string; value: string; inline?: boolean }) => ({
+                  name: (replaceTags(f.name) || f.name || "Field").slice(0, 256),
+                  value: (replaceTags(f.value) || f.value || "—").slice(0, 1024),
                   inline: Boolean(f.inline),
                 }))
-              );
+                .filter((f: { name: string; value: string }) => f.name.trim().length > 0 && f.value.trim().length > 0);
+
+              if (validFields.length > 0) {
+                embed.addFields(validFields);
+              }
             }
 
-            embed.setTimestamp();
+            if (raw.timestamp) {
+              embed.setTimestamp();
+            }
           } catch (err) {
             console.error("[Bot:Welcome] Error parsing welcome embed:", err);
           }
