@@ -54,7 +54,7 @@ export async function POST(
       );
     }
 
-    const { channelId, title, description, color, bannerUrl, type, mode = "TOGGLE", showRoleFields = true, roles } = validated.data;
+    const { channelId, messageId: existingMessageId, title, description, color, bannerUrl, type, mode = "TOGGLE", showRoleFields = true, roles } = validated.data;
 
     // 0. Resolve channel: accept channel name (with or without #) or numeric ID
     let resolvedChannelId = channelId.trim().replace(/^#/, "");
@@ -227,16 +227,21 @@ export async function POST(
       });
     }
 
-    // 4. Send Message to Channel via Discord API
+    // 4. Send or Edit Message in Channel via Discord API
+    const isEditing = Boolean(existingMessageId && existingMessageId.trim());
+    let targetMessageId = isEditing ? existingMessageId!.trim() : "";
+
     const postPayload: Record<string, unknown> = {
       embeds: [embedPayload],
+      components: components.length > 0 ? components : [],
     };
-    if (components.length > 0) {
-      postPayload.components = components;
-    }
 
-    const discordRes = await fetch(`${DISCORD_API_ENDPOINT}/channels/${resolvedChannelId}/messages`, {
-      method: "POST",
+    const discordUrl = isEditing
+      ? `${DISCORD_API_ENDPOINT}/channels/${resolvedChannelId}/messages/${targetMessageId}`
+      : `${DISCORD_API_ENDPOINT}/channels/${resolvedChannelId}/messages`;
+
+    const discordRes = await fetch(discordUrl, {
+      method: isEditing ? "PATCH" : "POST",
       headers: {
         Authorization: `Bot ${botToken}`,
         "Content-Type": "application/json",
@@ -248,8 +253,12 @@ export async function POST(
       const errJson = await discordRes.json().catch(() => ({}));
       let friendlyError = errJson.message || `Discord API error: ${discordRes.statusText}`;
 
-      if (errJson.code === 50013 || errJson.message?.includes("Missing Permissions")) {
-        friendlyError = `Missing Permissions: Paradox cannot post in this channel. In Discord, right-click the channel -> Edit Channel -> Permissions -> Add Paradox (or bot role) and turn ON 'View Channel', 'Send Messages', and 'Embed Links'.`;
+      if (errJson.code === 10008) {
+        friendlyError = `Unknown Message: The message ID '${targetMessageId}' was not found in #${resolvedChannelId} or has been deleted.`;
+      } else if (errJson.code === 50005) {
+        friendlyError = `Cannot Edit Message: Paradox can only edit messages originally posted by Paradox.`;
+      } else if (errJson.code === 50013 || errJson.message?.includes("Missing Permissions")) {
+        friendlyError = `Missing Permissions: Paradox cannot post or edit in this channel. In Discord, right-click the channel -> Edit Channel -> Permissions -> Add Paradox (or bot role) and turn ON 'View Channel', 'Send Messages', and 'Embed Links'.`;
       } else if (errJson.code === 50001) {
         friendlyError = `Missing Access: Paradox cannot access this channel. Please grant Paradox permission to view this channel.`;
       }
@@ -263,8 +272,19 @@ export async function POST(
       );
     }
 
-    const createdMsg = await discordRes.json();
-    const messageId = createdMsg.id;
+    if (isEditing) {
+      await prisma.reactionRole.deleteMany({
+        where: {
+          guildId,
+          messageId: targetMessageId,
+        },
+      });
+    } else {
+      const createdMsg = await discordRes.json();
+      targetMessageId = createdMsg.id;
+    }
+
+    const messageId = targetMessageId;
 
     // 5. If Mode is REACTION, add reactions sequentially
     if (type === "REACTION") {
@@ -311,14 +331,15 @@ export async function POST(
       data: {
         guildId,
         userId: auth.context!.user.id,
-        action: "DEPLOY_VISUAL_ROLE_DECK",
+        action: isEditing ? "EDIT_VISUAL_ROLE_DECK" : "DEPLOY_VISUAL_ROLE_DECK",
         details: JSON.stringify({
-          channelId,
+          channelId: resolvedChannelId,
           messageId,
           type,
           mode: mode || "TOGGLE",
           roleCount: roles.length,
           title,
+          isEditing,
         }),
       },
     });
@@ -326,8 +347,9 @@ export async function POST(
     return NextResponse.json({
       success: true,
       messageId,
-      channelId,
+      channelId: resolvedChannelId,
       roleCount: roles.length,
+      isEditing,
     });
   } catch (err: unknown) {
     console.error("[API:VisualRoleDeck:Deploy] Error:", err);

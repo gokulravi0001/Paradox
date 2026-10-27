@@ -188,6 +188,7 @@ export const ReactionRoleSchema = z.object({
 
 export const VisualRoleDeckDeploySchema = z.object({
   channelId: z.string().min(1, "Target channel is required"),
+  messageId: z.string().optional().nullable(),
   title: z.string().min(1, "Panel title is required").max(256),
   description: z.string().max(4096).optional().nullable(),
   color: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Invalid hex color").default("#5865F2"),
