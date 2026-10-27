@@ -381,6 +381,12 @@ function EmbedBuilderContent() {
   // Message Content Outside Embed (e.g. @everyone pings)
   const [outsideContent, setOutsideContent] = useState("");
 
+  // Welcome Embed Specific Channel States
+  const [autoWelcomeEnabled, setAutoWelcomeEnabled] = useState(true);
+  const [welcomeRulesChannelId, setWelcomeRulesChannelId] = useState("");
+  const [welcomeRolesChannelId, setWelcomeRolesChannelId] = useState("");
+  const [welcomeChatChannelId, setWelcomeChatChannelId] = useState("");
+
   // Edit Existing Message State
   const [publishMode, setPublishMode] = useState<"new" | "edit">("new");
   const [editMessageId, setEditMessageId] = useState("");
@@ -417,22 +423,25 @@ function EmbedBuilderContent() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }
 
-  // Load server channels, roles, and saved templates
+  // Load server channels, roles, saved templates, and welcome config
   async function loadData() {
     try {
       setRefreshing(true);
-      const [cRes, rRes, tRes] = await Promise.all([
+      const [cRes, rRes, tRes, wRes] = await Promise.all([
         fetch(`/api/guilds/${guildId}/channels`),
         fetch(`/api/guilds/${guildId}/roles`),
         fetch(`/api/guilds/${guildId}/embeds`),
+        fetch(`/api/guilds/${guildId}/welcome`),
       ]);
 
+      let loadedChannels: DiscordChannelItem[] = [];
       if (cRes.ok) {
         const cJson = await cRes.json();
-        setChannels(cJson.channels || []);
-        if (cJson.channels?.length > 0 && !selectedChannelId) {
-          setSelectedChannelId(cJson.channels[0].id);
-          setSelectedChannelName(cJson.channels[0].name);
+        loadedChannels = cJson.channels || [];
+        setChannels(loadedChannels);
+        if (loadedChannels.length > 0 && !selectedChannelId) {
+          setSelectedChannelId(loadedChannels[0].id);
+          setSelectedChannelName(loadedChannels[0].name);
         }
       }
       if (rRes.ok) {
@@ -443,12 +452,69 @@ function EmbedBuilderContent() {
         const tJson = await tRes.json();
         setTemplates(tJson.embeds || []);
       }
+      if (wRes.ok) {
+        const wJson = await wRes.json();
+        if (wJson.config?.welcomeChannelId) {
+          if (selectedCategory === "welcome" || initialType === "welcome") {
+            setSelectedChannelId(wJson.config.welcomeChannelId);
+            const match = loadedChannels.find((c) => c.id === wJson.config.welcomeChannelId);
+            if (match) setSelectedChannelName(match.name);
+          }
+        }
+        if (wJson.config?.welcomeEnabled !== undefined) {
+          setAutoWelcomeEnabled(wJson.config.welcomeEnabled);
+        }
+      }
     } catch (err) {
       console.error(err);
       addToast("error", "Failed to fetch server data.");
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  }
+
+  // Helper: auto-replaces referenced channels in Welcome description and fields
+  function handleSelectMentionedChannel(type: "rules" | "roles" | "chat", chId: string, chName: string) {
+    if (type === "rules") {
+      setWelcomeRulesChannelId(chId);
+      setDescription((prev) =>
+        prev.replace(/\{#rules[^}]*\}|\{#rules-and-info\}/g, `{#${chName}}`)
+      );
+      setFields((prev) =>
+        prev.map((f) =>
+          f.name.toLowerCase().includes("rule")
+            ? { ...f, value: `Visit {#${chName}}` }
+            : f
+        )
+      );
+      addToast("success", `Connected rules channel: #${chName}`);
+    } else if (type === "roles") {
+      setWelcomeRolesChannelId(chId);
+      setDescription((prev) =>
+        prev.replace(/\{#roles[^}]*\}/g, `{#${chName}}`)
+      );
+      setFields((prev) =>
+        prev.map((f) =>
+          f.name.toLowerCase().includes("role")
+            ? { ...f, value: `Head to {#${chName}}` }
+            : f
+        )
+      );
+      addToast("success", `Connected reaction roles channel: #${chName}`);
+    } else if (type === "chat") {
+      setWelcomeChatChannelId(chId);
+      setDescription((prev) =>
+        prev.replace(/\{#general[^}]*\}|\{#chat[^}]*\}/g, `{#${chName}}`)
+      );
+      setFields((prev) =>
+        prev.map((f) =>
+          f.name.toLowerCase().includes("chat")
+            ? { ...f, value: `Say hi in {#${chName}}` }
+            : f
+        )
+      );
+      addToast("success", `Connected general chat channel: #${chName}`);
     }
   }
 
@@ -624,10 +690,37 @@ function EmbedBuilderContent() {
         throw new Error(json.error || "Failed to publish embed to Discord");
       }
 
+      // If Welcome category and automated welcome is enabled, also sync with bot's auto-welcome system
+      if (selectedCategory === "welcome" && autoWelcomeEnabled && selectedChannelId) {
+        await fetch(`/api/guilds/${guildId}/welcome`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            welcomeEnabled: true,
+            welcomeChannelId: selectedChannelId,
+            welcomeMessage: outsideContent || undefined,
+            welcomeEmbed: JSON.stringify({
+              title,
+              description,
+              color,
+              authorName,
+              authorIconUrl,
+              thumbnailUrl,
+              imageUrl,
+              footerText,
+              footerIconUrl,
+              fields,
+            }),
+          }),
+        }).catch(() => null);
+      }
+
       addToast(
         "success",
         publishMode === "edit"
           ? `Successfully updated message ${editMessageId} in #${selectedChannelName}!`
+          : selectedCategory === "welcome" && autoWelcomeEnabled
+          ? `Published embed to #${selectedChannelName} & activated automated welcome for new members!`
           : `Successfully published embed to #${selectedChannelName}!`
       );
     } catch (err: any) {
@@ -881,10 +974,25 @@ function EmbedBuilderContent() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                  <Send className="w-3.5 h-3.5 text-discord-blurple" /> Destination & Channel
+                  <Send className="w-3.5 h-3.5 text-discord-blurple" />
+                  {selectedCategory === "welcome"
+                    ? "🎯 Welcome Destination Channel"
+                    : selectedCategory === "goodbye"
+                    ? "👋 Goodbye / Logs Channel"
+                    : selectedCategory === "announcement"
+                    ? "📢 Announcement Channel"
+                    : selectedCategory === "rules"
+                    ? "📜 Rules Channel"
+                    : selectedCategory === "event"
+                    ? "📅 Event Channel"
+                    : selectedCategory === "giveaway"
+                    ? "🎁 Giveaway Channel"
+                    : "📍 Destination Discord Channel"}
                 </span>
                 <p className="text-xs text-zinc-400">
-                  Select which channel receives this embed or toggle Edit Mode for existing messages.
+                  {selectedCategory === "welcome"
+                    ? "Choose the Discord channel where new members will be greeted with this welcome embed (e.g. #welcome or #joins)."
+                    : "Select which channel receives this embed or toggle Edit Mode for existing messages."}
                 </p>
               </div>
 
@@ -917,12 +1025,25 @@ function EmbedBuilderContent() {
 
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
               <div className={publishMode === "edit" ? "sm:col-span-6" : "sm:col-span-12"}>
-                <label className="text-xs font-semibold text-zinc-300 mb-1 block">
-                  Target Discord Channel
+                <label className="text-xs font-semibold text-zinc-300 mb-1 flex items-center justify-between">
+                  <span>
+                    {selectedCategory === "welcome" ? "Welcome Channel" : "Target Discord Channel"}{" "}
+                    <span className="text-rose-400">*</span>
+                  </span>
+                  {selectedChannelName && (
+                    <span className="text-xs font-mono text-discord-blurple">
+                      #{selectedChannelName}
+                    </span>
+                  )}
                 </label>
                 <ChannelSelect
                   channels={channels}
                   selectedChannelId={selectedChannelId}
+                  placeholder={
+                    selectedCategory === "welcome"
+                      ? "Choose welcome channel (e.g. #welcome)..."
+                      : "Select destination channel..."
+                  }
                   onSelect={(id, name) => {
                     setSelectedChannelId(id);
                     setSelectedChannelName(name);
@@ -958,6 +1079,37 @@ function EmbedBuilderContent() {
               )}
             </div>
 
+            {/* Automated Server Welcome Toggle (when Welcome category is active) */}
+            {selectedCategory === "welcome" && (
+              <div className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/25 flex items-center justify-between gap-4 mt-2">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-white flex items-center gap-2">
+                    <span>🌟 Auto-Welcome on Member Join</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
+                      Automated
+                    </span>
+                  </span>
+                  <p className="text-xs text-zinc-300">
+                    Automatically post this welcome embed into #{selectedChannelName || "welcome"} whenever a new member joins your Discord server.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setAutoWelcomeEnabled(!autoWelcomeEnabled)}
+                  className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer p-0.5 flex-shrink-0 ${
+                    autoWelcomeEnabled ? "bg-discord-blurple" : "bg-zinc-700"
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                      autoWelcomeEnabled ? "translate-x-6" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+
             {/* Optional Outside Content (pings like @everyone) */}
             <div className="space-y-1.5 pt-2 border-t border-white/5">
               <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
@@ -973,6 +1125,61 @@ function EmbedBuilderContent() {
               />
             </div>
           </div>
+
+          {/* MENTIONED CHANNELS PICKER FOR WELCOME EMBED */}
+          {selectedCategory === "welcome" && (
+            <div className="p-6 rounded-3xl bg-discord-card border border-white/10 shadow-xl space-y-4 animate-in fade-in duration-200">
+              <div className="space-y-1">
+                <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                  <Hash className="w-3.5 h-3.5" /> Connect Channels Mentioned in Welcome Embed
+                </span>
+                <p className="text-xs text-zinc-400">
+                  Select your server channels below to automatically update the channel chips in the welcome description and fields.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Rules Channel Selector */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-zinc-300 block">
+                    📜 Rules Channel
+                  </label>
+                  <ChannelSelect
+                    channels={channels}
+                    selectedChannelId={welcomeRulesChannelId}
+                    placeholder="Pick rules channel..."
+                    onSelect={(id, name) => handleSelectMentionedChannel("rules", id, name)}
+                  />
+                </div>
+
+                {/* Roles Channel Selector */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-zinc-300 block">
+                    🎭 Reaction Roles Channel
+                  </label>
+                  <ChannelSelect
+                    channels={channels}
+                    selectedChannelId={welcomeRolesChannelId}
+                    placeholder="Pick roles channel..."
+                    onSelect={(id, name) => handleSelectMentionedChannel("roles", id, name)}
+                  />
+                </div>
+
+                {/* General Chat Channel Selector */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-zinc-300 block">
+                    💬 General Chat Channel
+                  </label>
+                  <ChannelSelect
+                    channels={channels}
+                    selectedChannelId={welcomeChatChannelId}
+                    placeholder="Pick general chat..."
+                    onSelect={(id, name) => handleSelectMentionedChannel("chat", id, name)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ========================================================================= */}
           {/* 3. DEDICATED PROFILE PICTURE (PFP) & ICON BAR */}
