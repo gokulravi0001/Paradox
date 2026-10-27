@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeGuildAdmin } from "@/lib/serverAuth";
 import { prisma } from "@/lib/prisma";
-import { postDiscordMessage } from "@/lib/discord";
+import { postDiscordMessage, fetchGuildChannels } from "@/lib/discord";
 
 export const dynamic = "force-dynamic";
 
@@ -104,9 +104,11 @@ export async function POST(
       ? `https://cdn.discordapp.com/avatars/${auth.context!.user.id}/${auth.context!.user.avatar}.png?size=256`
       : "https://cdn.discordapp.com/embed/avatars/0.png";
 
+    const channels = await fetchGuildChannels(guildId).catch(() => []);
+
     const resolveTags = (str?: string | null): string | undefined => {
       if (!str) return undefined;
-      return str
+      let s = str
         .replace(/{user\.mention}/g, `<@${auth.context!.user.id}>`)
         .replace(/{user\.name}/g, auth.context!.user.username)
         .replace(/{user\.avatar}/g, userAvatarUrl)
@@ -115,12 +117,20 @@ export async function POST(
         .replace(/{server\.name}/g, "Discord Server")
         .replace(/{server\.member_count}/g, "99")
         .replace(/{server\.icon}/g, "https://cdn.discordapp.com/embed/avatars/0.png");
+
+      for (const ch of channels) {
+        const escaped = ch.name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+        const regex = new RegExp(`\\{#[ ]*${escaped}[ ]*\\}`, "gi");
+        s = s.replace(regex, `<#${ch.id}>`);
+      }
+
+      return s;
     };
 
     const formattedContent = resolveTags(message || "{user.name} has left {server.name}. (Test Goodbye Message)");
 
     let embedPayload = undefined;
-    if (embed && (embed.title || embed.description || embed.authorName || embed.thumbnailUrl)) {
+    if (embed && (embed.title || embed.description || embed.authorName || embed.thumbnailUrl || (embed.fields && embed.fields.length > 0))) {
       const resolvedThumb = resolveTags(embed.thumbnailUrl);
       const resolvedImg = resolveTags(embed.imageUrl);
       const resolvedAuthorIcon = resolveTags(embed.authorIconUrl);
@@ -139,6 +149,11 @@ export async function POST(
         image: resolvedImg ? { url: resolvedImg } : undefined,
         thumbnail: resolvedThumb ? { url: resolvedThumb } : undefined,
         footer: embed.footerText ? { text: resolveTags(embed.footerText) || "" } : undefined,
+        fields: embed.fields?.map((f: any) => ({
+          name: resolveTags(f.name) || f.name,
+          value: resolveTags(f.value) || f.value,
+          inline: Boolean(f.inline),
+        })),
       };
     }
 

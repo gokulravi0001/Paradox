@@ -41,7 +41,7 @@ export interface DiscordPreviewProps {
 
 export function DiscordPreview({
   botName = "Paradox",
-  botAvatar = "https://cdn.discordapp.com/embed/avatars/0.png",
+  botAvatar = "/pfp.png",
   content,
   title,
   description,
@@ -78,7 +78,7 @@ export function DiscordPreview({
     if (!text) return "";
     let res = text
       .replace(/{user\.name}/g, "Alex")
-      .replace(/{user\.mention}/g, "`@Alex`")
+      .replace(/{user\.mention}/g, "@Alex")
       .replace(/{user\.avatar}/g, sampleUserPfp)
       .replace(/{user\.pfp}/g, sampleUserPfp)
       .replace(/{user\.id}/g, "1547837282109624462")
@@ -86,9 +86,12 @@ export function DiscordPreview({
       .replace(/{server\.member_count}/g, "1,248")
       .replace(/{server\.icon}/g, sampleServerIcon);
 
+    // Replace {#channel-name} with #channel-name
+    res = res.replace(/\{#([a-zA-Z0-9_\-]+)\}/g, "#$1");
+
     return res.replace(/<#(\d+)>/g, (match, id) => {
       const name = channelMap[id];
-      return name ? `\`#${name}\`` : match;
+      return name ? `#${name}` : match;
     });
   }
 
