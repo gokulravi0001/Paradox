@@ -8,10 +8,10 @@ import { prisma } from "@/lib/prisma";
 import { handleSlashCommand } from "../commands";
 
 export async function onInteractionCreate(interaction: Interaction) {
-  // 1. Handle Slash Commands
-  if (interaction.isChatInputCommand()) {
-    await handleSlashCommand(interaction).catch((err) => {
-      console.error("[Bot:SlashCommand] Error executing slash command:", err);
+  // 1. Handle Slash Commands & Context Menu Commands
+  if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand()) {
+    await handleSlashCommand(interaction as any).catch((err) => {
+      console.error("[Bot:SlashCommand] Error executing command:", err);
     });
     return;
   }

@@ -5,6 +5,13 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJS = (cb, mod) => function __require() {
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -27,9 +34,822 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// node_modules/gifenc/dist/gifenc.js
+var require_gifenc = __commonJS({
+  "node_modules/gifenc/dist/gifenc.js"(exports2) {
+    var __defProp2 = Object.defineProperty;
+    var __markAsModule = (target) => __defProp2(target, "__esModule", { value: true });
+    var __export2 = (target, all) => {
+      for (var name in all)
+        __defProp2(target, name, { get: all[name], enumerable: true });
+    };
+    __markAsModule(exports2);
+    __export2(exports2, {
+      GIFEncoder: () => GIFEncoder3,
+      applyPalette: () => applyPalette3,
+      default: () => src_default,
+      nearestColor: () => nearestColor,
+      nearestColorIndex: () => nearestColorIndex,
+      nearestColorIndexWithDistance: () => nearestColorIndexWithDistance,
+      prequantize: () => prequantize,
+      quantize: () => quantize3,
+      snapColorsToPalette: () => snapColorsToPalette
+    });
+    var constants_default = {
+      signature: "GIF",
+      version: "89a",
+      trailer: 59,
+      extensionIntroducer: 33,
+      applicationExtensionLabel: 255,
+      graphicControlExtensionLabel: 249,
+      imageSeparator: 44,
+      signatureSize: 3,
+      versionSize: 3,
+      globalColorTableFlagMask: 128,
+      colorResolutionMask: 112,
+      sortFlagMask: 8,
+      globalColorTableSizeMask: 7,
+      applicationIdentifierSize: 8,
+      applicationAuthCodeSize: 3,
+      disposalMethodMask: 28,
+      userInputFlagMask: 2,
+      transparentColorFlagMask: 1,
+      localColorTableFlagMask: 128,
+      interlaceFlagMask: 64,
+      idSortFlagMask: 32,
+      localColorTableSizeMask: 7
+    };
+    function createStream(initialCapacity = 256) {
+      let cursor = 0;
+      let contents = new Uint8Array(initialCapacity);
+      return {
+        get buffer() {
+          return contents.buffer;
+        },
+        reset() {
+          cursor = 0;
+        },
+        bytesView() {
+          return contents.subarray(0, cursor);
+        },
+        bytes() {
+          return contents.slice(0, cursor);
+        },
+        writeByte(byte) {
+          expand(cursor + 1);
+          contents[cursor] = byte;
+          cursor++;
+        },
+        writeBytes(data, offset = 0, byteLength = data.length) {
+          expand(cursor + byteLength);
+          for (let i = 0; i < byteLength; i++) {
+            contents[cursor++] = data[i + offset];
+          }
+        },
+        writeBytesView(data, offset = 0, byteLength = data.byteLength) {
+          expand(cursor + byteLength);
+          contents.set(data.subarray(offset, offset + byteLength), cursor);
+          cursor += byteLength;
+        }
+      };
+      function expand(newCapacity) {
+        var prevCapacity = contents.length;
+        if (prevCapacity >= newCapacity)
+          return;
+        var CAPACITY_DOUBLING_MAX = 1024 * 1024;
+        newCapacity = Math.max(newCapacity, prevCapacity * (prevCapacity < CAPACITY_DOUBLING_MAX ? 2 : 1.125) >>> 0);
+        if (prevCapacity != 0)
+          newCapacity = Math.max(newCapacity, 256);
+        const oldContents = contents;
+        contents = new Uint8Array(newCapacity);
+        if (cursor > 0)
+          contents.set(oldContents.subarray(0, cursor), 0);
+      }
+    }
+    var BITS = 12;
+    var DEFAULT_HSIZE = 5003;
+    var MASKS = [
+      0,
+      1,
+      3,
+      7,
+      15,
+      31,
+      63,
+      127,
+      255,
+      511,
+      1023,
+      2047,
+      4095,
+      8191,
+      16383,
+      32767,
+      65535
+    ];
+    function lzwEncode(width, height, pixels, colorDepth, outStream = createStream(512), accum = new Uint8Array(256), htab = new Int32Array(DEFAULT_HSIZE), codetab = new Int32Array(DEFAULT_HSIZE)) {
+      const hsize = htab.length;
+      const initCodeSize = Math.max(2, colorDepth);
+      accum.fill(0);
+      codetab.fill(0);
+      htab.fill(-1);
+      let cur_accum = 0;
+      let cur_bits = 0;
+      const init_bits = initCodeSize + 1;
+      const g_init_bits = init_bits;
+      let clear_flg = false;
+      let n_bits = g_init_bits;
+      let maxcode = (1 << n_bits) - 1;
+      const ClearCode = 1 << init_bits - 1;
+      const EOFCode = ClearCode + 1;
+      let free_ent = ClearCode + 2;
+      let a_count = 0;
+      let ent = pixels[0];
+      let hshift = 0;
+      for (let fcode = hsize; fcode < 65536; fcode *= 2) {
+        ++hshift;
+      }
+      hshift = 8 - hshift;
+      outStream.writeByte(initCodeSize);
+      output(ClearCode);
+      const length = pixels.length;
+      for (let idx = 1; idx < length; idx++) {
+        next_block: {
+          const c = pixels[idx];
+          const fcode = (c << BITS) + ent;
+          let i = c << hshift ^ ent;
+          if (htab[i] === fcode) {
+            ent = codetab[i];
+            break next_block;
+          }
+          const disp = i === 0 ? 1 : hsize - i;
+          while (htab[i] >= 0) {
+            i -= disp;
+            if (i < 0)
+              i += hsize;
+            if (htab[i] === fcode) {
+              ent = codetab[i];
+              break next_block;
+            }
+          }
+          output(ent);
+          ent = c;
+          if (free_ent < 1 << BITS) {
+            codetab[i] = free_ent++;
+            htab[i] = fcode;
+          } else {
+            htab.fill(-1);
+            free_ent = ClearCode + 2;
+            clear_flg = true;
+            output(ClearCode);
+          }
+        }
+      }
+      output(ent);
+      output(EOFCode);
+      outStream.writeByte(0);
+      return outStream.bytesView();
+      function output(code) {
+        cur_accum &= MASKS[cur_bits];
+        if (cur_bits > 0)
+          cur_accum |= code << cur_bits;
+        else
+          cur_accum = code;
+        cur_bits += n_bits;
+        while (cur_bits >= 8) {
+          accum[a_count++] = cur_accum & 255;
+          if (a_count >= 254) {
+            outStream.writeByte(a_count);
+            outStream.writeBytesView(accum, 0, a_count);
+            a_count = 0;
+          }
+          cur_accum >>= 8;
+          cur_bits -= 8;
+        }
+        if (free_ent > maxcode || clear_flg) {
+          if (clear_flg) {
+            n_bits = g_init_bits;
+            maxcode = (1 << n_bits) - 1;
+            clear_flg = false;
+          } else {
+            ++n_bits;
+            maxcode = n_bits === BITS ? 1 << n_bits : (1 << n_bits) - 1;
+          }
+        }
+        if (code == EOFCode) {
+          while (cur_bits > 0) {
+            accum[a_count++] = cur_accum & 255;
+            if (a_count >= 254) {
+              outStream.writeByte(a_count);
+              outStream.writeBytesView(accum, 0, a_count);
+              a_count = 0;
+            }
+            cur_accum >>= 8;
+            cur_bits -= 8;
+          }
+          if (a_count > 0) {
+            outStream.writeByte(a_count);
+            outStream.writeBytesView(accum, 0, a_count);
+            a_count = 0;
+          }
+        }
+      }
+    }
+    var lzwEncode_default = lzwEncode;
+    function rgb888_to_rgb565(r, g, b) {
+      return r << 8 & 63488 | g << 2 & 992 | b >> 3;
+    }
+    function rgba8888_to_rgba4444(r, g, b, a) {
+      return r >> 4 | g & 240 | (b & 240) << 4 | (a & 240) << 8;
+    }
+    function rgb888_to_rgb444(r, g, b) {
+      return r >> 4 << 8 | g & 240 | b >> 4;
+    }
+    function clamp(value, min, max) {
+      return value < min ? min : value > max ? max : value;
+    }
+    function sqr(value) {
+      return value * value;
+    }
+    function find_nn(bins, idx, hasAlpha) {
+      var nn = 0;
+      var err = 1e100;
+      const bin1 = bins[idx];
+      const n1 = bin1.cnt;
+      const wa = bin1.ac;
+      const wr = bin1.rc;
+      const wg = bin1.gc;
+      const wb = bin1.bc;
+      for (var i = bin1.fw; i != 0; i = bins[i].fw) {
+        const bin = bins[i];
+        const n2 = bin.cnt;
+        const nerr2 = n1 * n2 / (n1 + n2);
+        if (nerr2 >= err)
+          continue;
+        var nerr = 0;
+        if (hasAlpha) {
+          nerr += nerr2 * sqr(bin.ac - wa);
+          if (nerr >= err)
+            continue;
+        }
+        nerr += nerr2 * sqr(bin.rc - wr);
+        if (nerr >= err)
+          continue;
+        nerr += nerr2 * sqr(bin.gc - wg);
+        if (nerr >= err)
+          continue;
+        nerr += nerr2 * sqr(bin.bc - wb);
+        if (nerr >= err)
+          continue;
+        err = nerr;
+        nn = i;
+      }
+      bin1.err = err;
+      bin1.nn = nn;
+    }
+    function create_bin() {
+      return {
+        ac: 0,
+        rc: 0,
+        gc: 0,
+        bc: 0,
+        cnt: 0,
+        nn: 0,
+        fw: 0,
+        bk: 0,
+        tm: 0,
+        mtm: 0,
+        err: 0
+      };
+    }
+    function create_bin_list(data, format) {
+      const bincount = format === "rgb444" ? 4096 : 65536;
+      const bins = new Array(bincount);
+      const size = data.length;
+      if (format === "rgba4444") {
+        for (let i = 0; i < size; ++i) {
+          const color = data[i];
+          const a = color >> 24 & 255;
+          const b = color >> 16 & 255;
+          const g = color >> 8 & 255;
+          const r = color & 255;
+          const index = rgba8888_to_rgba4444(r, g, b, a);
+          let bin = index in bins ? bins[index] : bins[index] = create_bin();
+          bin.rc += r;
+          bin.gc += g;
+          bin.bc += b;
+          bin.ac += a;
+          bin.cnt++;
+        }
+      } else if (format === "rgb444") {
+        for (let i = 0; i < size; ++i) {
+          const color = data[i];
+          const b = color >> 16 & 255;
+          const g = color >> 8 & 255;
+          const r = color & 255;
+          const index = rgb888_to_rgb444(r, g, b);
+          let bin = index in bins ? bins[index] : bins[index] = create_bin();
+          bin.rc += r;
+          bin.gc += g;
+          bin.bc += b;
+          bin.cnt++;
+        }
+      } else {
+        for (let i = 0; i < size; ++i) {
+          const color = data[i];
+          const b = color >> 16 & 255;
+          const g = color >> 8 & 255;
+          const r = color & 255;
+          const index = rgb888_to_rgb565(r, g, b);
+          let bin = index in bins ? bins[index] : bins[index] = create_bin();
+          bin.rc += r;
+          bin.gc += g;
+          bin.bc += b;
+          bin.cnt++;
+        }
+      }
+      return bins;
+    }
+    function quantize3(rgba, maxColors, opts = {}) {
+      const {
+        format = "rgb565",
+        clearAlpha = true,
+        clearAlphaColor = 0,
+        clearAlphaThreshold = 0,
+        oneBitAlpha = false
+      } = opts;
+      if (!rgba || !rgba.buffer) {
+        throw new Error("quantize() expected RGBA Uint8Array data");
+      }
+      if (!(rgba instanceof Uint8Array) && !(rgba instanceof Uint8ClampedArray)) {
+        throw new Error("quantize() expected RGBA Uint8Array data");
+      }
+      const data = new Uint32Array(rgba.buffer);
+      let useSqrt = opts.useSqrt !== false;
+      const hasAlpha = format === "rgba4444";
+      const bins = create_bin_list(data, format);
+      const bincount = bins.length;
+      const bincountMinusOne = bincount - 1;
+      const heap = new Uint32Array(bincount + 1);
+      var maxbins = 0;
+      for (var i = 0; i < bincount; ++i) {
+        const bin = bins[i];
+        if (bin != null) {
+          var d = 1 / bin.cnt;
+          if (hasAlpha)
+            bin.ac *= d;
+          bin.rc *= d;
+          bin.gc *= d;
+          bin.bc *= d;
+          bins[maxbins++] = bin;
+        }
+      }
+      if (sqr(maxColors) / maxbins < 0.022) {
+        useSqrt = false;
+      }
+      var i = 0;
+      for (; i < maxbins - 1; ++i) {
+        bins[i].fw = i + 1;
+        bins[i + 1].bk = i;
+        if (useSqrt)
+          bins[i].cnt = Math.sqrt(bins[i].cnt);
+      }
+      if (useSqrt)
+        bins[i].cnt = Math.sqrt(bins[i].cnt);
+      var h, l, l2;
+      for (i = 0; i < maxbins; ++i) {
+        find_nn(bins, i, false);
+        var err = bins[i].err;
+        for (l = ++heap[0]; l > 1; l = l2) {
+          l2 = l >> 1;
+          if (bins[h = heap[l2]].err <= err)
+            break;
+          heap[l] = h;
+        }
+        heap[l] = i;
+      }
+      var extbins = maxbins - maxColors;
+      for (i = 0; i < extbins; ) {
+        var tb;
+        for (; ; ) {
+          var b1 = heap[1];
+          tb = bins[b1];
+          if (tb.tm >= tb.mtm && bins[tb.nn].mtm <= tb.tm)
+            break;
+          if (tb.mtm == bincountMinusOne)
+            b1 = heap[1] = heap[heap[0]--];
+          else {
+            find_nn(bins, b1, false);
+            tb.tm = i;
+          }
+          var err = bins[b1].err;
+          for (l = 1; (l2 = l + l) <= heap[0]; l = l2) {
+            if (l2 < heap[0] && bins[heap[l2]].err > bins[heap[l2 + 1]].err)
+              l2++;
+            if (err <= bins[h = heap[l2]].err)
+              break;
+            heap[l] = h;
+          }
+          heap[l] = b1;
+        }
+        var nb = bins[tb.nn];
+        var n1 = tb.cnt;
+        var n2 = nb.cnt;
+        var d = 1 / (n1 + n2);
+        if (hasAlpha)
+          tb.ac = d * (n1 * tb.ac + n2 * nb.ac);
+        tb.rc = d * (n1 * tb.rc + n2 * nb.rc);
+        tb.gc = d * (n1 * tb.gc + n2 * nb.gc);
+        tb.bc = d * (n1 * tb.bc + n2 * nb.bc);
+        tb.cnt += nb.cnt;
+        tb.mtm = ++i;
+        bins[nb.bk].fw = nb.fw;
+        bins[nb.fw].bk = nb.bk;
+        nb.mtm = bincountMinusOne;
+      }
+      let palette = [];
+      var k = 0;
+      for (i = 0; ; ++k) {
+        let r = clamp(Math.round(bins[i].rc), 0, 255);
+        let g = clamp(Math.round(bins[i].gc), 0, 255);
+        let b = clamp(Math.round(bins[i].bc), 0, 255);
+        let a = 255;
+        if (hasAlpha) {
+          a = clamp(Math.round(bins[i].ac), 0, 255);
+          if (oneBitAlpha) {
+            const threshold = typeof oneBitAlpha === "number" ? oneBitAlpha : 127;
+            a = a <= threshold ? 0 : 255;
+          }
+          if (clearAlpha && a <= clearAlphaThreshold) {
+            r = g = b = clearAlphaColor;
+            a = 0;
+          }
+        }
+        const color = hasAlpha ? [r, g, b, a] : [r, g, b];
+        const exists = existsInPalette(palette, color);
+        if (!exists)
+          palette.push(color);
+        if ((i = bins[i].fw) == 0)
+          break;
+      }
+      return palette;
+    }
+    function existsInPalette(palette, color) {
+      for (let i = 0; i < palette.length; i++) {
+        const p = palette[i];
+        let matchesRGB = p[0] === color[0] && p[1] === color[1] && p[2] === color[2];
+        let matchesAlpha = p.length >= 4 && color.length >= 4 ? p[3] === color[3] : true;
+        if (matchesRGB && matchesAlpha)
+          return true;
+      }
+      return false;
+    }
+    function euclideanDistanceSquared(a, b) {
+      var sum = 0;
+      var n;
+      for (n = 0; n < a.length; n++) {
+        const dx = a[n] - b[n];
+        sum += dx * dx;
+      }
+      return sum;
+    }
+    function roundStep(byte, step) {
+      return step > 1 ? Math.round(byte / step) * step : byte;
+    }
+    function prequantize(rgba, { roundRGB = 5, roundAlpha = 10, oneBitAlpha = null } = {}) {
+      const data = new Uint32Array(rgba.buffer);
+      for (let i = 0; i < data.length; i++) {
+        const color = data[i];
+        let a = color >> 24 & 255;
+        let b = color >> 16 & 255;
+        let g = color >> 8 & 255;
+        let r = color & 255;
+        a = roundStep(a, roundAlpha);
+        if (oneBitAlpha) {
+          const threshold = typeof oneBitAlpha === "number" ? oneBitAlpha : 127;
+          a = a <= threshold ? 0 : 255;
+        }
+        r = roundStep(r, roundRGB);
+        g = roundStep(g, roundRGB);
+        b = roundStep(b, roundRGB);
+        data[i] = a << 24 | b << 16 | g << 8 | r << 0;
+      }
+    }
+    function applyPalette3(rgba, palette, format = "rgb565") {
+      if (!rgba || !rgba.buffer) {
+        throw new Error("quantize() expected RGBA Uint8Array data");
+      }
+      if (!(rgba instanceof Uint8Array) && !(rgba instanceof Uint8ClampedArray)) {
+        throw new Error("quantize() expected RGBA Uint8Array data");
+      }
+      if (palette.length > 256) {
+        throw new Error("applyPalette() only works with 256 colors or less");
+      }
+      const data = new Uint32Array(rgba.buffer);
+      const length = data.length;
+      const bincount = format === "rgb444" ? 4096 : 65536;
+      const index = new Uint8Array(length);
+      const cache = new Array(bincount);
+      const hasAlpha = format === "rgba4444";
+      if (format === "rgba4444") {
+        for (let i = 0; i < length; i++) {
+          const color = data[i];
+          const a = color >> 24 & 255;
+          const b = color >> 16 & 255;
+          const g = color >> 8 & 255;
+          const r = color & 255;
+          const key = rgba8888_to_rgba4444(r, g, b, a);
+          const idx = key in cache ? cache[key] : cache[key] = nearestColorIndexRGBA(r, g, b, a, palette);
+          index[i] = idx;
+        }
+      } else {
+        const rgb888_to_key = format === "rgb444" ? rgb888_to_rgb444 : rgb888_to_rgb565;
+        for (let i = 0; i < length; i++) {
+          const color = data[i];
+          const b = color >> 16 & 255;
+          const g = color >> 8 & 255;
+          const r = color & 255;
+          const key = rgb888_to_key(r, g, b);
+          const idx = key in cache ? cache[key] : cache[key] = nearestColorIndexRGB(r, g, b, palette);
+          index[i] = idx;
+        }
+      }
+      return index;
+    }
+    function nearestColorIndexRGBA(r, g, b, a, palette) {
+      let k = 0;
+      let mindist = 1e100;
+      for (let i = 0; i < palette.length; i++) {
+        const px2 = palette[i];
+        const a2 = px2[3];
+        let curdist = sqr2(a2 - a);
+        if (curdist > mindist)
+          continue;
+        const r2 = px2[0];
+        curdist += sqr2(r2 - r);
+        if (curdist > mindist)
+          continue;
+        const g2 = px2[1];
+        curdist += sqr2(g2 - g);
+        if (curdist > mindist)
+          continue;
+        const b2 = px2[2];
+        curdist += sqr2(b2 - b);
+        if (curdist > mindist)
+          continue;
+        mindist = curdist;
+        k = i;
+      }
+      return k;
+    }
+    function nearestColorIndexRGB(r, g, b, palette) {
+      let k = 0;
+      let mindist = 1e100;
+      for (let i = 0; i < palette.length; i++) {
+        const px2 = palette[i];
+        const r2 = px2[0];
+        let curdist = sqr2(r2 - r);
+        if (curdist > mindist)
+          continue;
+        const g2 = px2[1];
+        curdist += sqr2(g2 - g);
+        if (curdist > mindist)
+          continue;
+        const b2 = px2[2];
+        curdist += sqr2(b2 - b);
+        if (curdist > mindist)
+          continue;
+        mindist = curdist;
+        k = i;
+      }
+      return k;
+    }
+    function snapColorsToPalette(palette, knownColors, threshold = 5) {
+      if (!palette.length || !knownColors.length)
+        return;
+      const paletteRGB = palette.map((p) => p.slice(0, 3));
+      const thresholdSq = threshold * threshold;
+      const dim = palette[0].length;
+      for (let i = 0; i < knownColors.length; i++) {
+        let color = knownColors[i];
+        if (color.length < dim) {
+          color = [color[0], color[1], color[2], 255];
+        } else if (color.length > dim) {
+          color = color.slice(0, 3);
+        } else {
+          color = color.slice();
+        }
+        const r = nearestColorIndexWithDistance(paletteRGB, color.slice(0, 3), euclideanDistanceSquared);
+        const idx = r[0];
+        const distanceSq = r[1];
+        if (distanceSq > 0 && distanceSq <= thresholdSq) {
+          palette[idx] = color;
+        }
+      }
+    }
+    function sqr2(a) {
+      return a * a;
+    }
+    function nearestColorIndex(colors, pixel, distanceFn = euclideanDistanceSquared) {
+      let minDist = Infinity;
+      let minDistIndex = -1;
+      for (let j = 0; j < colors.length; j++) {
+        const paletteColor = colors[j];
+        const dist = distanceFn(pixel, paletteColor);
+        if (dist < minDist) {
+          minDist = dist;
+          minDistIndex = j;
+        }
+      }
+      return minDistIndex;
+    }
+    function nearestColorIndexWithDistance(colors, pixel, distanceFn = euclideanDistanceSquared) {
+      let minDist = Infinity;
+      let minDistIndex = -1;
+      for (let j = 0; j < colors.length; j++) {
+        const paletteColor = colors[j];
+        const dist = distanceFn(pixel, paletteColor);
+        if (dist < minDist) {
+          minDist = dist;
+          minDistIndex = j;
+        }
+      }
+      return [minDistIndex, minDist];
+    }
+    function nearestColor(colors, pixel, distanceFn = euclideanDistanceSquared) {
+      return colors[nearestColorIndex(colors, pixel, distanceFn)];
+    }
+    function GIFEncoder3(opt = {}) {
+      const { initialCapacity = 4096, auto = true } = opt;
+      const stream = createStream(initialCapacity);
+      const HSIZE = 5003;
+      const accum = new Uint8Array(256);
+      const htab = new Int32Array(HSIZE);
+      const codetab = new Int32Array(HSIZE);
+      let hasInit = false;
+      return {
+        reset() {
+          stream.reset();
+          hasInit = false;
+        },
+        finish() {
+          stream.writeByte(constants_default.trailer);
+        },
+        bytes() {
+          return stream.bytes();
+        },
+        bytesView() {
+          return stream.bytesView();
+        },
+        get buffer() {
+          return stream.buffer;
+        },
+        get stream() {
+          return stream;
+        },
+        writeHeader,
+        writeFrame(index, width, height, opts = {}) {
+          const {
+            transparent = false,
+            transparentIndex = 0,
+            delay = 0,
+            palette = null,
+            repeat = 0,
+            colorDepth = 8,
+            dispose = -1
+          } = opts;
+          let first = false;
+          if (auto) {
+            if (!hasInit) {
+              first = true;
+              writeHeader();
+              hasInit = true;
+            }
+          } else {
+            first = Boolean(opts.first);
+          }
+          width = Math.max(0, Math.floor(width));
+          height = Math.max(0, Math.floor(height));
+          if (first) {
+            if (!palette) {
+              throw new Error("First frame must include a { palette } option");
+            }
+            encodeLogicalScreenDescriptor(stream, width, height, palette, colorDepth);
+            encodeColorTable(stream, palette);
+            if (repeat >= 0) {
+              encodeNetscapeExt(stream, repeat);
+            }
+          }
+          const delayTime = Math.round(delay / 10);
+          encodeGraphicControlExt(stream, dispose, delayTime, transparent, transparentIndex);
+          const useLocalColorTable = Boolean(palette) && !first;
+          encodeImageDescriptor(stream, width, height, useLocalColorTable ? palette : null);
+          if (useLocalColorTable)
+            encodeColorTable(stream, palette);
+          encodePixels(stream, index, width, height, colorDepth, accum, htab, codetab);
+        }
+      };
+      function writeHeader() {
+        writeUTFBytes(stream, "GIF89a");
+      }
+    }
+    function encodeGraphicControlExt(stream, dispose, delay, transparent, transparentIndex) {
+      stream.writeByte(33);
+      stream.writeByte(249);
+      stream.writeByte(4);
+      if (transparentIndex < 0) {
+        transparentIndex = 0;
+        transparent = false;
+      }
+      var transp, disp;
+      if (!transparent) {
+        transp = 0;
+        disp = 0;
+      } else {
+        transp = 1;
+        disp = 2;
+      }
+      if (dispose >= 0) {
+        disp = dispose & 7;
+      }
+      disp <<= 2;
+      const userInput = 0;
+      stream.writeByte(0 | disp | userInput | transp);
+      writeUInt16(stream, delay);
+      stream.writeByte(transparentIndex || 0);
+      stream.writeByte(0);
+    }
+    function encodeLogicalScreenDescriptor(stream, width, height, palette, colorDepth = 8) {
+      const globalColorTableFlag = 1;
+      const sortFlag = 0;
+      const globalColorTableSize = colorTableSize(palette.length) - 1;
+      const fields = globalColorTableFlag << 7 | colorDepth - 1 << 4 | sortFlag << 3 | globalColorTableSize;
+      const backgroundColorIndex = 0;
+      const pixelAspectRatio = 0;
+      writeUInt16(stream, width);
+      writeUInt16(stream, height);
+      stream.writeBytes([fields, backgroundColorIndex, pixelAspectRatio]);
+    }
+    function encodeNetscapeExt(stream, repeat) {
+      stream.writeByte(33);
+      stream.writeByte(255);
+      stream.writeByte(11);
+      writeUTFBytes(stream, "NETSCAPE2.0");
+      stream.writeByte(3);
+      stream.writeByte(1);
+      writeUInt16(stream, repeat);
+      stream.writeByte(0);
+    }
+    function encodeColorTable(stream, palette) {
+      const colorTableLength = 1 << colorTableSize(palette.length);
+      for (let i = 0; i < colorTableLength; i++) {
+        let color = [0, 0, 0];
+        if (i < palette.length) {
+          color = palette[i];
+        }
+        stream.writeByte(color[0]);
+        stream.writeByte(color[1]);
+        stream.writeByte(color[2]);
+      }
+    }
+    function encodeImageDescriptor(stream, width, height, localPalette) {
+      stream.writeByte(44);
+      writeUInt16(stream, 0);
+      writeUInt16(stream, 0);
+      writeUInt16(stream, width);
+      writeUInt16(stream, height);
+      if (localPalette) {
+        const interlace = 0;
+        const sorted = 0;
+        const palSize = colorTableSize(localPalette.length) - 1;
+        stream.writeByte(128 | interlace | sorted | 0 | palSize);
+      } else {
+        stream.writeByte(0);
+      }
+    }
+    function encodePixels(stream, index, width, height, colorDepth = 8, accum, htab, codetab) {
+      lzwEncode_default(width, height, index, colorDepth, stream, accum, htab, codetab);
+    }
+    function writeUInt16(stream, short) {
+      stream.writeByte(short & 255);
+      stream.writeByte(short >> 8 & 255);
+    }
+    function writeUTFBytes(stream, text) {
+      for (var i = 0; i < text.length; i++) {
+        stream.writeByte(text.charCodeAt(i));
+      }
+    }
+    function colorTableSize(length) {
+      return Math.max(Math.ceil(Math.log2(length)), 1);
+    }
+    var src_default = GIFEncoder3;
+  }
+});
+
 // src/bot/index.ts
 var index_exports = {};
 __export(index_exports, {
+  SLASH_COMMANDS_DATA: () => SLASH_COMMANDS_DATA,
   startBot: () => startBot
 });
 module.exports = __toCommonJS(index_exports);
@@ -70,6 +890,359 @@ if (process.env.NODE_ENV !== "production") {
 
 // src/bot/commands/index.ts
 var import_discord2 = require("discord.js");
+
+// src/bot/services/imageGenerator.ts
+var import_canvas = require("@napi-rs/canvas");
+var gifencModule = __toESM(require_gifenc());
+var GIFEncoder2 = gifencModule.GIFEncoder || gifencModule.default;
+var quantize2 = gifencModule.quantize;
+var applyPalette2 = gifencModule.applyPalette;
+function validateImageUrl(urlStr) {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { valid: false, reason: "Only HTTP and HTTPS image URLs are supported." };
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname === "::1" || hostname === "169.254.169.254" || // AWS/GCP/Azure instance metadata
+    hostname.endsWith(".internal") || hostname.endsWith(".local") || hostname.endsWith(".onion")) {
+      return { valid: false, reason: "Access to private or local network addresses is prohibited." };
+    }
+    const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+    const ipMatch = hostname.match(ipv4Regex);
+    if (ipMatch) {
+      const first = parseInt(ipMatch[1], 10);
+      const second = parseInt(ipMatch[2], 10);
+      if (first === 10 || first === 127 || first === 172 && second >= 16 && second <= 31 || first === 192 && second === 168 || first === 169 && second === 254) {
+        return { valid: false, reason: "Private network IP addresses are not permitted." };
+      }
+    }
+    return { valid: true };
+  } catch {
+    return { valid: false, reason: "Invalid URL format." };
+  }
+}
+async function fetchSafeImageBuffer(urlStr, maxSizeBytes = 8 * 1024 * 1024) {
+  const check = validateImageUrl(urlStr);
+  if (!check.valid) {
+    throw new Error(check.reason || "Invalid or untrusted image URL.");
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1e4);
+  try {
+    const res = await fetch(urlStr, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "AuraTamil-Bot/1.0 (+https://discord.gg)",
+        Accept: "image/png,image/jpeg,image/webp,image/gif,*/*"
+      }
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to download image (HTTP ${res.status}: ${res.statusText}).`);
+    }
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.startsWith("image/")) {
+      throw new Error(`URL did not return an image (Content-Type: ${contentType || "unknown"}).`);
+    }
+    const contentLength = parseInt(res.headers.get("content-length") || "0", 10);
+    if (contentLength > maxSizeBytes) {
+      throw new Error(`Image size exceeds the 8 MB maximum limit.`);
+    }
+    const arrayBuf = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuf);
+    if (buffer.length > maxSizeBytes) {
+      throw new Error(`Image size exceeds the 8 MB maximum limit.`);
+    }
+    return buffer;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+async function makeImageIntoGif(imageBuffer, style = "pulse") {
+  const img = await (0, import_canvas.loadImage)(imageBuffer);
+  const targetMax = 380;
+  let targetWidth = img.width;
+  let targetHeight = img.height;
+  if (targetWidth > targetMax || targetHeight > targetMax) {
+    if (targetWidth > targetHeight) {
+      targetHeight = Math.round(targetHeight / targetWidth * targetMax);
+      targetWidth = targetMax;
+    } else {
+      targetWidth = Math.round(targetWidth / targetHeight * targetMax);
+      targetHeight = targetMax;
+    }
+  }
+  targetWidth = targetWidth % 2 === 0 ? targetWidth : targetWidth + 1;
+  targetHeight = targetHeight % 2 === 0 ? targetHeight : targetHeight + 1;
+  const frameCount = 12;
+  const frameDelay = 85;
+  const gif = GIFEncoder2();
+  const canvas = (0, import_canvas.createCanvas)(targetWidth, targetHeight);
+  const ctx = canvas.getContext("2d");
+  for (let i = 0; i < frameCount; i++) {
+    const progress = i / frameCount;
+    ctx.clearRect(0, 0, targetWidth, targetHeight);
+    ctx.fillStyle = "#0c0a14";
+    ctx.fillRect(0, 0, targetWidth, targetHeight);
+    if (style === "zoom") {
+      const scale = 1 + Math.sin(progress * Math.PI) * 0.08;
+      const w = targetWidth * scale;
+      const h = targetHeight * scale;
+      const x = (targetWidth - w) / 2;
+      const y = (targetHeight - h) / 2;
+      ctx.save();
+      ctx.drawImage(img, x, y, w, h);
+      ctx.restore();
+      const grad = ctx.createRadialGradient(
+        targetWidth / 2,
+        targetHeight / 2,
+        targetWidth * 0.35,
+        targetWidth / 2,
+        targetHeight / 2,
+        targetWidth * 0.55
+      );
+      grad.addColorStop(0, "rgba(0,0,0,0)");
+      grad.addColorStop(1, "rgba(124, 58, 237, 0.45)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, targetWidth, targetHeight);
+    } else if (style === "glow" || style === "pulse") {
+      const glowIntensity = Math.sin(progress * Math.PI * 2);
+      const blur = 10 + Math.abs(glowIntensity) * 14;
+      const glowColor = glowIntensity > 0 ? "rgba(147, 51, 234, 0.75)" : "rgba(239, 68, 68, 0.75)";
+      const pad = 8;
+      ctx.drawImage(img, pad, pad, targetWidth - pad * 2, targetHeight - pad * 2);
+      ctx.save();
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = blur;
+      ctx.strokeRect(pad, pad, targetWidth - pad * 2, targetHeight - pad * 2);
+      ctx.restore();
+    } else if (style === "scanline") {
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+      const scanY = Math.floor(progress * targetHeight);
+      const scanGrad = ctx.createLinearGradient(0, scanY - 20, 0, scanY + 20);
+      scanGrad.addColorStop(0, "rgba(168, 85, 247, 0)");
+      scanGrad.addColorStop(0.5, "rgba(239, 68, 68, 0.55)");
+      scanGrad.addColorStop(1, "rgba(168, 85, 247, 0)");
+      ctx.fillStyle = scanGrad;
+      ctx.fillRect(0, scanY - 20, targetWidth, 40);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+      for (let y = 0; y < targetHeight; y += 4) {
+        ctx.fillRect(0, y, targetWidth, 1);
+      }
+    }
+    const { data } = ctx.getImageData(0, 0, targetWidth, targetHeight);
+    const palette = quantize2(data, 256);
+    const index = applyPalette2(data, palette);
+    gif.writeFrame(index, targetWidth, targetHeight, { palette, delay: frameDelay });
+  }
+  gif.finish();
+  return Buffer.from(gif.bytes());
+}
+function wrapText(ctx, text, maxWidth) {
+  const words = text.split(/\s+/);
+  const lines = [];
+  let currentLine = "";
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  return lines;
+}
+async function generateQuoteCard(options) {
+  const width = 1024;
+  const height = 537;
+  const canvas = (0, import_canvas.createCanvas)(width, height);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0, 0, width, height);
+  let avatarImg = null;
+  let avBuffer = options.avatarBuffer;
+  if (!avBuffer && options.avatarUrl) {
+    try {
+      avBuffer = await fetchSafeImageBuffer(options.avatarUrl);
+    } catch {
+    }
+  }
+  if (avBuffer) {
+    try {
+      avatarImg = await (0, import_canvas.loadImage)(avBuffer);
+    } catch {
+      avatarImg = null;
+    }
+  }
+  let textCenterX = width / 2;
+  let maxTextWidth = 580;
+  if (avatarImg) {
+    const scale = height / avatarImg.height;
+    const avWidth = Math.round(avatarImg.width * scale);
+    ctx.drawImage(avatarImg, 0, 0, avWidth, height);
+    const fadeStart = Math.min(200, avWidth * 0.42);
+    const fadeEnd = Math.min(480, Math.max(avWidth, 380));
+    const grad = ctx.createLinearGradient(fadeStart, 0, fadeEnd, 0);
+    grad.addColorStop(0, "rgba(0, 0, 0, 0)");
+    grad.addColorStop(0.3, "rgba(0, 0, 0, 0.4)");
+    grad.addColorStop(0.65, "rgba(0, 0, 0, 0.82)");
+    grad.addColorStop(0.9, "rgba(0, 0, 0, 0.98)");
+    grad.addColorStop(1, "#000000");
+    ctx.fillStyle = grad;
+    ctx.fillRect(fadeStart, 0, width - fadeStart, height);
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(fadeEnd, 0, width - fadeEnd, height);
+    const topVignette = ctx.createLinearGradient(0, 0, 0, 50);
+    topVignette.addColorStop(0, "rgba(0, 0, 0, 0.5)");
+    topVignette.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = topVignette;
+    ctx.fillRect(0, 0, fadeEnd, 50);
+    const botVignette = ctx.createLinearGradient(0, height - 50, 0, height);
+    botVignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+    botVignette.addColorStop(1, "rgba(0, 0, 0, 0.5)");
+    ctx.fillStyle = botVignette;
+    ctx.fillRect(0, height - 50, fadeEnd, 50);
+    textCenterX = (fadeEnd + width) / 2;
+    maxTextWidth = Math.min(520, width - fadeEnd - 50);
+  }
+  const cleanText = options.text.trim();
+  let fontSize = 42;
+  if (cleanText.length > 250) fontSize = 22;
+  else if (cleanText.length > 140) fontSize = 26;
+  else if (cleanText.length > 80) fontSize = 32;
+  else if (cleanText.length > 35) fontSize = 38;
+  ctx.font = `italic ${fontSize}px "Segoe Script", "Lucida Handwriting", "Brush Script MT", Georgia, cursive, serif`;
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#FFFFFF";
+  const lineHeight = fontSize * 1.4;
+  const lines = wrapText(ctx, cleanText, maxTextWidth);
+  const totalTextHeight = lines.length * lineHeight;
+  const authorBlockHeight = 65;
+  const startY = Math.max(80, (height - (totalTextHeight + authorBlockHeight)) / 2 + fontSize * 0.8);
+  lines.forEach((line, index) => {
+    ctx.fillText(line, textCenterX, startY + index * lineHeight);
+  });
+  const authorName = options.author?.trim() || "Anonymous";
+  const authorY = startY + (lines.length - 1) * lineHeight + 48;
+  ctx.font = "22px sans-serif";
+  ctx.fillStyle = "#E5E7EB";
+  ctx.fillText(`- ${authorName}`, textCenterX, authorY);
+  if (options.authorTag) {
+    ctx.font = "16px sans-serif";
+    ctx.fillStyle = "#888888";
+    const tagText = options.authorTag.startsWith("@") ? options.authorTag : `@${options.authorTag}`;
+    ctx.fillText(tagText, textCenterX, authorY + 28);
+  }
+  const watermarkText = options.serverName || "A U R A   T A M I L";
+  ctx.textAlign = "right";
+  ctx.font = "14px sans-serif";
+  ctx.fillStyle = "#555555";
+  ctx.fillText(watermarkText, width - 25, height - 25);
+  return canvas.toBuffer("image/png");
+}
+async function generateAnimatedQuoteCard(options) {
+  const width = 800;
+  const height = 420;
+  const frameCount = 10;
+  const frameDelay = 100;
+  const canvas = (0, import_canvas.createCanvas)(width, height);
+  const ctx = canvas.getContext("2d");
+  const gif = GIFEncoder2();
+  let avatarImg = null;
+  let avBuffer = options.avatarBuffer;
+  if (!avBuffer && options.avatarUrl) {
+    try {
+      avBuffer = await fetchSafeImageBuffer(options.avatarUrl);
+    } catch {
+    }
+  }
+  if (avBuffer) {
+    try {
+      avatarImg = await (0, import_canvas.loadImage)(avBuffer);
+    } catch {
+      avatarImg = null;
+    }
+  }
+  let textCenterX = width / 2;
+  let maxTextWidth = 460;
+  let fadeEnd = 360;
+  for (let f = 0; f < frameCount; f++) {
+    const progress = f / frameCount;
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, width, height);
+    if (avatarImg) {
+      const scale = height / avatarImg.height;
+      const avWidth = Math.round(avatarImg.width * scale);
+      ctx.drawImage(avatarImg, 0, 0, avWidth, height);
+      const fadeStart = Math.min(150, avWidth * 0.42);
+      fadeEnd = Math.min(380, Math.max(avWidth, 300));
+      const grad = ctx.createLinearGradient(fadeStart, 0, fadeEnd, 0);
+      grad.addColorStop(0, "rgba(0, 0, 0, 0)");
+      grad.addColorStop(0.35, "rgba(0, 0, 0, 0.45)");
+      grad.addColorStop(0.7, "rgba(0, 0, 0, 0.85)");
+      grad.addColorStop(1, "#000000");
+      ctx.fillStyle = grad;
+      ctx.fillRect(fadeStart, 0, width - fadeStart, height);
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(fadeEnd, 0, width - fadeEnd, height);
+      textCenterX = (fadeEnd + width) / 2;
+      maxTextWidth = Math.min(420, width - fadeEnd - 40);
+    }
+    const pulse = Math.sin(progress * Math.PI * 2);
+    const cleanText = options.text.trim();
+    let fontSize = 34;
+    if (cleanText.length > 200) fontSize = 18;
+    else if (cleanText.length > 100) fontSize = 22;
+    else if (cleanText.length > 40) fontSize = 28;
+    ctx.font = `italic ${fontSize}px "Segoe Script", "Lucida Handwriting", "Brush Script MT", Georgia, cursive, serif`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#FFFFFF";
+    const lineHeight = fontSize * 1.4;
+    const lines = wrapText(ctx, cleanText, maxTextWidth);
+    const totalTextHeight = lines.length * lineHeight;
+    const authorBlockHeight = 55;
+    const startY = Math.max(60, (height - (totalTextHeight + authorBlockHeight)) / 2 + fontSize * 0.8);
+    lines.forEach((line, index2) => {
+      ctx.fillText(line, textCenterX, startY + index2 * lineHeight);
+    });
+    const authorName = options.author?.trim() || "Anonymous";
+    const authorY = startY + (lines.length - 1) * lineHeight + 42;
+    ctx.save();
+    ctx.font = "18px sans-serif";
+    ctx.fillStyle = pulse > 0 ? "#E5E7EB" : "#D1D5DB";
+    ctx.shadowColor = pulse > 0 ? "rgba(168, 85, 247, 0.8)" : "rgba(239, 68, 68, 0.8)";
+    ctx.shadowBlur = 4 + Math.abs(pulse) * 6;
+    ctx.fillText(`- ${authorName}`, textCenterX, authorY);
+    ctx.restore();
+    if (options.authorTag) {
+      ctx.font = "14px sans-serif";
+      ctx.fillStyle = "#888888";
+      const tagText = options.authorTag.startsWith("@") ? options.authorTag : `@${options.authorTag}`;
+      ctx.fillText(tagText, textCenterX, authorY + 24);
+    }
+    const watermarkText = options.serverName || "A U R A   T A M I L";
+    ctx.textAlign = "right";
+    ctx.font = "12px sans-serif";
+    ctx.fillStyle = "#444444";
+    ctx.fillText(watermarkText, width - 20, height - 20);
+    const { data } = ctx.getImageData(0, 0, width, height);
+    const palette = quantize2(data, 128);
+    const index = applyPalette2(data, palette);
+    gif.writeFrame(index, width, height, { palette, delay: frameDelay });
+  }
+  gif.finish();
+  return Buffer.from(gif.bytes());
+}
+
+// src/bot/commands/index.ts
 var SLASH_COMMANDS_DATA = [
   new import_discord2.SlashCommandBuilder().setName("help").setDescription("Explore Paradox commands, features, and dashboard link"),
   new import_discord2.SlashCommandBuilder().setName("ping").setDescription("Check bot latency and gateway connection"),
@@ -199,8 +1372,75 @@ var SLASH_COMMANDS_DATA = [
     (opt) => opt.setName("image").setDescription("Large banner image or GIF URL")
   ).addStringOption(
     (opt) => opt.setName("thumbnail").setDescription("Small top-right thumbnail icon URL")
-  )
+  ),
+  // 5. AURA Feature 1: Clickable Server Invite Embed
+  new import_discord2.SlashCommandBuilder().setName("postinvite").setDescription("Post a stylish server invite embed with native preview").addStringOption(
+    (opt) => opt.setName("custom_message").setDescription("Custom message or tagline for the invite embed")
+  ).addChannelOption(
+    (opt) => opt.setName("channel").setDescription("Channel to post the invite into (defaults to current channel)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
+  ).addStringOption(
+    (opt) => opt.setName("invite_url").setDescription("Override custom invite URL (e.g. https://discord.gg/yourcode)")
+  ),
+  // 6. AURA Feature 2: Make It a GIF
+  new import_discord2.SlashCommandBuilder().setName("gif").setDescription("Convert a static image into an animated GIF with neon effects").addAttachmentOption(
+    (opt) => opt.setName("image").setDescription("Upload a static image to animate (PNG, JPG, WEBP)")
+  ).addStringOption(
+    (opt) => opt.setName("url").setDescription("Or provide a direct image URL to animate")
+  ).addStringOption(
+    (opt) => opt.setName("style").setDescription("Animation aesthetic style").addChoices(
+      { name: "Neon Pulse (Purple & Crimson)", value: "pulse" },
+      { name: "Cinematic Zoom", value: "zoom" },
+      { name: "Cyber Scanline", value: "scanline" }
+    )
+  ),
+  // 7. AURA Feature 3: Make It a Quote (Photo Quote with User Avatar & Message)
+  new import_discord2.SlashCommandBuilder().setName("quote").setDescription("Turn a message or text into an AURA photo quote with the user's avatar").addStringOption(
+    (opt) => opt.setName("quote").setDescription("Quote text to display (or leave blank if providing message ID/link)")
+  ).addStringOption(
+    (opt) => opt.setName("message").setDescription("Discord Message ID or Link to quote directly")
+  ).addUserOption(
+    (opt) => opt.setName("user").setDescription("User whose photo and name to quote")
+  ).addStringOption(
+    (opt) => opt.setName("author").setDescription("Author or speaker name override")
+  ).addAttachmentOption(
+    (opt) => opt.setName("background").setDescription("Optional custom background image attachment")
+  ),
+  // 8. AURA Feature 4: Animated Quote
+  new import_discord2.SlashCommandBuilder().setName("animatedquote").setDescription("Generate an animated glowing quote card GIF with user photo").addStringOption(
+    (opt) => opt.setName("quote").setDescription("Quote text to display (or leave blank if providing message ID/link)")
+  ).addStringOption(
+    (opt) => opt.setName("message").setDescription("Discord Message ID or Link to quote directly")
+  ).addUserOption(
+    (opt) => opt.setName("user").setDescription("User whose photo and name to quote")
+  ).addStringOption(
+    (opt) => opt.setName("author").setDescription("Author or speaker name override")
+  ).addAttachmentOption(
+    (opt) => opt.setName("background").setDescription("Optional custom background image attachment")
+  ),
+  // 9. Context Menu: Right-Click Any Message -> Apps -> "Quote Message"
+  new import_discord2.ContextMenuCommandBuilder().setName("Quote Message").setType(import_discord2.ApplicationCommandType.Message)
 ];
+async function resolveMessageFromInput(channel, input) {
+  if (!input) return null;
+  const trimmed = input.trim();
+  const linkMatch = trimmed.match(/discord\.com\/channels\/\d+\/(\d+)\/(\d+)/);
+  if (linkMatch) {
+    const chId = linkMatch[1];
+    const msgId = linkMatch[2];
+    try {
+      const ch = await channel.guild.channels.fetch(chId).catch(() => null);
+      if (ch && "messages" in ch) {
+        return await ch.messages.fetch(msgId).catch(() => null);
+      }
+    } catch {
+    }
+  }
+  try {
+    return await channel.messages.fetch(trimmed).catch(() => null);
+  } catch {
+  }
+  return null;
+}
 async function handleSlashCommand(interaction) {
   const { commandName, guildId, guild, client, memberPermissions } = interaction;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -241,6 +1481,10 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
 \`${prefix}prefix <newPrefix>\` \u2014 Change server prefix
 \`/serverinfo\` \u2014 Server stats & bot role position
 \`/dashboard\` \u2014 Web dashboard link`
+      },
+      {
+        name: "\u2728 4. Creative & Community Tools",
+        value: "`/postinvite [message] [channel] [url]` \u2014 Staff: Post branded invite embed & native preview\n`/gif <image|url> [style]` \u2014 Transform a static picture into an animated GIF\n`/quote <quote> [author] [background]` \u2014 Generate an AURA quote card image\n`/animatedquote <quote> [author] [background]` \u2014 Generate an animated glowing quote card GIF"
       }
     ).setFooter({ text: "Paradox \u2022 Specialist Discord Bot" }).setTimestamp();
     const row = new import_discord2.ActionRowBuilder().addComponents(
@@ -650,6 +1894,256 @@ Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**
     ).setFooter({ text: "Paradox Bot" }).setTimestamp();
     return interaction.reply({ embeds: [embed] });
   }
+  if (commandName === "postinvite") {
+    if (!guild || !guildId) {
+      return interaction.reply({ content: "\u274C This command can only be used inside a server.", ephemeral: true });
+    }
+    if (!isManager) {
+      return interaction.reply({
+        content: "\u26D4 You need the **Manage Server** or **Administrator** permission to post server invites.",
+        ephemeral: true
+      });
+    }
+    await interaction.deferReply({ ephemeral: true });
+    const customMessage = interaction.options.getString("custom_message");
+    const overrideUrl = interaction.options.getString("invite_url");
+    const targetChannel = interaction.options.getChannel("channel") || interaction.channel;
+    if (!targetChannel) {
+      return interaction.editReply({ content: "\u274C Target channel not found or invalid." });
+    }
+    let inviteUrl = overrideUrl?.trim();
+    if (!inviteUrl) {
+      if (guild.vanityURLCode) {
+        inviteUrl = `https://discord.gg/${guild.vanityURLCode}`;
+      } else {
+        try {
+          const existingInvites = await guild.invites.fetch();
+          const permanentInvite = existingInvites.find(
+            (inv) => !inv.temporary && (inv.maxAge === 0 || inv.maxAge === null)
+          );
+          if (permanentInvite) {
+            inviteUrl = permanentInvite.url;
+          }
+        } catch {
+        }
+        if (!inviteUrl) {
+          try {
+            const newInvite = await targetChannel.createInvite({
+              maxAge: 0,
+              maxUses: 0,
+              unique: false,
+              reason: `Aura /postinvite executed by ${interaction.user.tag}`
+            });
+            inviteUrl = newInvite.url;
+          } catch (err) {
+            return interaction.editReply({
+              content: `\u274C Could not dynamically create an invite link: ${err.message}. Please provide an invite URL in the \`invite_url\` parameter or grant the bot **Create Instant Invite** permissions.`
+            });
+          }
+        }
+      }
+    }
+    const serverName = guild.name;
+    const serverIcon = guild.iconURL({ size: 512 });
+    const defaultTagline = "Enter the Aura. Find your people. Make memories.";
+    const descriptionText = customMessage?.trim() || defaultTagline;
+    const embed = new import_discord2.EmbedBuilder().setColor(9133302).setTitle(`\u2728 Welcome to ${serverName}`).setURL(inviteUrl).setDescription(
+      `**${descriptionText}**
+
+Click the title above or the button below to enter **${serverName}**!
+
+\u{1F517} **Invite Link:** [${inviteUrl}](${inviteUrl})`
+    ).setFooter({
+      text: `${serverName} \u2022 Click title or button to join`,
+      iconURL: serverIcon || void 0
+    }).setTimestamp();
+    if (serverIcon) {
+      embed.setThumbnail(serverIcon);
+    }
+    const bannerUrl = guild.bannerURL({ size: 1024 }) || guild.splashURL({ size: 1024 });
+    if (bannerUrl) {
+      embed.setImage(bannerUrl);
+    }
+    const row = new import_discord2.ActionRowBuilder().addComponents(
+      new import_discord2.ButtonBuilder().setLabel(`Join ${serverName}`).setStyle(import_discord2.ButtonStyle.Link).setURL(inviteUrl).setEmoji("\u{1F680}")
+    );
+    try {
+      await targetChannel.send({
+        content: `${inviteUrl}
+*Enter the Aura. Find your people. Make memories.*`,
+        embeds: [embed],
+        components: [row]
+      });
+      return interaction.editReply({
+        content: `\u2705 Branded server invite successfully posted to <#${targetChannel.id}>!
+*(Note: Discord's native preview widget is rendered automatically by Discord clients and its appearance is controlled by Discord).*`
+      });
+    } catch (err) {
+      return interaction.editReply({
+        content: `\u274C Failed to post invite to <#${targetChannel.id}>: ${err.message}. Make sure the bot has **Send Messages** and **Embed Links** permissions in that channel.`
+      });
+    }
+  }
+  if (commandName === "gif") {
+    const attachment = interaction.options.getAttachment("image");
+    const url = interaction.options.getString("url");
+    const style = interaction.options.getString("style") || "pulse";
+    if (!attachment && !url) {
+      return interaction.reply({
+        content: "\u274C Please provide either an image attachment or a direct image URL.",
+        ephemeral: true
+      });
+    }
+    await interaction.deferReply();
+    try {
+      let imageBuffer;
+      if (attachment) {
+        if (!attachment.contentType?.startsWith("image/")) {
+          return interaction.editReply({
+            content: "\u274C The attached file must be an image (PNG, JPG, WEBP)."
+          });
+        }
+        if (attachment.size > 8 * 1024 * 1024) {
+          return interaction.editReply({
+            content: "\u274C Image size exceeds the 8 MB maximum limit."
+          });
+        }
+        imageBuffer = await fetchSafeImageBuffer(attachment.url, 8 * 1024 * 1024);
+      } else {
+        const check = validateImageUrl(url);
+        if (!check.valid) {
+          return interaction.editReply({
+            content: `\u274C Invalid or unsafe image URL: ${check.reason}`
+          });
+        }
+        imageBuffer = await fetchSafeImageBuffer(url, 8 * 1024 * 1024);
+      }
+      const gifBuffer = await makeImageIntoGif(imageBuffer, style);
+      const fileAttachment = new import_discord2.AttachmentBuilder(gifBuffer, { name: "aura-animated.gif" });
+      return interaction.editReply({
+        content: `\u2728 **Animated GIF Ready!** (Style: \`${style}\`)`,
+        files: [fileAttachment]
+      });
+    } catch (err) {
+      return interaction.editReply({
+        content: `\u274C Failed to generate animated GIF: ${err.message || "Unknown error occurred"}`
+      });
+    }
+  }
+  if (commandName === "quote" || commandName === "Quote Message" || commandName === "animatedquote") {
+    const isAnimated = commandName === "animatedquote";
+    const isContextMenu = interaction.isMessageContextMenuCommand?.() || commandName === "Quote Message";
+    await interaction.deferReply();
+    try {
+      let targetMsg = null;
+      let quoteText = null;
+      let targetUser = null;
+      let authorOverride = null;
+      let bgAttachment = null;
+      if (isContextMenu) {
+        targetMsg = interaction.targetMessage;
+      } else {
+        const messageInput = interaction.options.getString("message");
+        if (messageInput) {
+          targetMsg = await resolveMessageFromInput(interaction.channel, messageInput);
+          if (!targetMsg) {
+            return interaction.editReply({
+              content: `\u274C Could not find message \`${messageInput}\`. Please make sure the message exists in this server and channel.`
+            });
+          }
+        }
+        targetUser = interaction.options.getUser("user");
+        quoteText = interaction.options.getString("quote");
+        authorOverride = interaction.options.getString("author");
+        bgAttachment = interaction.options.getAttachment("background");
+      }
+      let authorUser = interaction.user;
+      let authorName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
+      let authorTag = interaction.user.tag;
+      let avatarUrl = interaction.user.displayAvatarURL({ extension: "png", size: 512 });
+      let timestamp = void 0;
+      if (targetMsg) {
+        quoteText = quoteText || targetMsg.content || (targetMsg.attachments.size > 0 ? "[Photo / Attachment]" : "[Quoted Message]");
+        authorUser = targetMsg.author;
+        authorName = authorOverride || targetMsg.member?.displayName || targetMsg.author.globalName || targetMsg.author.username;
+        authorTag = targetMsg.author.tag;
+        avatarUrl = targetMsg.author.displayAvatarURL({ extension: "png", size: 512 });
+        timestamp = targetMsg.createdAt.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric"
+        });
+      } else if (targetUser) {
+        authorUser = targetUser;
+        authorName = authorOverride || targetUser.globalName || targetUser.username;
+        authorTag = targetUser.tag;
+        avatarUrl = targetUser.displayAvatarURL({ extension: "png", size: 512 });
+      } else if (authorOverride) {
+        authorName = authorOverride;
+      }
+      if (!quoteText || !quoteText.trim()) {
+        return interaction.editReply({
+          content: "\u274C Quote text is required. Please provide text in the `quote` option or specify a message to quote."
+        });
+      }
+      const cleanQuote = quoteText.trim();
+      const maxLength = isAnimated ? 600 : 1e3;
+      if (cleanQuote.length > maxLength) {
+        return interaction.editReply({
+          content: `\u274C Quote text is too long! Please keep it under ${maxLength} characters.`
+        });
+      }
+      let bgBuffer;
+      if (bgAttachment) {
+        if (!bgAttachment.contentType?.startsWith("image/")) {
+          return interaction.editReply({
+            content: "\u274C Background must be an image file (PNG, JPG, WEBP)."
+          });
+        }
+        if (bgAttachment.size > 8 * 1024 * 1024) {
+          return interaction.editReply({
+            content: "\u274C Background image size exceeds the 8 MB maximum limit."
+          });
+        }
+        bgBuffer = await fetchSafeImageBuffer(bgAttachment.url, 8 * 1024 * 1024);
+      }
+      if (isAnimated) {
+        const gifBuffer = await generateAnimatedQuoteCard({
+          text: cleanQuote,
+          author: authorName,
+          authorTag,
+          avatarUrl,
+          bgBuffer,
+          serverName: guild?.name,
+          timestamp
+        });
+        const fileAttachment = new import_discord2.AttachmentBuilder(gifBuffer, { name: "aura-animated-quote.gif" });
+        return interaction.editReply({
+          content: `\u2728 **Animated Quote by ${authorName}**`,
+          files: [fileAttachment]
+        });
+      } else {
+        const cardBuffer = await generateQuoteCard({
+          text: cleanQuote,
+          author: authorName,
+          authorTag,
+          avatarUrl,
+          bgBuffer,
+          serverName: guild?.name,
+          timestamp
+        });
+        const fileAttachment = new import_discord2.AttachmentBuilder(cardBuffer, { name: "aura-quote.png" });
+        return interaction.editReply({
+          content: `\u{1F4DC} **Quote by ${authorName}**`,
+          files: [fileAttachment]
+        });
+      }
+    } catch (err) {
+      return interaction.editReply({
+        content: `\u274C Failed to generate quote card: ${err.message || "Unknown error occurred"}`
+      });
+    }
+  }
 }
 async function handleTextCommand(message, prefix) {
   const content = message.content.slice(prefix.length).trim();
@@ -662,6 +2156,56 @@ async function handleTextCommand(message, prefix) {
   if (command === "ping") {
     const ping = message.client.ws.ping;
     return message.reply(`\u{1F3D3} Pong! WebSocket Latency: **${ping}ms**`);
+  }
+  if (command === "quote" || command === "q") {
+    let targetMsg = null;
+    let quoteText = null;
+    if (message.reference?.messageId) {
+      try {
+        targetMsg = await message.fetchReference().catch(() => null);
+        if (!targetMsg && message.channel && "messages" in message.channel) {
+          targetMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+        }
+      } catch {
+      }
+      if (args.length > 1) {
+        quoteText = args.slice(1).join(" ");
+      }
+    } else if (args[1]) {
+      targetMsg = await resolveMessageFromInput(message.channel, args[1]);
+      if (!targetMsg) {
+        quoteText = args.slice(1).join(" ");
+      }
+    }
+    let authorUser = message.author;
+    let authorName = message.member?.displayName || message.author.globalName || message.author.username;
+    let authorTag = message.author.username;
+    let avatarUrl = message.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+    if (targetMsg) {
+      quoteText = quoteText || targetMsg.content || (targetMsg.attachments.size > 0 ? "[Photo / Attachment]" : "[Quoted Message]");
+      authorUser = targetMsg.author;
+      authorName = targetMsg.member?.displayName || targetMsg.author.globalName || targetMsg.author.username;
+      authorTag = targetMsg.author.username;
+      avatarUrl = targetMsg.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+    }
+    if (!quoteText || !quoteText.trim()) {
+      return message.reply(`\u{1F4A1} **Usage:** Reply to any message and type \`${prefix}quote\` to turn it into a photo quote!`);
+    }
+    await message.channel.sendTyping().catch(() => null);
+    try {
+      const cardBuffer = await generateQuoteCard({
+        text: quoteText.trim(),
+        author: authorName,
+        authorTag,
+        avatarUrl,
+        serverName: guild?.name
+      });
+      const fileAttachment = new import_discord2.AttachmentBuilder(cardBuffer, { name: "quote.png" });
+      return message.reply({ files: [fileAttachment] });
+    } catch (err) {
+      console.error("[Bot:Quote] Error generating quote card:", err);
+      return message.reply(`\u274C Failed to generate quote card: ${err.message}`);
+    }
   }
   if (command === "help") {
     const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u{1F916} Paradox Specialist Bot \u2014 Command Guide").setDescription(
@@ -1182,9 +2726,21 @@ async function onReady(client) {
   client.user.setActivity("Managing servers & video embeds", { type: import_discord3.ActivityType.Custom });
   try {
     if (client.application) {
-      console.log(`[Bot] Registering slash commands with Discord...`);
+      console.log(`[Bot] Registering slash commands globally with Discord...`);
       await client.application.commands.set(SLASH_COMMANDS_DATA);
-      console.log(`[Bot] Successfully registered ${SLASH_COMMANDS_DATA.length} slash commands!`);
+      console.log(`[Bot] Successfully registered ${SLASH_COMMANDS_DATA.length} global slash commands!`);
+      const connectedGuilds = await client.guilds.fetch().catch(() => null);
+      if (connectedGuilds) {
+        for (const [gId, oauthGuild] of connectedGuilds) {
+          try {
+            const guildObj = await oauthGuild.fetch();
+            await guildObj.commands.set(SLASH_COMMANDS_DATA);
+            console.log(`[Bot] \u26A1 Instant slash commands deployed to: "${guildObj.name}"`);
+          } catch (gErr) {
+            console.warn(`[Bot] Could not push instant commands to "${oauthGuild.name}": ${gErr.message}`);
+          }
+        }
+      }
     }
   } catch (err) {
     console.error("[Bot] Failed to register slash commands:", err);
@@ -1355,8 +2911,11 @@ async function onMessageCreate(message) {
       where: { id: guildId }
     }).catch(() => null);
     const prefix = config?.prefix || "$";
-    if (message.content.startsWith(prefix)) {
-      await handleTextCommand(message, prefix);
+    const isCustomPrefix = message.content.startsWith(prefix);
+    const isFallbackPrefix = message.content.startsWith("$") || message.content.startsWith("!") || message.content.startsWith(".");
+    const usedPrefix = isCustomPrefix ? prefix : isFallbackPrefix ? message.content[0] : null;
+    if (usedPrefix) {
+      await handleTextCommand(message, usedPrefix);
       return;
     }
     if (!config || !config.videoFixerEnabled) return;
@@ -1540,9 +3099,9 @@ async function onMessageReactionRemove(reaction, user) {
 // src/bot/events/interactionCreate.ts
 var import_discord5 = require("discord.js");
 async function onInteractionCreate(interaction) {
-  if (interaction.isChatInputCommand()) {
+  if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand()) {
     await handleSlashCommand(interaction).catch((err) => {
-      console.error("[Bot:SlashCommand] Error executing slash command:", err);
+      console.error("[Bot:SlashCommand] Error executing command:", err);
     });
     return;
   }
@@ -2023,5 +3582,6 @@ if (require.main === module) {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  SLASH_COMMANDS_DATA,
   startBot
 });

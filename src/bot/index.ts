@@ -9,6 +9,7 @@ import { onMessageReactionRemove } from "./events/messageReactionRemove";
 import { onInteractionCreate } from "./events/interactionCreate";
 import { onGuildMemberAdd } from "./events/guildMemberAdd";
 import { onGuildMemberRemove } from "./events/guildMemberRemove";
+export { SLASH_COMMANDS_DATA } from "./commands";
 
 export async function startBot() {
   const token = process.env.DISCORD_BOT_TOKEN;

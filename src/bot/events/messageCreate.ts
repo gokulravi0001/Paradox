@@ -26,9 +26,16 @@ export async function onMessageCreate(message: Message) {
     // Default prefix is now $
     const prefix = config?.prefix || "$";
 
-    // 2. Check for Prefix Commands (e.g. $help, $ping, $rr, $roledeck, $embed, $videofix)
-    if (message.content.startsWith(prefix)) {
-      await handleTextCommand(message, prefix);
+    // 2. Check for Prefix Commands (supports server prefix as well as standard $ or ! or .)
+    const isCustomPrefix = message.content.startsWith(prefix);
+    const isFallbackPrefix =
+      message.content.startsWith("$") ||
+      message.content.startsWith("!") ||
+      message.content.startsWith(".");
+    const usedPrefix = isCustomPrefix ? prefix : isFallbackPrefix ? message.content[0] : null;
+
+    if (usedPrefix) {
+      await handleTextCommand(message, usedPrefix);
       return;
     }
 

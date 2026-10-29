@@ -1,6 +1,8 @@
 import {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
+  ContextMenuCommandBuilder,
+  ApplicationCommandType,
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
@@ -10,8 +12,18 @@ import {
   ChannelType,
   TextChannel,
   Role,
+  AttachmentBuilder,
+  User,
+  GuildMember,
 } from "discord.js";
 import { prisma } from "@/lib/prisma";
+import {
+  generateQuoteCard,
+  generateAnimatedQuoteCard,
+  makeImageIntoGif,
+  fetchSafeImageBuffer,
+  validateImageUrl,
+} from "../services/imageGenerator";
 
 export const SLASH_COMMANDS_DATA = [
   new SlashCommandBuilder()
@@ -266,12 +278,123 @@ export const SLASH_COMMANDS_DATA = [
     .addStringOption((opt) =>
       opt.setName("thumbnail").setDescription("Small top-right thumbnail icon URL")
     ),
+
+  // 5. AURA Feature 1: Clickable Server Invite Embed
+  new SlashCommandBuilder()
+    .setName("postinvite")
+    .setDescription("Post a stylish server invite embed with native preview")
+    .addStringOption((opt) =>
+      opt.setName("custom_message").setDescription("Custom message or tagline for the invite embed")
+    )
+    .addChannelOption((opt) =>
+      opt
+        .setName("channel")
+        .setDescription("Channel to post the invite into (defaults to current channel)")
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+    )
+    .addStringOption((opt) =>
+      opt.setName("invite_url").setDescription("Override custom invite URL (e.g. https://discord.gg/yourcode)")
+    ),
+
+  // 6. AURA Feature 2: Make It a GIF
+  new SlashCommandBuilder()
+    .setName("gif")
+    .setDescription("Convert a static image into an animated GIF with neon effects")
+    .addAttachmentOption((opt) =>
+      opt.setName("image").setDescription("Upload a static image to animate (PNG, JPG, WEBP)")
+    )
+    .addStringOption((opt) =>
+      opt.setName("url").setDescription("Or provide a direct image URL to animate")
+    )
+    .addStringOption((opt) =>
+      opt
+        .setName("style")
+        .setDescription("Animation aesthetic style")
+        .addChoices(
+          { name: "Neon Pulse (Purple & Crimson)", value: "pulse" },
+          { name: "Cinematic Zoom", value: "zoom" },
+          { name: "Cyber Scanline", value: "scanline" }
+        )
+    ),
+
+  // 7. AURA Feature 3: Make It a Quote (Photo Quote with User Avatar & Message)
+  new SlashCommandBuilder()
+    .setName("quote")
+    .setDescription("Turn a message or text into an AURA photo quote with the user's avatar")
+    .addStringOption((opt) =>
+      opt.setName("quote").setDescription("Quote text to display (or leave blank if providing message ID/link)")
+    )
+    .addStringOption((opt) =>
+      opt.setName("message").setDescription("Discord Message ID or Link to quote directly")
+    )
+    .addUserOption((opt) =>
+      opt.setName("user").setDescription("User whose photo and name to quote")
+    )
+    .addStringOption((opt) =>
+      opt.setName("author").setDescription("Author or speaker name override")
+    )
+    .addAttachmentOption((opt) =>
+      opt.setName("background").setDescription("Optional custom background image attachment")
+    ),
+
+  // 8. AURA Feature 4: Animated Quote
+  new SlashCommandBuilder()
+    .setName("animatedquote")
+    .setDescription("Generate an animated glowing quote card GIF with user photo")
+    .addStringOption((opt) =>
+      opt.setName("quote").setDescription("Quote text to display (or leave blank if providing message ID/link)")
+    )
+    .addStringOption((opt) =>
+      opt.setName("message").setDescription("Discord Message ID or Link to quote directly")
+    )
+    .addUserOption((opt) =>
+      opt.setName("user").setDescription("User whose photo and name to quote")
+    )
+    .addStringOption((opt) =>
+      opt.setName("author").setDescription("Author or speaker name override")
+    )
+    .addAttachmentOption((opt) =>
+      opt.setName("background").setDescription("Optional custom background image attachment")
+    ),
+
+  // 9. Context Menu: Right-Click Any Message -> Apps -> "Quote Message"
+  new ContextMenuCommandBuilder()
+    .setName("Quote Message")
+    .setType(ApplicationCommandType.Message),
 ];
 
 /**
- * Handle slash command execution
+ * Resolves a Discord message from a raw message ID or a full Discord message URL.
  */
-export async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
+async function resolveMessageFromInput(channel: TextChannel, input: string): Promise<Message | null> {
+  if (!input) return null;
+  const trimmed = input.trim();
+
+  // 1. Check if it's a full discord message link (https://discord.com/channels/:guildId/:channelId/:messageId)
+  const linkMatch = trimmed.match(/discord\.com\/channels\/\d+\/(\d+)\/(\d+)/);
+  if (linkMatch) {
+    const chId = linkMatch[1];
+    const msgId = linkMatch[2];
+    try {
+      const ch = await channel.guild.channels.fetch(chId).catch(() => null);
+      if (ch && "messages" in ch) {
+        return await (ch as TextChannel).messages.fetch(msgId).catch(() => null);
+      }
+    } catch {}
+  }
+
+  // 2. Direct message ID lookup in current channel
+  try {
+    return await channel.messages.fetch(trimmed).catch(() => null);
+  } catch {}
+
+  return null;
+}
+
+/**
+ * Handle slash command execution & context menu actions
+ */
+export async function handleSlashCommand(interaction: ChatInputCommandInteraction | any) {
   const { commandName, guildId, guild, client, memberPermissions } = interaction;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
@@ -329,6 +452,14 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
             `\`${prefix}prefix <newPrefix>\` — Change server prefix\n` +
             "`/serverinfo` — Server stats & bot role position\n" +
             "`/dashboard` — Web dashboard link",
+        },
+        {
+          name: "✨ 4. Creative & Community Tools",
+          value:
+            "`/postinvite [message] [channel] [url]` — Staff: Post branded invite embed & native preview\n" +
+            "`/gif <image|url> [style]` — Transform a static picture into an animated GIF\n" +
+            "`/quote <quote> [author] [background]` — Generate an AURA quote card image\n" +
+            "`/animatedquote <quote> [author] [background]` — Generate an animated glowing quote card GIF",
         }
       )
       .setFooter({ text: "Paradox • Specialist Discord Bot" })
@@ -866,6 +997,318 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
     return interaction.reply({ embeds: [embed] });
   }
+
+  // /postinvite (AURA Feature 1: Clickable Server Invite Embed)
+  if (commandName === "postinvite") {
+    if (!guild || !guildId) {
+      return interaction.reply({ content: "❌ This command can only be used inside a server.", ephemeral: true });
+    }
+
+    if (!isManager) {
+      return interaction.reply({
+        content: "⛔ You need the **Manage Server** or **Administrator** permission to post server invites.",
+        ephemeral: true,
+      });
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    const customMessage = interaction.options.getString("custom_message");
+    const overrideUrl = interaction.options.getString("invite_url");
+    const targetChannel =
+      (interaction.options.getChannel("channel") as TextChannel) ||
+      (interaction.channel as TextChannel);
+
+    if (!targetChannel) {
+      return interaction.editReply({ content: "❌ Target channel not found or invalid." });
+    }
+
+    // Determine Invite URL dynamically
+    let inviteUrl = overrideUrl?.trim();
+
+    if (!inviteUrl) {
+      // 1. Check if server has a vanity URL
+      if (guild.vanityURLCode) {
+        inviteUrl = `https://discord.gg/${guild.vanityURLCode}`;
+      } else {
+        // 2. Try fetching existing permanent invite
+        try {
+          const existingInvites = await guild.invites.fetch();
+          const permanentInvite = existingInvites.find(
+            (inv) => !inv.temporary && (inv.maxAge === 0 || inv.maxAge === null)
+          );
+          if (permanentInvite) {
+            inviteUrl = permanentInvite.url;
+          }
+        } catch {
+          // Fall through to creating a new invite
+        }
+
+        // 3. Create a new permanent invite for the target channel
+        if (!inviteUrl) {
+          try {
+            const newInvite = await targetChannel.createInvite({
+              maxAge: 0,
+              maxUses: 0,
+              unique: false,
+              reason: `Aura /postinvite executed by ${interaction.user.tag}`,
+            });
+            inviteUrl = newInvite.url;
+          } catch (err: any) {
+            return interaction.editReply({
+              content: `❌ Could not dynamically create an invite link: ${err.message}. Please provide an invite URL in the \`invite_url\` parameter or grant the bot **Create Instant Invite** permissions.`,
+            });
+          }
+        }
+      }
+    }
+
+    // Server branding colors: Purple (#8B5CF6 / 0x8B5CF6) with Red (#EF4444) accents
+    const serverName = guild.name;
+    const serverIcon = guild.iconURL({ size: 512 });
+    const defaultTagline = "Enter the Aura. Find your people. Make memories.";
+    const descriptionText = customMessage?.trim() || defaultTagline;
+
+    const embed = new EmbedBuilder()
+      .setColor(0x8b5cf6)
+      .setTitle(`✨ Welcome to ${serverName}`)
+      .setURL(inviteUrl)
+      .setDescription(
+        `**${descriptionText}**\n\n` +
+        `Click the title above or the button below to enter **${serverName}**!\n\n` +
+        `🔗 **Invite Link:** [${inviteUrl}](${inviteUrl})`
+      )
+      .setFooter({
+        text: `${serverName} • Click title or button to join`,
+        iconURL: serverIcon || undefined,
+      })
+      .setTimestamp();
+
+    if (serverIcon) {
+      embed.setThumbnail(serverIcon);
+    }
+
+    const bannerUrl = guild.bannerURL({ size: 1024 }) || guild.splashURL({ size: 1024 });
+    if (bannerUrl) {
+      embed.setImage(bannerUrl);
+    }
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setLabel(`Join ${serverName}`)
+        .setStyle(ButtonStyle.Link)
+        .setURL(inviteUrl)
+        .setEmoji("🚀")
+    );
+
+    try {
+      // Send the embed AND the raw invite link in content so Discord renders its native interactive server invite preview card
+      await targetChannel.send({
+        content: `${inviteUrl}\n*Enter the Aura. Find your people. Make memories.*`,
+        embeds: [embed],
+        components: [row],
+      });
+
+      return interaction.editReply({
+        content: `✅ Branded server invite successfully posted to <#${targetChannel.id}>!\n*(Note: Discord's native preview widget is rendered automatically by Discord clients and its appearance is controlled by Discord).*`,
+      });
+    } catch (err: any) {
+      return interaction.editReply({
+        content: `❌ Failed to post invite to <#${targetChannel.id}>: ${err.message}. Make sure the bot has **Send Messages** and **Embed Links** permissions in that channel.`,
+      });
+    }
+  }
+
+  // /gif (AURA Feature 2: Make It a GIF)
+  if (commandName === "gif") {
+    const attachment = interaction.options.getAttachment("image");
+    const url = interaction.options.getString("url");
+    const style = (interaction.options.getString("style") as "pulse" | "zoom" | "scanline") || "pulse";
+
+    if (!attachment && !url) {
+      return interaction.reply({
+        content: "❌ Please provide either an image attachment or a direct image URL.",
+        ephemeral: true,
+      });
+    }
+
+    await interaction.deferReply();
+
+    try {
+      let imageBuffer: Buffer;
+
+      if (attachment) {
+        if (!attachment.contentType?.startsWith("image/")) {
+          return interaction.editReply({
+            content: "❌ The attached file must be an image (PNG, JPG, WEBP).",
+          });
+        }
+        if (attachment.size > 8 * 1024 * 1024) {
+          return interaction.editReply({
+            content: "❌ Image size exceeds the 8 MB maximum limit.",
+          });
+        }
+        imageBuffer = await fetchSafeImageBuffer(attachment.url, 8 * 1024 * 1024);
+      } else {
+        const check = validateImageUrl(url!);
+        if (!check.valid) {
+          return interaction.editReply({
+            content: `❌ Invalid or unsafe image URL: ${check.reason}`,
+          });
+        }
+        imageBuffer = await fetchSafeImageBuffer(url!, 8 * 1024 * 1024);
+      }
+
+      const gifBuffer = await makeImageIntoGif(imageBuffer, style);
+      const fileAttachment = new AttachmentBuilder(gifBuffer, { name: "aura-animated.gif" });
+
+      return interaction.editReply({
+        content: `✨ **Animated GIF Ready!** (Style: \`${style}\`)`,
+        files: [fileAttachment],
+      });
+    } catch (err: any) {
+      return interaction.editReply({
+        content: `❌ Failed to generate animated GIF: ${err.message || "Unknown error occurred"}`,
+      });
+    }
+  }
+
+  // /quote, /animatedquote, or Context Menu "Quote Message" (AURA Quote with User Avatar & Text)
+  if (commandName === "quote" || commandName === "Quote Message" || commandName === "animatedquote") {
+    const isAnimated = commandName === "animatedquote";
+    const isContextMenu = (interaction as any).isMessageContextMenuCommand?.() || commandName === "Quote Message";
+
+    await interaction.deferReply();
+
+    try {
+      let targetMsg: Message | null = null;
+      let quoteText: string | null = null;
+      let targetUser: User | null = null;
+      let authorOverride: string | null = null;
+      let bgAttachment: any = null;
+
+      if (isContextMenu) {
+        targetMsg = (interaction as any).targetMessage as Message;
+      } else {
+        const messageInput = interaction.options.getString("message");
+        if (messageInput) {
+          targetMsg = await resolveMessageFromInput(interaction.channel as TextChannel, messageInput);
+          if (!targetMsg) {
+            return interaction.editReply({
+              content: `❌ Could not find message \`${messageInput}\`. Please make sure the message exists in this server and channel.`,
+            });
+          }
+        }
+        targetUser = interaction.options.getUser("user");
+        quoteText = interaction.options.getString("quote");
+        authorOverride = interaction.options.getString("author");
+        bgAttachment = interaction.options.getAttachment("background");
+      }
+
+      let authorUser: User = interaction.user;
+      let authorName: string =
+        (interaction.member as GuildMember)?.displayName ||
+        interaction.user.globalName ||
+        interaction.user.username;
+      let authorTag: string = interaction.user.tag;
+      let avatarUrl: string = interaction.user.displayAvatarURL({ extension: "png", size: 512 });
+      let timestamp: string | undefined = undefined;
+
+      if (targetMsg) {
+        quoteText =
+          quoteText ||
+          targetMsg.content ||
+          (targetMsg.attachments.size > 0 ? "[Photo / Attachment]" : "[Quoted Message]");
+        authorUser = targetMsg.author;
+        authorName =
+          authorOverride ||
+          targetMsg.member?.displayName ||
+          targetMsg.author.globalName ||
+          targetMsg.author.username;
+        authorTag = targetMsg.author.tag;
+        avatarUrl = targetMsg.author.displayAvatarURL({ extension: "png", size: 512 });
+        timestamp = targetMsg.createdAt.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      } else if (targetUser) {
+        authorUser = targetUser;
+        authorName = authorOverride || targetUser.globalName || targetUser.username;
+        authorTag = targetUser.tag;
+        avatarUrl = targetUser.displayAvatarURL({ extension: "png", size: 512 });
+      } else if (authorOverride) {
+        authorName = authorOverride;
+      }
+
+      if (!quoteText || !quoteText.trim()) {
+        return interaction.editReply({
+          content: "❌ Quote text is required. Please provide text in the `quote` option or specify a message to quote.",
+        });
+      }
+
+      const cleanQuote = quoteText.trim();
+      const maxLength = isAnimated ? 600 : 1000;
+      if (cleanQuote.length > maxLength) {
+        return interaction.editReply({
+          content: `❌ Quote text is too long! Please keep it under ${maxLength} characters.`,
+        });
+      }
+
+      let bgBuffer: Buffer | undefined;
+      if (bgAttachment) {
+        if (!bgAttachment.contentType?.startsWith("image/")) {
+          return interaction.editReply({
+            content: "❌ Background must be an image file (PNG, JPG, WEBP).",
+          });
+        }
+        if (bgAttachment.size > 8 * 1024 * 1024) {
+          return interaction.editReply({
+            content: "❌ Background image size exceeds the 8 MB maximum limit.",
+          });
+        }
+        bgBuffer = await fetchSafeImageBuffer(bgAttachment.url, 8 * 1024 * 1024);
+      }
+
+      if (isAnimated) {
+        const gifBuffer = await generateAnimatedQuoteCard({
+          text: cleanQuote,
+          author: authorName,
+          authorTag,
+          avatarUrl,
+          bgBuffer,
+          serverName: guild?.name,
+          timestamp,
+        });
+
+        const fileAttachment = new AttachmentBuilder(gifBuffer, { name: "aura-animated-quote.gif" });
+        return interaction.editReply({
+          content: `✨ **Animated Quote by ${authorName}**`,
+          files: [fileAttachment],
+        });
+      } else {
+        const cardBuffer = await generateQuoteCard({
+          text: cleanQuote,
+          author: authorName,
+          authorTag,
+          avatarUrl,
+          bgBuffer,
+          serverName: guild?.name,
+          timestamp,
+        });
+
+        const fileAttachment = new AttachmentBuilder(cardBuffer, { name: "aura-quote.png" });
+        return interaction.editReply({
+          content: `📜 **Quote by ${authorName}**`,
+          files: [fileAttachment],
+        });
+      }
+    } catch (err: any) {
+      return interaction.editReply({
+        content: `❌ Failed to generate quote card: ${err.message || "Unknown error occurred"}`,
+      });
+    }
+  }
 }
 
 /**
@@ -886,6 +1329,67 @@ export async function handleTextCommand(message: Message, prefix: string) {
   if (command === "ping") {
     const ping = message.client.ws.ping;
     return message.reply(`🏓 Pong! WebSocket Latency: **${ping}ms**`);
+  }
+
+  // $quote or $q (Make it a quote by replying to any message)
+  if (command === "quote" || command === "q") {
+    let targetMsg: Message | null = null;
+    let quoteText: string | null = null;
+
+    // 1. Check if user replied to a message
+    if (message.reference?.messageId) {
+      try {
+        targetMsg = await message.fetchReference().catch(() => null);
+        if (!targetMsg && message.channel && "messages" in message.channel) {
+          targetMsg = await (message.channel as TextChannel).messages.fetch(message.reference.messageId).catch(() => null);
+        }
+      } catch {}
+
+      if (args.length > 1) {
+        quoteText = args.slice(1).join(" ");
+      }
+    } else if (args[1]) {
+      // 2. Check if user provided message link or ID
+      targetMsg = await resolveMessageFromInput(message.channel as TextChannel, args[1]);
+      if (!targetMsg) {
+        quoteText = args.slice(1).join(" ");
+      }
+    }
+
+    let authorUser: User = message.author;
+    let authorName: string = message.member?.displayName || message.author.globalName || message.author.username;
+    let authorTag: string = message.author.username;
+    let avatarUrl: string = message.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+
+    if (targetMsg) {
+      quoteText = quoteText || targetMsg.content || (targetMsg.attachments.size > 0 ? "[Photo / Attachment]" : "[Quoted Message]");
+      authorUser = targetMsg.author;
+      authorName = targetMsg.member?.displayName || targetMsg.author.globalName || targetMsg.author.username;
+      authorTag = targetMsg.author.username;
+      avatarUrl = targetMsg.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+    }
+
+    if (!quoteText || !quoteText.trim()) {
+      return message.reply(`💡 **Usage:** Reply to any message and type \`${prefix}quote\` to turn it into a photo quote!`);
+    }
+
+    await message.channel.sendTyping().catch(() => null);
+
+    try {
+      const cardBuffer = await generateQuoteCard({
+        text: quoteText.trim(),
+        author: authorName,
+        authorTag,
+        avatarUrl,
+        serverName: guild?.name,
+      });
+
+      const fileAttachment = new AttachmentBuilder(cardBuffer, { name: "quote.png" });
+      return message.reply({ files: [fileAttachment] });
+    } catch (err: any) {
+      console.error("[Bot:Quote] Error generating quote card:", err);
+      return message.reply(`❌ Failed to generate quote card: ${err.message}`);
+    }
   }
 
   if (command === "help") {
