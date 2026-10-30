@@ -50,7 +50,7 @@ export function EmbedLinkModal({
       return;
     }
 
-    const markdown = `[${trimmedText}](${trimmedUrl})`;
+    const markdown = `[${trimmedText}](<${trimmedUrl}>)`;
     onInsert(markdown);
     setText("");
     setUrl("");
@@ -71,13 +71,13 @@ export function EmbedLinkModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-discord-blurple/20 text-discord-blurple border border-discord-blurple/30">
+            <div className="p-2 rounded-xl bg-[#00a8fc]/20 text-[#00a8fc] border border-[#00a8fc]/30">
               <Link2 className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Embed Link Creator</h3>
+              <h3 className="text-sm font-bold text-white">Clickable Blue Text Link</h3>
               <p className="text-[11px] text-zinc-400">
-                Turn your text into a clickable link in Discord embeds
+                Highlights your text in blue and opens the link when clicked (No embed card)
               </p>
             </div>
           </div>
@@ -98,8 +98,8 @@ export function EmbedLinkModal({
           {/* Option 1: Enter Text */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-zinc-200 flex items-center justify-between">
-              <span>1. Enter Text (Clickable words)</span>
-              <span className="text-[10px] text-zinc-500">What users will see</span>
+              <span>1. Enter Text (Highlighted in Blue)</span>
+              <span className="text-[10px] text-zinc-500">What users see</span>
             </label>
             <input
               type="text"
@@ -109,8 +109,8 @@ export function EmbedLinkModal({
                 setText(e.target.value);
                 if (error) setError("");
               }}
-              placeholder="e.g. Join our Server, Official Website, Read Rules..."
-              className="w-full px-3.5 py-2 rounded-xl bg-discord-dark border border-white/10 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-discord-blurple transition"
+              placeholder="e.g. Join Aura Tamil, Official Website, Read Rules..."
+              className="w-full px-3.5 py-2 rounded-xl bg-discord-dark border border-white/10 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-[#00a8fc] transition"
             />
           </div>
 
@@ -129,8 +129,8 @@ export function EmbedLinkModal({
                   setUrl(e.target.value);
                   if (error) setError("");
                 }}
-                placeholder="https://discord.gg/yourserver or https://..."
-                className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-discord-dark border border-white/10 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-discord-blurple font-mono transition"
+                placeholder="https://discord.gg/aura or https://..."
+                className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-discord-dark border border-white/10 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-[#00a8fc] font-mono transition"
               />
             </div>
           </div>
@@ -138,27 +138,31 @@ export function EmbedLinkModal({
           {/* Live Preview Box */}
           <div className="p-3 rounded-xl bg-discord-dark/70 border border-white/5 space-y-1.5">
             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-              Result Preview in Discord:
+              Discord Chat Preview (No Embed Card):
             </span>
             <div className="text-xs text-zinc-300">
               {text.trim() && url.trim() ? (
                 <span>
-                  Click here:{" "}
-                  <span className="text-[#00a8fc] underline cursor-pointer font-medium">
+                  Check out{" "}
+                  <span className="text-[#00a8fc] underline cursor-pointer font-medium hover:text-[#38bdf8]">
                     {text.trim()}
                   </span>
+                  !
                 </span>
               ) : (
                 <span className="text-zinc-500 italic">
-                  Fill in the text and link above to see the clickable preview...
+                  Fill in the text and link above to see the blue clickable preview...
                 </span>
               )}
             </div>
             {text.trim() && url.trim() && (
-              <div className="text-[10px] font-mono text-zinc-500 truncate">
-                Format: [{text.trim()}]({url.trim()})
+              <div className="text-[10px] font-mono text-emerald-400 truncate pt-1">
+                Discord Markdown: [{text.trim()}](&lt;{url.trim()}&gt;)
               </div>
             )}
+            <p className="text-[10px] text-zinc-500 italic">
+              💡 The &lt;&gt; brackets tell Discord to suppress preview embeds so only the blue text is shown.
+            </p>
           </div>
 
           {error && (
@@ -182,10 +186,10 @@ export function EmbedLinkModal({
             <button
               type="submit"
               disabled={!text.trim() || !url.trim()}
-              className="px-4 py-2 rounded-xl bg-discord-blurple hover:bg-indigo-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-discord-blurple/20 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-xl bg-[#00a8fc] hover:bg-[#0094dd] text-white text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-[#00a8fc]/20 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Insert Embed Link</span>
+              <span>Insert Blue Link</span>
             </button>
           </div>
         </form>

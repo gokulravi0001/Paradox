@@ -30,7 +30,7 @@ function formatInline(text: string): React.ReactNode[] {
   // *italic*
   // _italic_
   // Match Discord markdown elements, links, channel mentions, member pings, and role pings
-  const tokenRegex = /(\[.*?\]\(https?:\/\/[^\s)]+\)|`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_|#[a-zA-Z0-9_\-]+|<#[0-9]+>|\{#[a-zA-Z0-9_\-]+\}|@[a-zA-Z0-9_\-]+|<@&?[0-9]+>)/g;
+  const tokenRegex = /(\[.*?\]\(<?https?:\/\/[^\s)>]+>?\)|`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_|#[a-zA-Z0-9_\-]+|<#[0-9]+>|\{#[a-zA-Z0-9_\-]+\}|@[a-zA-Z0-9_\-]+|<@&?[0-9]+>)/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -46,7 +46,10 @@ function formatInline(text: string): React.ReactNode[] {
     if (token.startsWith("[") && token.includes("](") && token.endsWith(")")) {
       const closingBracket = token.indexOf("](");
       const label = token.slice(1, closingBracket);
-      const url = token.slice(closingBracket + 2, -1);
+      let url = token.slice(closingBracket + 2, -1).trim();
+      if (url.startsWith("<") && url.endsWith(">")) {
+        url = url.slice(1, -1).trim();
+      }
       parts.push(
         <a
           key={key++}

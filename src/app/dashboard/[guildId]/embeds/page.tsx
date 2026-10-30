@@ -1776,19 +1776,19 @@ function EmbedBuilderContent() {
                     )}
                   </div>
 
-                  {/* 4. PLUS EMBED LINK TOOL */}
+                  {/* 4. PLUS BLUE TEXT LINK TOOL */}
                   <button
                     type="button"
                     onClick={() => {
                       setTargetFieldForModal(null);
                       setShowEmbedLinkModal(true);
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 hover:from-indigo-500/30 hover:to-purple-500/30 text-indigo-300 hover:text-white border border-indigo-500/40 text-xs font-bold transition cursor-pointer shadow-sm"
-                    title="Insert Clickable Embed Link: [Text](URL)"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500/20 to-indigo-500/20 hover:from-sky-500/30 hover:to-indigo-500/30 text-sky-300 hover:text-white border border-sky-500/40 text-xs font-bold transition cursor-pointer shadow-sm"
+                    title="Insert Clickable Blue Link: [Text](<URL>)"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <Link2 className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Embed Link</span>
+                    <Link2 className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Blue Link</span>
                   </button>
                 </div>
               </div>

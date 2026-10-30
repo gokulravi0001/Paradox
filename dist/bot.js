@@ -1373,17 +1373,24 @@ var SLASH_COMMANDS_DATA = [
   ).addStringOption(
     (opt) => opt.setName("thumbnail").setDescription("Small top-right thumbnail icon URL")
   ),
-  // Feature: Embed Link (2 options: Enter Text and Enter Link)
-  new import_discord2.SlashCommandBuilder().setName("embedlink").setDescription("Create a clickable link inside a stylish Discord embed (Text opens the Link)").addStringOption(
-    (opt) => opt.setName("text").setDescription("Enter the text to display (e.g. Join Our Server, Visit Rules)").setRequired(true)
+  // Feature: Pure Blue Clickable Text Link (NO EMBED)
+  new import_discord2.SlashCommandBuilder().setName("link").setDescription("Post clickable blue text that opens a link (pure text, NO embed card)").addStringOption(
+    (opt) => opt.setName("text").setDescription("Enter the text to be highlighted in blue (e.g. Join Aura Tamil, Rules)").setRequired(true)
   ).addStringOption(
-    (opt) => opt.setName("link").setDescription("Enter the destination link URL (e.g. https://discord.gg/...)").setRequired(true)
+    (opt) => opt.setName("link").setDescription("Enter destination URL that opens when clicked (e.g. https://discord.gg/aura)").setRequired(true)
   ).addChannelOption(
-    (opt) => opt.setName("channel").setDescription("Channel to post the embed link into (defaults to current channel)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
+    (opt) => opt.setName("channel").setDescription("Channel to post the link into (defaults to current channel)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
   ).addStringOption(
-    (opt) => opt.setName("title").setDescription("Optional embed title above the link")
+    (opt) => opt.setName("message").setDescription("Optional message before the blue link")
+  ),
+  new import_discord2.SlashCommandBuilder().setName("embedlink").setDescription("Post clickable blue text that opens a link (pure text, NO embed card)").addStringOption(
+    (opt) => opt.setName("text").setDescription("Enter the text to be highlighted in blue (e.g. Join Aura Tamil, Rules)").setRequired(true)
   ).addStringOption(
-    (opt) => opt.setName("color").setDescription("Optional hex color (e.g. #5865F2, #8B5CF6, #ED4245)")
+    (opt) => opt.setName("link").setDescription("Enter destination URL that opens when clicked (e.g. https://discord.gg/aura)").setRequired(true)
+  ).addChannelOption(
+    (opt) => opt.setName("channel").setDescription("Channel to post the link into (defaults to current channel)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
+  ).addStringOption(
+    (opt) => opt.setName("message").setDescription("Optional message before the blue link")
   ),
   // 5. AURA Feature 1: Clickable Server Invite Embed
   new import_discord2.SlashCommandBuilder().setName("postinvite").setDescription("Post a stylish server invite embed with native preview").addStringOption(
@@ -1889,7 +1896,7 @@ Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**
       ephemeral: true
     });
   }
-  if (commandName === "embedlink") {
+  if (commandName === "link" || commandName === "embedlink") {
     if (!guild || !guildId) return interaction.reply({ content: "Must be used in a server.", ephemeral: true });
     const text = interaction.options.getString("text", true).trim();
     let link = interaction.options.getString("link", true).trim();
@@ -1897,33 +1904,21 @@ Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**
       link = `https://${link}`;
     }
     const targetChannel = interaction.options.getChannel("channel") || interaction.channel;
-    const title = interaction.options.getString("title")?.trim();
-    const colorHex = interaction.options.getString("color") || "#5865F2";
-    const maskedLink = `[${text}](${link})`;
-    const embed = new import_discord2.EmbedBuilder().setDescription(`\u{1F517} **${maskedLink}**
-
-*(Click above to open the link)*`).setFooter({ text: "Paradox Embed Link" }).setTimestamp();
-    if (title) {
-      embed.setTitle(title);
-    }
-    try {
-      embed.setColor(parseInt(colorHex.replace("#", ""), 16));
-    } catch {
-      embed.setColor(5793266);
-    }
-    const row = new import_discord2.ActionRowBuilder().addComponents(
-      new import_discord2.ButtonBuilder().setLabel(text.length > 80 ? text.slice(0, 77) + "..." : text).setStyle(import_discord2.ButtonStyle.Link).setURL(link)
-    );
+    const extraMsg = interaction.options.getString("message")?.trim();
+    const maskedLink = `[${text}](<${link}>)`;
+    const finalContent = extraMsg ? `${extraMsg} ${maskedLink}` : maskedLink;
     if (targetChannel.id === interaction.channelId) {
       return interaction.reply({
-        embeds: [embed],
-        components: [row]
+        content: finalContent,
+        flags: [import_discord2.MessageFlags.SuppressEmbeds]
       });
     } else {
-      await targetChannel.send({ embeds: [embed], components: [row] });
+      await targetChannel.send({
+        content: finalContent,
+        flags: [import_discord2.MessageFlags.SuppressEmbeds]
+      });
       return interaction.reply({
-        content: `\u2705 Clickable embed link posted to <#${targetChannel.id}>!
-Markdown format: \`${maskedLink}\``,
+        content: `\u2705 Posted clickable blue text link to <#${targetChannel.id}>: ${maskedLink}`,
         ephemeral: true
       });
     }
@@ -2653,14 +2648,16 @@ Or to edit: \`${prefix}embed edit <message_id> <title> | <description>\``);
     const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(title).setDescription(desc).setTimestamp();
     return message.channel.send({ embeds: [embed] });
   }
-  if (command === "embedlink" || command === "link") {
+  if (command === "link" || command === "embedlink") {
     const rawArgs = content.slice(command.length).trim();
-    const match = rawArgs.match(/^"([^"]+)"\s+(.+)$/) || rawArgs.match(/^'([^']+)'\s+(.+)$/);
+    const match = rawArgs.match(/^"([^"]+)"\s+(https?:\/\/\S+|discord:\/\/\S+|\S+)(?:\s+(.*))?$/i) || rawArgs.match(/^'([^']+)'\s+(https?:\/\/\S+|discord:\/\/\S+|\S+)(?:\s+(.*))?$/i);
     let text = "";
     let link = "";
+    let extra = "";
     if (match) {
       text = match[1].trim();
       link = match[2].trim();
+      extra = match[3]?.trim() || "";
     } else {
       const parts = rawArgs.split(/\s+/);
       if (parts.length >= 2) {
@@ -2670,23 +2667,19 @@ Or to edit: \`${prefix}embed edit <message_id> <title> | <description>\``);
     }
     if (!text || !link) {
       return message.reply({
-        content: `\u274C **Usage**: \`${prefix}embedlink "<text>" <link>\`
-Example: \`${prefix}embedlink "Join Aura Tamil" https://discord.gg/aura\``
+        content: `\u274C **Usage**: \`${prefix}link "<text>" <link>\`
+Example: \`${prefix}link "Join Aura Tamil" https://discord.gg/aura\`
+*Highlights the text in blue and works like a link (no embed card).*`
       });
     }
     if (!link.startsWith("http://") && !link.startsWith("https://") && !link.startsWith("discord://")) {
       link = `https://${link}`;
     }
-    const maskedLink = `[${text}](${link})`;
-    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setDescription(`\u{1F517} **${maskedLink}**
-
-*(Click the link above to open)*`).setFooter({ text: "Paradox Embed Link" }).setTimestamp();
-    const row = new import_discord2.ActionRowBuilder().addComponents(
-      new import_discord2.ButtonBuilder().setLabel(text.length > 80 ? text.slice(0, 77) + "..." : text).setStyle(import_discord2.ButtonStyle.Link).setURL(link)
-    );
-    return message.reply({
-      embeds: [embed],
-      components: [row]
+    const maskedLink = `[${text}](<${link}>)`;
+    const finalContent = extra ? `${extra} ${maskedLink}` : maskedLink;
+    return message.channel.send({
+      content: finalContent,
+      flags: [import_discord2.MessageFlags.SuppressEmbeds]
     });
   }
   if (command === "dashboard") {
