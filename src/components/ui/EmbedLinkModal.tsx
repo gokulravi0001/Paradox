@@ -161,7 +161,7 @@ export function EmbedLinkModal({
               </div>
             )}
             <p className="text-[10px] text-zinc-500 italic">
-              💡 The &lt;&gt; brackets tell Discord to suppress preview embeds so only the blue text is shown.
+              💡 Supports &lt;a href=&quot;link&quot;&gt;TEXT&lt;/a&gt; syntax! You can also type &lt;a href=&quot;...&quot;&gt;TEXT&lt;/a&gt; directly in any Discord channel.
             </p>
           </div>
 

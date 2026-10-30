@@ -2983,6 +2983,68 @@ function extractAndTransformVideoUrls(content, enabledProviders = ["twitter", "t
 }
 
 // src/bot/events/messageCreate.ts
+async function handleHtmlLinkBridge(message, convertedContent) {
+  const channel = message.channel;
+  const guild = message.guild;
+  if (!guild || !("send" in channel)) return;
+  const botMember = guild.members.me;
+  const isThread = channel.isThread();
+  const parentChannel = isThread ? channel.parent : channel;
+  const canManageWebhooks = parentChannel && botMember?.permissionsIn(parentChannel.id).has(import_discord4.PermissionFlagsBits.ManageWebhooks);
+  const canManageMessages = botMember?.permissionsIn(channel.id).has(import_discord4.PermissionFlagsBits.ManageMessages);
+  if (canManageWebhooks && parentChannel) {
+    try {
+      const webhooks = await parentChannel.fetchWebhooks().catch(() => null);
+      let webhook = webhooks?.find((wh) => wh.owner?.id === message.client.user?.id);
+      if (!webhook) {
+        webhook = await parentChannel.createWebhook({
+          name: "Paradox Link Bridge",
+          avatar: message.client.user?.displayAvatarURL()
+        }).catch(() => null);
+      }
+      if (webhook) {
+        const attachments = Array.from(message.attachments.values()).map((att) => att.url);
+        const sendOptions = {
+          content: convertedContent,
+          username: message.member?.displayName || message.author.globalName || message.author.username,
+          avatarURL: message.author.displayAvatarURL(),
+          flags: [import_discord4.MessageFlags.SuppressEmbeds],
+          allowedMentions: { parse: ["users", "roles", "everyone"] }
+        };
+        if (isThread) {
+          sendOptions.threadId = channel.id;
+        }
+        if (attachments.length > 0) {
+          sendOptions.files = attachments;
+        }
+        await webhook.send(sendOptions);
+        if (canManageMessages) {
+          await message.delete().catch(() => null);
+        }
+        return;
+      }
+    } catch (err) {
+      console.error("[Bot:HtmlLinkBridge] Webhook send error, falling back:", err);
+    }
+  }
+  if (canManageMessages) {
+    try {
+      await message.delete().catch(() => null);
+      await channel.send({
+        content: `**${message.member?.displayName || message.author.username}**: ${convertedContent}`,
+        flags: [import_discord4.MessageFlags.SuppressEmbeds],
+        allowedMentions: { parse: ["users"] }
+      });
+      return;
+    } catch {
+    }
+  }
+  await message.reply({
+    content: convertedContent,
+    flags: [import_discord4.MessageFlags.SuppressEmbeds],
+    allowedMentions: { repliedUser: false }
+  }).catch(() => null);
+}
 async function onMessageCreate(message) {
   if (message.author.bot || message.webhookId) return;
   if (!message.guild || !("send" in message.channel)) return;
@@ -2998,6 +3060,18 @@ async function onMessageCreate(message) {
     const usedPrefix = isCustomPrefix ? prefix : isFallbackPrefix ? message.content[0] : null;
     if (usedPrefix) {
       await handleTextCommand(message, usedPrefix);
+      return;
+    }
+    const htmlLinkRegex = /<a\s+[^>]*href=["']?([^"'\s>]+)["']?[^>]*>([\s\S]*?)<\/a>/gi;
+    if (htmlLinkRegex.test(message.content)) {
+      const convertedContent = message.content.replace(htmlLinkRegex, (_, url, text) => {
+        let cleanUrl = String(url).trim();
+        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://") && !cleanUrl.startsWith("discord://")) {
+          cleanUrl = `https://${cleanUrl}`;
+        }
+        return `[${String(text).trim()}](<${cleanUrl}>)`;
+      });
+      await handleHtmlLinkBridge(message, convertedContent);
       return;
     }
     if (!config || !config.videoFixerEnabled) return;

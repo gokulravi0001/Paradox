@@ -4,10 +4,102 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags,
+  TextChannel,
 } from "discord.js";
 import { prisma } from "@/lib/prisma";
 import { extractAndTransformVideoUrls } from "../services/videoTransformer";
 import { handleTextCommand } from "../commands";
+
+/**
+ * Handles user chat messages containing <a href="LINK">TEXT</a>
+ * Converts them into pure blue clickable text [TEXT](<LINK>) in Discord without embed cards.
+ */
+async function handleHtmlLinkBridge(message: Message, convertedContent: string) {
+  const channel = message.channel;
+  const guild = message.guild;
+  if (!guild || !("send" in channel)) return;
+
+  const botMember = guild.members.me;
+  const isThread = channel.isThread();
+  const parentChannel = isThread ? (channel.parent as TextChannel | null) : (channel as TextChannel);
+
+  const canManageWebhooks =
+    parentChannel &&
+    botMember?.permissionsIn(parentChannel.id).has(PermissionFlagsBits.ManageWebhooks);
+  const canManageMessages =
+    botMember?.permissionsIn(channel.id).has(PermissionFlagsBits.ManageMessages);
+
+  // 1. Send via Webhook with user's name & avatar (native blue clickable text)
+  if (canManageWebhooks && parentChannel) {
+    try {
+      const webhooks = await parentChannel.fetchWebhooks().catch(() => null);
+      let webhook = webhooks?.find((wh) => wh.owner?.id === message.client.user?.id);
+
+      if (!webhook) {
+        webhook = await parentChannel
+          .createWebhook({
+            name: "Paradox Link Bridge",
+            avatar: message.client.user?.displayAvatarURL(),
+          })
+          .catch(() => null);
+      }
+
+      if (webhook) {
+        const attachments = Array.from(message.attachments.values()).map((att) => att.url);
+        const sendOptions: any = {
+          content: convertedContent,
+          username:
+            message.member?.displayName ||
+            message.author.globalName ||
+            message.author.username,
+          avatarURL: message.author.displayAvatarURL(),
+          flags: [MessageFlags.SuppressEmbeds],
+          allowedMentions: { parse: ["users", "roles", "everyone"] },
+        };
+
+        if (isThread) {
+          sendOptions.threadId = channel.id;
+        }
+
+        if (attachments.length > 0) {
+          sendOptions.files = attachments;
+        }
+
+        await webhook.send(sendOptions);
+
+        if (canManageMessages) {
+          await message.delete().catch(() => null);
+        }
+        return;
+      }
+    } catch (err) {
+      console.error("[Bot:HtmlLinkBridge] Webhook send error, falling back:", err);
+    }
+  }
+
+  // 2. Fallback: Bot sends message with username attribution and deletes original
+  if (canManageMessages) {
+    try {
+      await message.delete().catch(() => null);
+      await channel.send({
+        content: `**${message.member?.displayName || message.author.username}**: ${convertedContent}`,
+        flags: [MessageFlags.SuppressEmbeds],
+        allowedMentions: { parse: ["users"] },
+      });
+      return;
+    } catch {}
+  }
+
+  // 3. Fallback: Reply with the converted blue link
+  await message
+    .reply({
+      content: convertedContent,
+      flags: [MessageFlags.SuppressEmbeds],
+      allowedMentions: { repliedUser: false },
+    })
+    .catch(() => null);
+}
 
 export async function onMessageCreate(message: Message) {
   // Ignore bot messages and webhooks
@@ -39,7 +131,26 @@ export async function onMessageCreate(message: Message) {
       return;
     }
 
-    // 3. Process Video Embed Fixer if enabled
+    // 3. Process HTML-style links: <a href="LINK">TEXT</a>
+    const htmlLinkRegex = /<a\s+[^>]*href=["']?([^"'\s>]+)["']?[^>]*>([\s\S]*?)<\/a>/gi;
+    if (htmlLinkRegex.test(message.content)) {
+      const convertedContent = message.content.replace(htmlLinkRegex, (_, url, text) => {
+        let cleanUrl = String(url).trim();
+        if (
+          !cleanUrl.startsWith("http://") &&
+          !cleanUrl.startsWith("https://") &&
+          !cleanUrl.startsWith("discord://")
+        ) {
+          cleanUrl = `https://${cleanUrl}`;
+        }
+        return `[${String(text).trim()}](<${cleanUrl}>)`;
+      });
+
+      await handleHtmlLinkBridge(message, convertedContent);
+      return;
+    }
+
+    // 4. Process Video Embed Fixer if enabled
     if (!config || !config.videoFixerEnabled) return;
 
     // Check if channel is ignored
