@@ -1173,6 +1173,44 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
     }
   }
 
+  // Helper to resolve raw Discord mentions (<@123>, <#123>, <@&123>) into readable display names
+  async function resolveMentionsToNames(text: string, guild: any): Promise<string> {
+    if (!text) return text;
+    let res = text;
+
+    // Resolve user mentions <@123456> or <@!123456>
+    const userMentions = Array.from(res.matchAll(/<@!?(\d+)>/g));
+    for (const m of userMentions) {
+      const id = m[1];
+      let name: string | null = null;
+      if (guild) {
+        const member = guild.members.cache.get(id) || (await guild.members.fetch(id).catch(() => null));
+        name = member?.displayName || member?.user?.globalName || member?.user?.username || null;
+      }
+      if (!name && guild?.client) {
+        const user = await guild.client.users.fetch(id).catch(() => null);
+        name = user?.globalName || user?.username || null;
+      }
+      res = res.replace(m[0], `@${name || "User"}`);
+    }
+
+    // Resolve channel mentions <#123456>
+    if (guild) {
+      res = res.replace(/<#(\d+)>/g, (full, id) => {
+        const ch = guild.channels.cache.get(id);
+        return ch ? `#${ch.name}` : full;
+      });
+
+      // Resolve role mentions <@&123456>
+      res = res.replace(/<@&(\d+)>/g, (full, id) => {
+        const role = guild.roles.cache.get(id);
+        return role ? `@${role.name}` : full;
+      });
+    }
+
+    return res;
+  }
+
   // /quote, /animatedquote, or Context Menu "Quote Message" (AURA Quote with User Avatar & Text)
   if (commandName === "quote" || commandName === "Quote Message" || commandName === "animatedquote") {
     const isAnimated = commandName === "animatedquote";
@@ -1206,12 +1244,15 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       }
 
       let authorUser: User = interaction.user;
+      const initialMember = interaction.member as GuildMember | null;
       let authorName: string =
-        (interaction.member as GuildMember)?.displayName ||
+        initialMember?.displayName ||
         interaction.user.globalName ||
         interaction.user.username;
-      let authorTag: string = interaction.user.tag;
-      let avatarUrl: string = interaction.user.displayAvatarURL({ extension: "png", size: 512 });
+      let authorTag: string = interaction.user.username;
+      let avatarUrl: string =
+        initialMember?.displayAvatarURL({ extension: "png", size: 512 }) ||
+        interaction.user.displayAvatarURL({ extension: "png", size: 512 });
       let timestamp: string | undefined = undefined;
 
       if (targetMsg) {
@@ -1220,13 +1261,12 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
           targetMsg.content ||
           (targetMsg.attachments.size > 0 ? "[Photo / Attachment]" : "[Quoted Message]");
         authorUser = targetMsg.author;
-        authorName =
-          authorOverride ||
-          targetMsg.member?.displayName ||
-          targetMsg.author.globalName ||
-          targetMsg.author.username;
-        authorTag = targetMsg.author.tag;
-        avatarUrl = targetMsg.author.displayAvatarURL({ extension: "png", size: 512 });
+        const msgMember = targetMsg.member || (await guild?.members.fetch(targetMsg.author.id).catch(() => null));
+        authorName = msgMember?.displayName || targetMsg.author.globalName || targetMsg.author.username;
+        authorTag = targetMsg.author.username;
+        avatarUrl =
+          msgMember?.displayAvatarURL({ extension: "png", size: 512 }) ||
+          targetMsg.author.displayAvatarURL({ extension: "png", size: 512 });
         timestamp = targetMsg.createdAt.toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
@@ -1234,11 +1274,57 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
         });
       } else if (targetUser) {
         authorUser = targetUser;
-        authorName = authorOverride || targetUser.globalName || targetUser.username;
-        authorTag = targetUser.tag;
-        avatarUrl = targetUser.displayAvatarURL({ extension: "png", size: 512 });
-      } else if (authorOverride) {
-        authorName = authorOverride;
+        const targetMember = await guild?.members.fetch(targetUser.id).catch(() => null);
+        authorName = targetMember?.displayName || targetUser.globalName || targetUser.username;
+        authorTag = targetUser.username;
+        avatarUrl =
+          targetMember?.displayAvatarURL({ extension: "png", size: 512 }) ||
+          targetUser.displayAvatarURL({ extension: "png", size: 512 });
+      }
+
+      // Resolve authorOverride if user passes a mention like <@123456>, ID, or custom name
+      if (authorOverride && authorOverride.trim()) {
+        const rawOverride = authorOverride.trim();
+        const mentionMatch = rawOverride.match(/<@!?(\d+)>/);
+        const idToLookup = mentionMatch ? mentionMatch[1] : /^\d{17,20}$/.test(rawOverride) ? rawOverride : null;
+
+        if (idToLookup) {
+          const member = await guild?.members.fetch(idToLookup).catch(() => null);
+          const user = member?.user || (await client.users.fetch(idToLookup).catch(() => null));
+          if (member) {
+            authorUser = member.user;
+            authorName = member.displayName;
+            authorTag = member.user.username;
+            if (!bgAttachment) avatarUrl = member.displayAvatarURL({ extension: "png", size: 512 });
+          } else if (user) {
+            authorUser = user;
+            authorName = user.globalName || user.username;
+            authorTag = user.username;
+            if (!bgAttachment) avatarUrl = user.displayAvatarURL({ extension: "png", size: 512 });
+          }
+        } else {
+          const cleanName = rawOverride.replace(/^@/, "").toLowerCase();
+          const memberMatch = guild?.members.cache.find(
+            (m) =>
+              m.displayName.toLowerCase() === cleanName ||
+              m.user.username.toLowerCase() === cleanName ||
+              m.user.globalName?.toLowerCase() === cleanName
+          );
+          if (memberMatch) {
+            authorUser = memberMatch.user;
+            authorName = memberMatch.displayName;
+            authorTag = memberMatch.user.username;
+            if (!bgAttachment) avatarUrl = memberMatch.displayAvatarURL({ extension: "png", size: 512 });
+          } else {
+            authorName = rawOverride.replace(/^@/, "");
+          }
+        }
+      }
+
+      // Ensure authorName never retains raw <@id> syntax
+      authorName = await resolveMentionsToNames(authorName, guild);
+      if (/<@!?\d+>/.test(authorName)) {
+        authorName = authorTag || "Anonymous";
       }
 
       if (!quoteText || !quoteText.trim()) {
@@ -1247,7 +1333,8 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
         });
       }
 
-      const cleanQuote = quoteText.trim();
+      // Resolve any Discord mentions inside the quote text into readable names
+      const cleanQuote = await resolveMentionsToNames(quoteText.trim(), guild);
       const maxLength = isAnimated ? 600 : 1000;
       if (cleanQuote.length > maxLength) {
         return interaction.editReply({
@@ -1359,25 +1446,50 @@ export async function handleTextCommand(message: Message, prefix: string) {
     let authorUser: User = message.author;
     let authorName: string = message.member?.displayName || message.author.globalName || message.author.username;
     let authorTag: string = message.author.username;
-    let avatarUrl: string = message.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+    let avatarUrl: string =
+      message.member?.displayAvatarURL({ extension: "png", size: 512, forceStatic: true }) ||
+      message.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
 
     if (targetMsg) {
-      quoteText = quoteText || targetMsg.content || (targetMsg.attachments.size > 0 ? "[Photo / Attachment]" : "[Quoted Message]");
+      quoteText =
+        quoteText ||
+        targetMsg.content ||
+        (targetMsg.attachments.size > 0 ? "[Photo / Attachment]" : "[Quoted Message]");
       authorUser = targetMsg.author;
-      authorName = targetMsg.member?.displayName || targetMsg.author.globalName || targetMsg.author.username;
+      const targetMember = targetMsg.member || (await guild?.members.fetch(targetMsg.author.id).catch(() => null));
+      authorName = targetMember?.displayName || targetMsg.author.globalName || targetMsg.author.username;
       authorTag = targetMsg.author.username;
-      avatarUrl = targetMsg.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+      avatarUrl =
+        targetMember?.displayAvatarURL({ extension: "png", size: 512, forceStatic: true }) ||
+        targetMsg.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+    } else if (message.mentions.users.size > 0) {
+      const mentionedMember = message.mentions.members?.first();
+      const mentionedUser = message.mentions.users.first()!;
+      authorUser = mentionedUser;
+      authorName = mentionedMember?.displayName || mentionedUser.globalName || mentionedUser.username;
+      authorTag = mentionedUser.username;
+      avatarUrl =
+        mentionedMember?.displayAvatarURL({ extension: "png", size: 512, forceStatic: true }) ||
+        mentionedUser.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+      quoteText = args.slice(1).join(" ").replace(/<@!?\d+>/g, "").trim();
     }
 
     if (!quoteText || !quoteText.trim()) {
       return message.reply(`💡 **Usage:** Reply to any message and type \`${prefix}quote\` to turn it into a photo quote!`);
     }
 
+    authorName = await resolveMentionsToNames(authorName, guild);
+    if (/<@!?\d+>/.test(authorName)) {
+      authorName = authorTag || "Anonymous";
+    }
+
+    const cleanQuote = await resolveMentionsToNames(quoteText.trim(), guild);
+
     await message.channel.sendTyping().catch(() => null);
 
     try {
       const cardBuffer = await generateQuoteCard({
-        text: quoteText.trim(),
+        text: cleanQuote,
         author: authorName,
         authorTag,
         avatarUrl,

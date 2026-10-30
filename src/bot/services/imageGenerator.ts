@@ -359,24 +359,39 @@ export async function generateQuoteCard(options: QuoteCardOptions): Promise<Buff
   });
 
   // Author details below text
-  const authorName = options.author?.trim() || "Anonymous";
+  let authorName = options.author?.trim() || "Anonymous";
+  if (/<@!?\d+>/.test(authorName)) {
+    if (options.authorTag) {
+      authorName = options.authorTag.replace(/^@/, "");
+    } else {
+      authorName = authorName.replace(/<@!?\d+>/g, "").trim() || "Anonymous";
+    }
+  }
+
   const authorY = startY + (lines.length - 1) * lineHeight + 48;
 
-  ctx.font = "22px sans-serif";
+  ctx.font = '22px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = "#E5E7EB";
   ctx.fillText(`- ${authorName}`, textCenterX, authorY);
 
   if (options.authorTag) {
-    ctx.font = "16px sans-serif";
-    ctx.fillStyle = "#888888";
-    const tagText = options.authorTag.startsWith("@") ? options.authorTag : `@${options.authorTag}`;
-    ctx.fillText(tagText, textCenterX, authorY + 28);
+    const cleanTag = options.authorTag.trim();
+    const tagText = cleanTag.startsWith("@") ? cleanTag : `@${cleanTag}`;
+    if (tagText.toLowerCase() !== `@${authorName.toLowerCase()}`) {
+      ctx.font = '16px "Segoe UI", Arial, sans-serif';
+      ctx.fillStyle = "#888888";
+      ctx.fillText(tagText, textCenterX, authorY + 28);
+    }
   }
 
-  // Watermark in bottom-right corner
-  const watermarkText = options.serverName || "A U R A   T A M I L";
+  // Watermark in bottom-right corner (normalize stylized Unicode so glyphs do not render as □ boxes)
+  let watermarkText = (options.serverName || "A U R A   T A M I L")
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "")
+    .trim();
+  if (!watermarkText) watermarkText = "A U R A   T A M I L";
   ctx.textAlign = "right";
-  ctx.font = "14px sans-serif";
+  ctx.font = '14px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = "#555555";
   ctx.fillText(watermarkText, width - 25, height - 25);
 
@@ -471,11 +486,19 @@ export async function generateAnimatedQuoteCard(options: QuoteCardOptions): Prom
     });
 
     // Author with subtle neon pulse
-    const authorName = options.author?.trim() || "Anonymous";
+    let authorName = options.author?.trim() || "Anonymous";
+    if (/<@!?\d+>/.test(authorName)) {
+      if (options.authorTag) {
+        authorName = options.authorTag.replace(/^@/, "");
+      } else {
+        authorName = authorName.replace(/<@!?\d+>/g, "").trim() || "Anonymous";
+      }
+    }
+
     const authorY = startY + (lines.length - 1) * lineHeight + 42;
 
     ctx.save();
-    ctx.font = "18px sans-serif";
+    ctx.font = '18px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = pulse > 0 ? "#E5E7EB" : "#D1D5DB";
     ctx.shadowColor = pulse > 0 ? "rgba(168, 85, 247, 0.8)" : "rgba(239, 68, 68, 0.8)";
     ctx.shadowBlur = 4 + Math.abs(pulse) * 6;
@@ -483,16 +506,23 @@ export async function generateAnimatedQuoteCard(options: QuoteCardOptions): Prom
     ctx.restore();
 
     if (options.authorTag) {
-      ctx.font = "14px sans-serif";
-      ctx.fillStyle = "#888888";
-      const tagText = options.authorTag.startsWith("@") ? options.authorTag : `@${options.authorTag}`;
-      ctx.fillText(tagText, textCenterX, authorY + 24);
+      const cleanTag = options.authorTag.trim();
+      const tagText = cleanTag.startsWith("@") ? cleanTag : `@${cleanTag}`;
+      if (tagText.toLowerCase() !== `@${authorName.toLowerCase()}`) {
+        ctx.font = '14px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = "#888888";
+        ctx.fillText(tagText, textCenterX, authorY + 24);
+      }
     }
 
     // Watermark in bottom-right corner
-    const watermarkText = options.serverName || "A U R A   T A M I L";
+    let watermarkText = (options.serverName || "A U R A   T A M I L")
+      .normalize("NFKD")
+      .replace(/[^\x20-\x7E]/g, "")
+      .trim();
+    if (!watermarkText) watermarkText = "A U R A   T A M I L";
     ctx.textAlign = "right";
-    ctx.font = "12px sans-serif";
+    ctx.font = '12px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = "#444444";
     ctx.fillText(watermarkText, width - 20, height - 20);
 

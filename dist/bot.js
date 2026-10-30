@@ -1129,20 +1129,31 @@ async function generateQuoteCard(options) {
   lines.forEach((line, index) => {
     ctx.fillText(line, textCenterX, startY + index * lineHeight);
   });
-  const authorName = options.author?.trim() || "Anonymous";
+  let authorName = options.author?.trim() || "Anonymous";
+  if (/<@!?\d+>/.test(authorName)) {
+    if (options.authorTag) {
+      authorName = options.authorTag.replace(/^@/, "");
+    } else {
+      authorName = authorName.replace(/<@!?\d+>/g, "").trim() || "Anonymous";
+    }
+  }
   const authorY = startY + (lines.length - 1) * lineHeight + 48;
-  ctx.font = "22px sans-serif";
+  ctx.font = '22px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = "#E5E7EB";
   ctx.fillText(`- ${authorName}`, textCenterX, authorY);
   if (options.authorTag) {
-    ctx.font = "16px sans-serif";
-    ctx.fillStyle = "#888888";
-    const tagText = options.authorTag.startsWith("@") ? options.authorTag : `@${options.authorTag}`;
-    ctx.fillText(tagText, textCenterX, authorY + 28);
+    const cleanTag = options.authorTag.trim();
+    const tagText = cleanTag.startsWith("@") ? cleanTag : `@${cleanTag}`;
+    if (tagText.toLowerCase() !== `@${authorName.toLowerCase()}`) {
+      ctx.font = '16px "Segoe UI", Arial, sans-serif';
+      ctx.fillStyle = "#888888";
+      ctx.fillText(tagText, textCenterX, authorY + 28);
+    }
   }
-  const watermarkText = options.serverName || "A U R A   T A M I L";
+  let watermarkText = (options.serverName || "A U R A   T A M I L").normalize("NFKD").replace(/[^\x20-\x7E]/g, "").trim();
+  if (!watermarkText) watermarkText = "A U R A   T A M I L";
   ctx.textAlign = "right";
-  ctx.font = "14px sans-serif";
+  ctx.font = '14px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = "#555555";
   ctx.fillText(watermarkText, width - 25, height - 25);
   return canvas.toBuffer("image/png");
@@ -1213,24 +1224,35 @@ async function generateAnimatedQuoteCard(options) {
     lines.forEach((line, index2) => {
       ctx.fillText(line, textCenterX, startY + index2 * lineHeight);
     });
-    const authorName = options.author?.trim() || "Anonymous";
+    let authorName = options.author?.trim() || "Anonymous";
+    if (/<@!?\d+>/.test(authorName)) {
+      if (options.authorTag) {
+        authorName = options.authorTag.replace(/^@/, "");
+      } else {
+        authorName = authorName.replace(/<@!?\d+>/g, "").trim() || "Anonymous";
+      }
+    }
     const authorY = startY + (lines.length - 1) * lineHeight + 42;
     ctx.save();
-    ctx.font = "18px sans-serif";
+    ctx.font = '18px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = pulse > 0 ? "#E5E7EB" : "#D1D5DB";
     ctx.shadowColor = pulse > 0 ? "rgba(168, 85, 247, 0.8)" : "rgba(239, 68, 68, 0.8)";
     ctx.shadowBlur = 4 + Math.abs(pulse) * 6;
     ctx.fillText(`- ${authorName}`, textCenterX, authorY);
     ctx.restore();
     if (options.authorTag) {
-      ctx.font = "14px sans-serif";
-      ctx.fillStyle = "#888888";
-      const tagText = options.authorTag.startsWith("@") ? options.authorTag : `@${options.authorTag}`;
-      ctx.fillText(tagText, textCenterX, authorY + 24);
+      const cleanTag = options.authorTag.trim();
+      const tagText = cleanTag.startsWith("@") ? cleanTag : `@${cleanTag}`;
+      if (tagText.toLowerCase() !== `@${authorName.toLowerCase()}`) {
+        ctx.font = '14px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = "#888888";
+        ctx.fillText(tagText, textCenterX, authorY + 24);
+      }
     }
-    const watermarkText = options.serverName || "A U R A   T A M I L";
+    let watermarkText = (options.serverName || "A U R A   T A M I L").normalize("NFKD").replace(/[^\x20-\x7E]/g, "").trim();
+    if (!watermarkText) watermarkText = "A U R A   T A M I L";
     ctx.textAlign = "right";
-    ctx.font = "12px sans-serif";
+    ctx.font = '12px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = "#444444";
     ctx.fillText(watermarkText, width - 20, height - 20);
     const { data } = ctx.getImageData(0, 0, width, height);
@@ -2030,6 +2052,35 @@ Click the title above or the button below to enter **${serverName}**!
       });
     }
   }
+  async function resolveMentionsToNames2(text, guild2) {
+    if (!text) return text;
+    let res = text;
+    const userMentions = Array.from(res.matchAll(/<@!?(\d+)>/g));
+    for (const m of userMentions) {
+      const id = m[1];
+      let name = null;
+      if (guild2) {
+        const member = guild2.members.cache.get(id) || await guild2.members.fetch(id).catch(() => null);
+        name = member?.displayName || member?.user?.globalName || member?.user?.username || null;
+      }
+      if (!name && guild2?.client) {
+        const user = await guild2.client.users.fetch(id).catch(() => null);
+        name = user?.globalName || user?.username || null;
+      }
+      res = res.replace(m[0], `@${name || "User"}`);
+    }
+    if (guild2) {
+      res = res.replace(/<#(\d+)>/g, (full, id) => {
+        const ch = guild2.channels.cache.get(id);
+        return ch ? `#${ch.name}` : full;
+      });
+      res = res.replace(/<@&(\d+)>/g, (full, id) => {
+        const role = guild2.roles.cache.get(id);
+        return role ? `@${role.name}` : full;
+      });
+    }
+    return res;
+  }
   if (commandName === "quote" || commandName === "Quote Message" || commandName === "animatedquote") {
     const isAnimated = commandName === "animatedquote";
     const isContextMenu = interaction.isMessageContextMenuCommand?.() || commandName === "Quote Message";
@@ -2058,16 +2109,18 @@ Click the title above or the button below to enter **${serverName}**!
         bgAttachment = interaction.options.getAttachment("background");
       }
       let authorUser = interaction.user;
-      let authorName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
-      let authorTag = interaction.user.tag;
-      let avatarUrl = interaction.user.displayAvatarURL({ extension: "png", size: 512 });
+      const initialMember = interaction.member;
+      let authorName = initialMember?.displayName || interaction.user.globalName || interaction.user.username;
+      let authorTag = interaction.user.username;
+      let avatarUrl = initialMember?.displayAvatarURL({ extension: "png", size: 512 }) || interaction.user.displayAvatarURL({ extension: "png", size: 512 });
       let timestamp = void 0;
       if (targetMsg) {
         quoteText = quoteText || targetMsg.content || (targetMsg.attachments.size > 0 ? "[Photo / Attachment]" : "[Quoted Message]");
         authorUser = targetMsg.author;
-        authorName = authorOverride || targetMsg.member?.displayName || targetMsg.author.globalName || targetMsg.author.username;
-        authorTag = targetMsg.author.tag;
-        avatarUrl = targetMsg.author.displayAvatarURL({ extension: "png", size: 512 });
+        const msgMember = targetMsg.member || await guild?.members.fetch(targetMsg.author.id).catch(() => null);
+        authorName = msgMember?.displayName || targetMsg.author.globalName || targetMsg.author.username;
+        authorTag = targetMsg.author.username;
+        avatarUrl = msgMember?.displayAvatarURL({ extension: "png", size: 512 }) || targetMsg.author.displayAvatarURL({ extension: "png", size: 512 });
         timestamp = targetMsg.createdAt.toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
@@ -2075,18 +2128,54 @@ Click the title above or the button below to enter **${serverName}**!
         });
       } else if (targetUser) {
         authorUser = targetUser;
-        authorName = authorOverride || targetUser.globalName || targetUser.username;
-        authorTag = targetUser.tag;
-        avatarUrl = targetUser.displayAvatarURL({ extension: "png", size: 512 });
-      } else if (authorOverride) {
-        authorName = authorOverride;
+        const targetMember = await guild?.members.fetch(targetUser.id).catch(() => null);
+        authorName = targetMember?.displayName || targetUser.globalName || targetUser.username;
+        authorTag = targetUser.username;
+        avatarUrl = targetMember?.displayAvatarURL({ extension: "png", size: 512 }) || targetUser.displayAvatarURL({ extension: "png", size: 512 });
+      }
+      if (authorOverride && authorOverride.trim()) {
+        const rawOverride = authorOverride.trim();
+        const mentionMatch = rawOverride.match(/<@!?(\d+)>/);
+        const idToLookup = mentionMatch ? mentionMatch[1] : /^\d{17,20}$/.test(rawOverride) ? rawOverride : null;
+        if (idToLookup) {
+          const member = await guild?.members.fetch(idToLookup).catch(() => null);
+          const user = member?.user || await client.users.fetch(idToLookup).catch(() => null);
+          if (member) {
+            authorUser = member.user;
+            authorName = member.displayName;
+            authorTag = member.user.username;
+            if (!bgAttachment) avatarUrl = member.displayAvatarURL({ extension: "png", size: 512 });
+          } else if (user) {
+            authorUser = user;
+            authorName = user.globalName || user.username;
+            authorTag = user.username;
+            if (!bgAttachment) avatarUrl = user.displayAvatarURL({ extension: "png", size: 512 });
+          }
+        } else {
+          const cleanName = rawOverride.replace(/^@/, "").toLowerCase();
+          const memberMatch = guild?.members.cache.find(
+            (m) => m.displayName.toLowerCase() === cleanName || m.user.username.toLowerCase() === cleanName || m.user.globalName?.toLowerCase() === cleanName
+          );
+          if (memberMatch) {
+            authorUser = memberMatch.user;
+            authorName = memberMatch.displayName;
+            authorTag = memberMatch.user.username;
+            if (!bgAttachment) avatarUrl = memberMatch.displayAvatarURL({ extension: "png", size: 512 });
+          } else {
+            authorName = rawOverride.replace(/^@/, "");
+          }
+        }
+      }
+      authorName = await resolveMentionsToNames2(authorName, guild);
+      if (/<@!?\d+>/.test(authorName)) {
+        authorName = authorTag || "Anonymous";
       }
       if (!quoteText || !quoteText.trim()) {
         return interaction.editReply({
           content: "\u274C Quote text is required. Please provide text in the `quote` option or specify a message to quote."
         });
       }
-      const cleanQuote = quoteText.trim();
+      const cleanQuote = await resolveMentionsToNames2(quoteText.trim(), guild);
       const maxLength = isAnimated ? 600 : 1e3;
       if (cleanQuote.length > maxLength) {
         return interaction.editReply({
@@ -2180,21 +2269,35 @@ async function handleTextCommand(message, prefix) {
     let authorUser = message.author;
     let authorName = message.member?.displayName || message.author.globalName || message.author.username;
     let authorTag = message.author.username;
-    let avatarUrl = message.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+    let avatarUrl = message.member?.displayAvatarURL({ extension: "png", size: 512, forceStatic: true }) || message.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
     if (targetMsg) {
       quoteText = quoteText || targetMsg.content || (targetMsg.attachments.size > 0 ? "[Photo / Attachment]" : "[Quoted Message]");
       authorUser = targetMsg.author;
-      authorName = targetMsg.member?.displayName || targetMsg.author.globalName || targetMsg.author.username;
+      const targetMember = targetMsg.member || await guild?.members.fetch(targetMsg.author.id).catch(() => null);
+      authorName = targetMember?.displayName || targetMsg.author.globalName || targetMsg.author.username;
       authorTag = targetMsg.author.username;
-      avatarUrl = targetMsg.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+      avatarUrl = targetMember?.displayAvatarURL({ extension: "png", size: 512, forceStatic: true }) || targetMsg.author.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+    } else if (message.mentions.users.size > 0) {
+      const mentionedMember = message.mentions.members?.first();
+      const mentionedUser = message.mentions.users.first();
+      authorUser = mentionedUser;
+      authorName = mentionedMember?.displayName || mentionedUser.globalName || mentionedUser.username;
+      authorTag = mentionedUser.username;
+      avatarUrl = mentionedMember?.displayAvatarURL({ extension: "png", size: 512, forceStatic: true }) || mentionedUser.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+      quoteText = args.slice(1).join(" ").replace(/<@!?\d+>/g, "").trim();
     }
     if (!quoteText || !quoteText.trim()) {
       return message.reply(`\u{1F4A1} **Usage:** Reply to any message and type \`${prefix}quote\` to turn it into a photo quote!`);
     }
+    authorName = await resolveMentionsToNames(authorName, guild);
+    if (/<@!?\d+>/.test(authorName)) {
+      authorName = authorTag || "Anonymous";
+    }
+    const cleanQuote = await resolveMentionsToNames(quoteText.trim(), guild);
     await message.channel.sendTyping().catch(() => null);
     try {
       const cardBuffer = await generateQuoteCard({
-        text: quoteText.trim(),
+        text: cleanQuote,
         author: authorName,
         authorTag,
         avatarUrl,
