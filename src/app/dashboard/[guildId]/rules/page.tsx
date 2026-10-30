@@ -32,6 +32,7 @@ export default function RulesPage() {
   const guildId = params.guildId as string;
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [channels, setChannels] = useState<DiscordChannelItem[]>([]);
   const [rules, setRules] = useState<RuleItem[]>([]);
@@ -84,6 +85,22 @@ export default function RulesPage() {
 
     if (guildId) init();
   }, [guildId]);
+
+  async function refreshChannels() {
+    try {
+      setRefreshing(true);
+      const res = await fetch(`/api/guilds/${guildId}/channels`);
+      if (res.ok) {
+        const cData = await res.json();
+        setChannels(cData.channels || []);
+        addToast("success", "Channels refreshed from Discord!");
+      }
+    } catch {
+      addToast("error", "Failed to refresh channels.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleAddRule(e: React.FormEvent) {
     e.preventDefault();
@@ -230,6 +247,8 @@ export default function RulesPage() {
                   channels={channels}
                   selectedChannelId={channelId}
                   onSelect={(id) => setChannelId(id)}
+                  onRefresh={refreshChannels}
+                  refreshing={refreshing}
                   placeholder="Select rules channel..."
                 />
               </div>

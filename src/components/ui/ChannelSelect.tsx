@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import { Hash, Volume2, Megaphone, MessageSquare, ChevronDown, RefreshCw, Search } from "lucide-react";
 
 export interface DiscordChannelItem {
@@ -21,6 +22,8 @@ interface ChannelSelectProps {
   refreshing?: boolean;
   className?: string;
   required?: boolean;
+  guildId?: string;
+  onChannelsUpdated?: (channels: DiscordChannelItem[]) => void;
 }
 
 export function getChannelIcon(type?: number) {
@@ -37,7 +40,7 @@ export function getChannelIcon(type?: number) {
 }
 
 export function ChannelSelect({
-  channels,
+  channels: initialChannels,
   selectedChannelId,
   onSelect,
   filterTypes = [0, 5], // Default text & announcement channels
@@ -46,11 +49,55 @@ export function ChannelSelect({
   onRefresh,
   refreshing = false,
   className = "",
+  guildId: explicitGuildId,
+  onChannelsUpdated,
 }: ChannelSelectProps) {
+  const params = useParams();
+  const routeGuildId = params?.guildId as string | undefined;
+  const targetGuildId = explicitGuildId || routeGuildId;
+
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [internalChannels, setInternalChannels] = useState<DiscordChannelItem[]>(initialChannels || []);
+  const [internalRefreshing, setInternalRefreshing] = useState(false);
 
-  const filtered = channels
+  useEffect(() => {
+    if (initialChannels && initialChannels.length > 0) {
+      setInternalChannels(initialChannels);
+    }
+  }, [initialChannels]);
+
+  const activeChannels = internalChannels.length > 0 ? internalChannels : initialChannels || [];
+  const isRefreshing = refreshing || internalRefreshing;
+
+  async function handleRefresh() {
+    if (onRefresh) {
+      onRefresh();
+      return;
+    }
+    if (!targetGuildId) return;
+
+    try {
+      setInternalRefreshing(true);
+      const res = await fetch(`/api/guilds/${targetGuildId}/channels`);
+      if (res.ok) {
+        const data = await res.json();
+        const freshChannels = data.channels || [];
+        setInternalChannels(freshChannels);
+        if (onChannelsUpdated) {
+          onChannelsUpdated(freshChannels);
+        }
+      }
+    } catch (err) {
+      console.error("[ChannelSelect] Failed to refresh channels:", err);
+    } finally {
+      setInternalRefreshing(false);
+    }
+  }
+
+  const showRefreshButton = Boolean(onRefresh || targetGuildId);
+
+  const filtered = activeChannels
     .filter((c) => {
       // Ignore category channels (type 4)
       if (c.type === 4) return false;
@@ -62,7 +109,7 @@ export function ChannelSelect({
     })
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
-  const selectedChannel = channels.find((c) => c.id === selectedChannelId);
+  const selectedChannel = activeChannels.find((c) => c.id === selectedChannelId);
 
   return (
     <div className={`relative ${className}`}>
@@ -99,15 +146,15 @@ export function ChannelSelect({
           />
         </button>
 
-        {onRefresh && (
+        {showRefreshButton && (
           <button
             type="button"
-            onClick={onRefresh}
-            disabled={refreshing || disabled}
-            title="Refresh channel list"
-            className="p-2.5 rounded-xl bg-discord-dark border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition disabled:opacity-50 cursor-pointer"
+            onClick={handleRefresh}
+            disabled={isRefreshing || disabled}
+            title="Refresh channels from Discord"
+            className="p-2.5 rounded-xl bg-discord-dark border border-white/10 hover:border-discord-blurple/50 hover:bg-white/[0.04] text-zinc-400 hover:text-discord-blurple transition flex items-center justify-center disabled:opacity-50 cursor-pointer shadow-sm"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-discord-blurple" : ""}`} />
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin text-discord-blurple" : ""}`} />
           </button>
         )}
       </div>
@@ -131,18 +178,18 @@ export function ChannelSelect({
                   className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-discord-dark border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-discord-blurple"
                 />
               </div>
-              {onRefresh && (
+              {showRefreshButton && (
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRefresh();
+                    handleRefresh();
                   }}
-                  disabled={refreshing}
-                  title="Refresh server channels"
+                  disabled={isRefreshing}
+                  title="Refresh channels from Discord"
                   className="p-2 rounded-lg bg-discord-dark hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition cursor-pointer flex-shrink-0"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-discord-blurple" : ""}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-discord-blurple" : ""}`} />
                 </button>
               )}
             </div>
@@ -150,7 +197,7 @@ export function ChannelSelect({
             <div className="overflow-y-auto space-y-0.5 divide-y divide-white/[0.03] pr-1">
               {filtered.length === 0 ? (
                 <div className="py-6 text-center text-xs text-zinc-500">
-                  {channels.length === 0 ? "No channels loaded from server" : "No matching channels"}
+                  {activeChannels.length === 0 ? "No channels loaded from server" : "No matching channels"}
                 </div>
               ) : (
                 filtered.map((c) => {

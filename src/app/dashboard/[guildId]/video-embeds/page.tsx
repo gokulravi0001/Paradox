@@ -40,6 +40,7 @@ export default function VideoEmbedsPage() {
   const guildId = params.guildId as string;
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [channels, setChannels] = useState<DiscordChannelItem[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -100,6 +101,22 @@ export default function VideoEmbedsPage() {
 
     if (guildId) init();
   }, [guildId]);
+
+  async function refreshChannels() {
+    try {
+      setRefreshing(true);
+      const res = await fetch(`/api/guilds/${guildId}/channels`);
+      if (res.ok) {
+        const cData = await res.json();
+        setChannels(cData.channels || []);
+        addToast("success", "Channels refreshed from Discord!");
+      }
+    } catch {
+      addToast("error", "Failed to refresh channels.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   function toggleProvider(id: string) {
     if (activeProviders.includes(id)) {
@@ -289,6 +306,8 @@ export default function VideoEmbedsPage() {
                 setIgnoredChannels([...ignoredChannels, id]);
               }
             }}
+            onRefresh={refreshChannels}
+            refreshing={refreshing}
             placeholder="Add an excluded channel..."
           />
 

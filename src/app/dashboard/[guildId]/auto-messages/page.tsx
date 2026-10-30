@@ -35,6 +35,7 @@ export default function AutoMessagesPage() {
   const guildId = params.guildId as string;
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [channels, setChannels] = useState<DiscordChannelItem[]>([]);
   const [autoMessages, setAutoMessages] = useState<AutoMessageItem[]>([]);
@@ -83,6 +84,22 @@ export default function AutoMessagesPage() {
 
     if (guildId) init();
   }, [guildId]);
+
+  async function refreshChannels() {
+    try {
+      setRefreshing(true);
+      const res = await fetch(`/api/guilds/${guildId}/channels`);
+      if (res.ok) {
+        const cData = await res.json();
+        setChannels(cData.channels || []);
+        addToast("success", "Channels refreshed from Discord!");
+      }
+    } catch {
+      addToast("error", "Failed to refresh channels.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -230,6 +247,8 @@ export default function AutoMessagesPage() {
                 channels={channels}
                 selectedChannelId={channelId}
                 onSelect={(id) => setChannelId(id)}
+                onRefresh={refreshChannels}
+                refreshing={refreshing}
                 placeholder="Choose channel for automated messages..."
               />
             </div>

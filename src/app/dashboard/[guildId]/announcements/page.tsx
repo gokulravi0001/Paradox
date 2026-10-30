@@ -37,6 +37,7 @@ export default function AnnouncementsPage() {
   const guildId = params.guildId as string;
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [channels, setChannels] = useState<DiscordChannelItem[]>([]);
   const [roles, setRoles] = useState<DiscordRoleItem[]>([]);
@@ -98,6 +99,32 @@ export default function AnnouncementsPage() {
 
     if (guildId) init();
   }, [guildId]);
+
+  async function refreshChannels() {
+    try {
+      setRefreshing(true);
+      const [channelsRes, rolesRes] = await Promise.all([
+        fetch(`/api/guilds/${guildId}/channels`),
+        fetch(`/api/guilds/${guildId}/roles`),
+      ]);
+
+      if (channelsRes.ok) {
+        const cData = await channelsRes.json();
+        setChannels(cData.channels || []);
+      }
+
+      if (rolesRes.ok) {
+        const rData = await rolesRes.json();
+        setRoles(rData.roles || []);
+      }
+
+      addToast("success", "Channels and roles refreshed from Discord!");
+    } catch {
+      addToast("error", "Failed to refresh channels.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleSend() {
     setConfirmOpen(false);
@@ -233,6 +260,8 @@ export default function AnnouncementsPage() {
                 channels={channels}
                 selectedChannelId={channelId}
                 onSelect={(id) => setChannelId(id)}
+                onRefresh={refreshChannels}
+                refreshing={refreshing}
                 placeholder="Choose announcement channel..."
               />
             </div>

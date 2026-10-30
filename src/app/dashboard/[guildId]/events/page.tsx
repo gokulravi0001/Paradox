@@ -35,6 +35,7 @@ export default function EventsPage() {
   const guildId = params.guildId as string;
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [channels, setChannels] = useState<DiscordChannelItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -95,6 +96,22 @@ export default function EventsPage() {
 
     if (guildId) init();
   }, [guildId]);
+
+  async function refreshChannels() {
+    try {
+      setRefreshing(true);
+      const res = await fetch(`/api/guilds/${guildId}/channels`);
+      if (res.ok) {
+        const cData = await res.json();
+        setChannels(cData.channels || []);
+        addToast("success", "Channels refreshed from Discord!");
+      }
+    } catch {
+      addToast("error", "Failed to refresh channels.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -266,6 +283,8 @@ export default function EventsPage() {
                   channels={voiceChannels.length > 0 ? voiceChannels : channels}
                   selectedChannelId={voiceChannelId}
                   onSelect={(id) => setVoiceChannelId(id)}
+                  onRefresh={refreshChannels}
+                  refreshing={refreshing}
                   filterTypes={[2]}
                   placeholder="Select a voice channel..."
                 />
@@ -311,6 +330,8 @@ export default function EventsPage() {
                   channels={channels}
                   selectedChannelId={announcementChannelId}
                   onSelect={(id) => setAnnouncementChannelId(id)}
+                  onRefresh={refreshChannels}
+                  refreshing={refreshing}
                   placeholder="Select channel to post announcement..."
                 />
               )}

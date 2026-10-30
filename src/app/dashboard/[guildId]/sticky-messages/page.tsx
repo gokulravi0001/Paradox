@@ -32,6 +32,7 @@ export default function StickyMessagesPage() {
   const guildId = params.guildId as string;
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [channels, setChannels] = useState<DiscordChannelItem[]>([]);
   const [stickies, setStickies] = useState<StickyMessageItem[]>([]);
@@ -79,6 +80,22 @@ export default function StickyMessagesPage() {
 
     if (guildId) init();
   }, [guildId]);
+
+  async function refreshChannels() {
+    try {
+      setRefreshing(true);
+      const res = await fetch(`/api/guilds/${guildId}/channels`);
+      if (res.ok) {
+        const cData = await res.json();
+        setChannels(cData.channels || []);
+        addToast("success", "Channels refreshed from Discord!");
+      }
+    } catch {
+      addToast("error", "Failed to refresh channels.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -182,6 +199,8 @@ export default function StickyMessagesPage() {
                 channels={channels}
                 selectedChannelId={channelId}
                 onSelect={(id) => setChannelId(id)}
+                onRefresh={refreshChannels}
+                refreshing={refreshing}
                 placeholder="Choose channel for sticky notice..."
               />
             </div>
