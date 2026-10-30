@@ -15,7 +15,6 @@ import {
   AttachmentBuilder,
   User,
   GuildMember,
-  MessageFlags,
 } from "discord.js";
 import { prisma } from "@/lib/prisma";
 import {
@@ -280,57 +279,6 @@ export const SLASH_COMMANDS_DATA = [
       opt.setName("thumbnail").setDescription("Small top-right thumbnail icon URL")
     ),
 
-  // Feature: Pure Blue Clickable Text Link (NO EMBED)
-  new SlashCommandBuilder()
-    .setName("link")
-    .setDescription("Post clickable blue text that opens a link (pure text, NO embed card)")
-    .addStringOption((opt) =>
-      opt
-        .setName("text")
-        .setDescription("Enter the text to be highlighted in blue (e.g. Join Aura Tamil, Rules)")
-        .setRequired(true)
-    )
-    .addStringOption((opt) =>
-      opt
-        .setName("link")
-        .setDescription("Enter destination URL that opens when clicked (e.g. https://discord.gg/aura)")
-        .setRequired(true)
-    )
-    .addChannelOption((opt) =>
-      opt
-        .setName("channel")
-        .setDescription("Channel to post the link into (defaults to current channel)")
-        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-    )
-    .addStringOption((opt) =>
-      opt.setName("message").setDescription("Optional message before the blue link")
-    ),
-
-  new SlashCommandBuilder()
-    .setName("embedlink")
-    .setDescription("Post clickable blue text that opens a link (pure text, NO embed card)")
-    .addStringOption((opt) =>
-      opt
-        .setName("text")
-        .setDescription("Enter the text to be highlighted in blue (e.g. Join Aura Tamil, Rules)")
-        .setRequired(true)
-    )
-    .addStringOption((opt) =>
-      opt
-        .setName("link")
-        .setDescription("Enter destination URL that opens when clicked (e.g. https://discord.gg/aura)")
-        .setRequired(true)
-    )
-    .addChannelOption((opt) =>
-      opt
-        .setName("channel")
-        .setDescription("Channel to post the link into (defaults to current channel)")
-        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-    )
-    .addStringOption((opt) =>
-      opt.setName("message").setDescription("Optional message before the blue link")
-    ),
-
   // 5. AURA Feature 1: Clickable Server Invite Embed
   new SlashCommandBuilder()
     .setName("postinvite")
@@ -501,8 +449,6 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
           name: "📢 3. Embeds & Utilities",
           value:
             "`/embed` — Post rich embed messages\n" +
-            "`/embedlink <text> <link>` — Post clickable text link inside an embed\n" +
-            `\`${prefix}embedlink "<text>" <link>\` — Quick text command for clickable embed link\n` +
             `\`${prefix}prefix <newPrefix>\` — Change server prefix\n` +
             "`/serverinfo` — Server stats & bot role position\n" +
             "`/dashboard` — Web dashboard link",
@@ -1012,42 +958,6 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       content: `✅ Embed published to <#${targetChannel.id}>! (Message ID: \`${sent.id}\`)`,
       ephemeral: true,
     });
-  }
-
-  // /link & /embedlink (Feature: Pure blue highlighted text link without any embed card)
-  if (commandName === "link" || commandName === "embedlink") {
-    if (!guild || !guildId) return interaction.reply({ content: "Must be used in a server.", ephemeral: true });
-
-    const text = interaction.options.getString("text", true).trim();
-    let link = interaction.options.getString("link", true).trim();
-    if (!link.startsWith("http://") && !link.startsWith("https://") && !link.startsWith("discord://")) {
-      link = `https://${link}`;
-    }
-
-    const targetChannel =
-      (interaction.options.getChannel("channel") as TextChannel) ||
-      (interaction.channel as TextChannel);
-    const extraMsg = interaction.options.getString("message")?.trim();
-
-    // In Discord markdown, [text](<url>) displays purely as blue clickable text, and <url> + SuppressEmbeds suppresses any embed card!
-    const maskedLink = `[${text}](<${link}>)`;
-    const finalContent = extraMsg ? `${extraMsg} ${maskedLink}` : maskedLink;
-
-    if (targetChannel.id === interaction.channelId) {
-      return interaction.reply({
-        content: finalContent,
-        flags: [MessageFlags.SuppressEmbeds],
-      });
-    } else {
-      await targetChannel.send({
-        content: finalContent,
-        flags: [MessageFlags.SuppressEmbeds],
-      });
-      return interaction.reply({
-        content: `✅ Posted clickable blue text link to <#${targetChannel.id}>: ${maskedLink}`,
-        ephemeral: true,
-      });
-    }
   }
 
   // /dashboard
@@ -1973,48 +1883,6 @@ export async function handleTextCommand(message: Message, prefix: string) {
       .setTimestamp();
 
     return message.channel.send({ embeds: [embed] });
-  }
-
-  // $link or $embedlink "<text>" <link> (Pure Blue Text Link without any embed card)
-  if (command === "link" || command === "embedlink") {
-    const rawArgs = content.slice(command.length).trim();
-    const match =
-      rawArgs.match(/^"([^"]+)"\s+(https?:\/\/\S+|discord:\/\/\S+|\S+)(?:\s+(.*))?$/i) ||
-      rawArgs.match(/^'([^']+)'\s+(https?:\/\/\S+|discord:\/\/\S+|\S+)(?:\s+(.*))?$/i);
-    let text = "";
-    let link = "";
-    let extra = "";
-
-    if (match) {
-      text = match[1].trim();
-      link = match[2].trim();
-      extra = match[3]?.trim() || "";
-    } else {
-      const parts = rawArgs.split(/\s+/);
-      if (parts.length >= 2) {
-        link = parts[parts.length - 1].trim();
-        text = parts.slice(0, parts.length - 1).join(" ").trim();
-      }
-    }
-
-    if (!text || !link) {
-      return message.reply({
-        content: `❌ **Usage**: \`${prefix}link "<text>" <link>\`\nExample: \`${prefix}link "Join Aura Tamil" https://discord.gg/aura\`\n*Highlights the text in blue and works like a link (no embed card).*`,
-      });
-    }
-
-    if (!link.startsWith("http://") && !link.startsWith("https://") && !link.startsWith("discord://")) {
-      link = `https://${link}`;
-    }
-
-    // [text](<link>) in Discord displays purely as blue clickable text, and suppressEmbeds removes any embed
-    const maskedLink = `[${text}](<${link}>)`;
-    const finalContent = extra ? `${extra} ${maskedLink}` : maskedLink;
-
-    return message.channel.send({
-      content: finalContent,
-      flags: [MessageFlags.SuppressEmbeds],
-    });
   }
 
   if (command === "dashboard") {

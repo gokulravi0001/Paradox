@@ -29,8 +29,8 @@ function formatInline(text: string): React.ReactNode[] {
   // ~~strike~~
   // *italic*
   // _italic_
-  // Match Discord markdown elements, HTML links, markdown links, channel mentions, member pings, and role pings
-  const tokenRegex = /(<a\s+[^>]*href=["']?[^"'\s>]+["']?[^>]*>[\s\S]*?<\/a>|\[.*?\]\(<?https?:\/\/[^\s)>]+>?\)|`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_|#[a-zA-Z0-9_\-]+|<#[0-9]+>|\{#[a-zA-Z0-9_\-]+\}|@[a-zA-Z0-9_\-]+|<@&?[0-9]+>)/gi;
+  // Match Discord markdown elements, links, channel mentions, member pings, and role pings
+  const tokenRegex = /(\[.*?\]\(https?:\/\/[^\s)]+\)|`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_|#[a-zA-Z0-9_\-]+|<#[0-9]+>|\{#[a-zA-Z0-9_\-]+\}|@[a-zA-Z0-9_\-]+|<@&?[0-9]+>)/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -43,35 +43,10 @@ function formatInline(text: string): React.ReactNode[] {
 
     const token = match[0];
 
-    // HTML link format: <a href="link">TEXT</a>
-    if (/^<a\s+/i.test(token)) {
-      const htmlMatch = token.match(/<a\s+[^>]*href=["']?([^"'\s>]+)["']?[^>]*>([\s\S]*?)<\/a>/i);
-      if (htmlMatch) {
-        const url = htmlMatch[1];
-        const label = htmlMatch[2];
-        parts.push(
-          <a
-            key={key++}
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#00a8fc] hover:underline"
-          >
-            {label}
-          </a>
-        );
-        lastIndex = tokenRegex.lastIndex;
-        continue;
-      }
-    }
-
     if (token.startsWith("[") && token.includes("](") && token.endsWith(")")) {
       const closingBracket = token.indexOf("](");
       const label = token.slice(1, closingBracket);
-      let url = token.slice(closingBracket + 2, -1).trim();
-      if (url.startsWith("<") && url.endsWith(">")) {
-        url = url.slice(1, -1).trim();
-      }
+      const url = token.slice(closingBracket + 2, -1);
       parts.push(
         <a
           key={key++}

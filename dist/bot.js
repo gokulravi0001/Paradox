@@ -1373,25 +1373,6 @@ var SLASH_COMMANDS_DATA = [
   ).addStringOption(
     (opt) => opt.setName("thumbnail").setDescription("Small top-right thumbnail icon URL")
   ),
-  // Feature: Pure Blue Clickable Text Link (NO EMBED)
-  new import_discord2.SlashCommandBuilder().setName("link").setDescription("Post clickable blue text that opens a link (pure text, NO embed card)").addStringOption(
-    (opt) => opt.setName("text").setDescription("Enter the text to be highlighted in blue (e.g. Join Aura Tamil, Rules)").setRequired(true)
-  ).addStringOption(
-    (opt) => opt.setName("link").setDescription("Enter destination URL that opens when clicked (e.g. https://discord.gg/aura)").setRequired(true)
-  ).addChannelOption(
-    (opt) => opt.setName("channel").setDescription("Channel to post the link into (defaults to current channel)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
-  ).addStringOption(
-    (opt) => opt.setName("message").setDescription("Optional message before the blue link")
-  ),
-  new import_discord2.SlashCommandBuilder().setName("embedlink").setDescription("Post clickable blue text that opens a link (pure text, NO embed card)").addStringOption(
-    (opt) => opt.setName("text").setDescription("Enter the text to be highlighted in blue (e.g. Join Aura Tamil, Rules)").setRequired(true)
-  ).addStringOption(
-    (opt) => opt.setName("link").setDescription("Enter destination URL that opens when clicked (e.g. https://discord.gg/aura)").setRequired(true)
-  ).addChannelOption(
-    (opt) => opt.setName("channel").setDescription("Channel to post the link into (defaults to current channel)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
-  ).addStringOption(
-    (opt) => opt.setName("message").setDescription("Optional message before the blue link")
-  ),
   // 5. AURA Feature 1: Clickable Server Invite Embed
   new import_discord2.SlashCommandBuilder().setName("postinvite").setDescription("Post a stylish server invite embed with native preview").addStringOption(
     (opt) => opt.setName("custom_message").setDescription("Custom message or tagline for the invite embed")
@@ -1497,8 +1478,6 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
       {
         name: "\u{1F4E2} 3. Embeds & Utilities",
         value: `\`/embed\` \u2014 Post rich embed messages
-\`/embedlink <text> <link>\` \u2014 Post clickable text link inside an embed
-\`${prefix}embedlink "<text>" <link>\` \u2014 Quick text command for clickable embed link
 \`${prefix}prefix <newPrefix>\` \u2014 Change server prefix
 \`/serverinfo\` \u2014 Server stats & bot role position
 \`/dashboard\` \u2014 Web dashboard link`
@@ -1895,33 +1874,6 @@ Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**
       content: `\u2705 Embed published to <#${targetChannel.id}>! (Message ID: \`${sent.id}\`)`,
       ephemeral: true
     });
-  }
-  if (commandName === "link" || commandName === "embedlink") {
-    if (!guild || !guildId) return interaction.reply({ content: "Must be used in a server.", ephemeral: true });
-    const text = interaction.options.getString("text", true).trim();
-    let link = interaction.options.getString("link", true).trim();
-    if (!link.startsWith("http://") && !link.startsWith("https://") && !link.startsWith("discord://")) {
-      link = `https://${link}`;
-    }
-    const targetChannel = interaction.options.getChannel("channel") || interaction.channel;
-    const extraMsg = interaction.options.getString("message")?.trim();
-    const maskedLink = `[${text}](<${link}>)`;
-    const finalContent = extraMsg ? `${extraMsg} ${maskedLink}` : maskedLink;
-    if (targetChannel.id === interaction.channelId) {
-      return interaction.reply({
-        content: finalContent,
-        flags: [import_discord2.MessageFlags.SuppressEmbeds]
-      });
-    } else {
-      await targetChannel.send({
-        content: finalContent,
-        flags: [import_discord2.MessageFlags.SuppressEmbeds]
-      });
-      return interaction.reply({
-        content: `\u2705 Posted clickable blue text link to <#${targetChannel.id}>: ${maskedLink}`,
-        ephemeral: true
-      });
-    }
   }
   if (commandName === "dashboard") {
     const dashboardUrl = guildId ? `${appUrl}/dashboard/${guildId}` : `${appUrl}/dashboard`;
@@ -2648,40 +2600,6 @@ Or to edit: \`${prefix}embed edit <message_id> <title> | <description>\``);
     const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(title).setDescription(desc).setTimestamp();
     return message.channel.send({ embeds: [embed] });
   }
-  if (command === "link" || command === "embedlink") {
-    const rawArgs = content.slice(command.length).trim();
-    const match = rawArgs.match(/^"([^"]+)"\s+(https?:\/\/\S+|discord:\/\/\S+|\S+)(?:\s+(.*))?$/i) || rawArgs.match(/^'([^']+)'\s+(https?:\/\/\S+|discord:\/\/\S+|\S+)(?:\s+(.*))?$/i);
-    let text = "";
-    let link = "";
-    let extra = "";
-    if (match) {
-      text = match[1].trim();
-      link = match[2].trim();
-      extra = match[3]?.trim() || "";
-    } else {
-      const parts = rawArgs.split(/\s+/);
-      if (parts.length >= 2) {
-        link = parts[parts.length - 1].trim();
-        text = parts.slice(0, parts.length - 1).join(" ").trim();
-      }
-    }
-    if (!text || !link) {
-      return message.reply({
-        content: `\u274C **Usage**: \`${prefix}link "<text>" <link>\`
-Example: \`${prefix}link "Join Aura Tamil" https://discord.gg/aura\`
-*Highlights the text in blue and works like a link (no embed card).*`
-      });
-    }
-    if (!link.startsWith("http://") && !link.startsWith("https://") && !link.startsWith("discord://")) {
-      link = `https://${link}`;
-    }
-    const maskedLink = `[${text}](<${link}>)`;
-    const finalContent = extra ? `${extra} ${maskedLink}` : maskedLink;
-    return message.channel.send({
-      content: finalContent,
-      flags: [import_discord2.MessageFlags.SuppressEmbeds]
-    });
-  }
   if (command === "dashboard") {
     return message.reply(`Manage Paradox in the web dashboard: ${appUrl}/dashboard/${guild?.id}`);
   }
@@ -2983,68 +2901,6 @@ function extractAndTransformVideoUrls(content, enabledProviders = ["twitter", "t
 }
 
 // src/bot/events/messageCreate.ts
-async function handleHtmlLinkBridge(message, convertedContent) {
-  const channel = message.channel;
-  const guild = message.guild;
-  if (!guild || !("send" in channel)) return;
-  const botMember = guild.members.me;
-  const isThread = channel.isThread();
-  const parentChannel = isThread ? channel.parent : channel;
-  const canManageWebhooks = parentChannel && botMember?.permissionsIn(parentChannel.id).has(import_discord4.PermissionFlagsBits.ManageWebhooks);
-  const canManageMessages = botMember?.permissionsIn(channel.id).has(import_discord4.PermissionFlagsBits.ManageMessages);
-  if (canManageWebhooks && parentChannel) {
-    try {
-      const webhooks = await parentChannel.fetchWebhooks().catch(() => null);
-      let webhook = webhooks?.find((wh) => wh.owner?.id === message.client.user?.id);
-      if (!webhook) {
-        webhook = await parentChannel.createWebhook({
-          name: "Paradox Link Bridge",
-          avatar: message.client.user?.displayAvatarURL()
-        }).catch(() => null);
-      }
-      if (webhook) {
-        const attachments = Array.from(message.attachments.values()).map((att) => att.url);
-        const sendOptions = {
-          content: convertedContent,
-          username: message.member?.displayName || message.author.globalName || message.author.username,
-          avatarURL: message.author.displayAvatarURL(),
-          flags: [import_discord4.MessageFlags.SuppressEmbeds],
-          allowedMentions: { parse: ["users", "roles", "everyone"] }
-        };
-        if (isThread) {
-          sendOptions.threadId = channel.id;
-        }
-        if (attachments.length > 0) {
-          sendOptions.files = attachments;
-        }
-        await webhook.send(sendOptions);
-        if (canManageMessages) {
-          await message.delete().catch(() => null);
-        }
-        return;
-      }
-    } catch (err) {
-      console.error("[Bot:HtmlLinkBridge] Webhook send error, falling back:", err);
-    }
-  }
-  if (canManageMessages) {
-    try {
-      await message.delete().catch(() => null);
-      await channel.send({
-        content: `**${message.member?.displayName || message.author.username}**: ${convertedContent}`,
-        flags: [import_discord4.MessageFlags.SuppressEmbeds],
-        allowedMentions: { parse: ["users"] }
-      });
-      return;
-    } catch {
-    }
-  }
-  await message.reply({
-    content: convertedContent,
-    flags: [import_discord4.MessageFlags.SuppressEmbeds],
-    allowedMentions: { repliedUser: false }
-  }).catch(() => null);
-}
 async function onMessageCreate(message) {
   if (message.author.bot || message.webhookId) return;
   if (!message.guild || !("send" in message.channel)) return;
@@ -3060,18 +2916,6 @@ async function onMessageCreate(message) {
     const usedPrefix = isCustomPrefix ? prefix : isFallbackPrefix ? message.content[0] : null;
     if (usedPrefix) {
       await handleTextCommand(message, usedPrefix);
-      return;
-    }
-    const htmlLinkRegex = /<a\s+[^>]*href=["']?([^"'\s>]+)["']?[^>]*>([\s\S]*?)<\/a>/gi;
-    if (htmlLinkRegex.test(message.content)) {
-      const convertedContent = message.content.replace(htmlLinkRegex, (_, url, text) => {
-        let cleanUrl = String(url).trim();
-        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://") && !cleanUrl.startsWith("discord://")) {
-          cleanUrl = `https://${cleanUrl}`;
-        }
-        return `[${String(text).trim()}](<${cleanUrl}>)`;
-      });
-      await handleHtmlLinkBridge(message, convertedContent);
       return;
     }
     if (!config || !config.videoFixerEnabled) return;

@@ -26,7 +26,6 @@ import {
   RefreshCw,
   Check,
   Sliders,
-  Link2,
 } from "lucide-react";
 import { ChannelSelect, DiscordChannelItem } from "@/components/ui/ChannelSelect";
 import { RoleSelect, DiscordRoleItem } from "@/components/ui/RoleSelect";
@@ -34,7 +33,6 @@ import { VariableMenu } from "@/components/ui/VariableMenu";
 import { QuickTagsBar } from "@/components/ui/QuickTagsBar";
 import { DiscordPreview } from "@/components/ui/DiscordPreview";
 import { ToastContainer, ToastMessage } from "@/components/ui/Toast";
-import { EmbedLinkModal } from "@/components/ui/EmbedLinkModal";
 import { DISCORD_LIMITS } from "@/lib/validations";
 
 interface EmbedField {
@@ -174,10 +172,6 @@ export default function WelcomePage() {
   // Add Channel Field States
   const [showAddChannelFieldDropdown, setShowAddChannelFieldDropdown] = useState(false);
   const [channelFieldSearch, setChannelFieldSearch] = useState("");
-
-  // Embed Link Modal States
-  const [showEmbedLinkModal, setShowEmbedLinkModal] = useState(false);
-  const [targetFieldForModal, setTargetFieldForModal] = useState<number | null>(null);
 
   // Description Textarea Ref for precise cursor insertion
   const descTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1026,21 +1020,6 @@ export default function WelcomePage() {
                           </div>
                         )}
                       </div>
-
-                      {/* 4. Blue Link Button */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTargetFieldForModal(null);
-                          setShowEmbedLinkModal(true);
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500/20 to-indigo-500/20 hover:from-sky-500/30 hover:to-indigo-500/30 text-sky-300 hover:text-white border border-sky-500/40 text-xs font-bold transition cursor-pointer shadow-sm"
-                        title="Insert Clickable Blue Link: [Text](<URL>)"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <Link2 className="w-3.5 h-3.5 text-sky-400" />
-                        <span>Blue Link</span>
-                      </button>
                     </div>
                   </div>
 
@@ -1195,22 +1174,6 @@ export default function WelcomePage() {
                           </div>
                         )}
                       </div>
-
-                      {/* 3. Add Link Field */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTargetFieldForModal(-1);
-                          setShowEmbedLinkModal(true);
-                        }}
-                        disabled={fields.length >= DISCORD_LIMITS.FIELDS_MAX}
-                        className="text-xs px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 hover:from-indigo-500/30 hover:to-purple-500/30 text-indigo-300 font-bold border border-indigo-500/30 transition flex items-center gap-1 cursor-pointer disabled:opacity-40"
-                        title="Add a new field containing a clickable link: [Text](URL)"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <Link2 className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Add Link Field</span>
-                      </button>
                     </div>
                   </div>
 
@@ -1419,21 +1382,7 @@ export default function WelcomePage() {
                               className="w-full px-3 py-2 rounded-lg bg-discord-dark border border-white/10 text-white text-xs focus:outline-none focus:border-purple-500 resize-y"
                             />
                             <div className="flex items-center justify-between text-[11px] text-zinc-500 px-1">
-                              <div className="flex items-center gap-2">
-                                <span>Supports Discord markdown & channel mentions</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setTargetFieldForModal(idx);
-                                    setShowEmbedLinkModal(true);
-                                  }}
-                                  className="text-indigo-400 hover:text-indigo-300 font-medium inline-flex items-center gap-1 cursor-pointer transition"
-                                  title="Insert clickable embed link: [Text](URL)"
-                                >
-                                  <Link2 className="w-3 h-3" />
-                                  <span>Embed Link</span>
-                                </button>
-                              </div>
+                              <span>Supports Discord markdown and channel mentions like {'{#'}channel{'}'}</span>
                               <span>{f.value.length}/1024</span>
                             </div>
                           </div>
@@ -1739,42 +1688,6 @@ export default function WelcomePage() {
           </div>
         </div>
       </div>
-
-      {/* Embed Link Modal (Text + Link) */}
-      <EmbedLinkModal
-        isOpen={showEmbedLinkModal}
-        onClose={() => {
-          setShowEmbedLinkModal(false);
-          setTargetFieldForModal(null);
-        }}
-        onInsert={(markdown) => {
-          if (targetFieldForModal === -1) {
-            // Add as new field
-            if (fields.length >= DISCORD_LIMITS.FIELDS_MAX) {
-              addToast("warning", `Maximum ${DISCORD_LIMITS.FIELDS_MAX} fields allowed.`);
-              return;
-            }
-            setFields([
-              ...fields,
-              {
-                name: "🔗 Link",
-                value: markdown,
-                inline: true,
-              },
-            ]);
-            addToast("success", "Added new field with clickable link!");
-          } else if (targetFieldForModal !== null && targetFieldForModal >= 0) {
-            // Append to existing field
-            const cur = fields[targetFieldForModal]?.value || "";
-            updateField(targetFieldForModal, "value", cur ? `${cur} ${markdown}` : markdown);
-            addToast("success", `Added link to Field #${targetFieldForModal + 1}!`);
-          } else {
-            // Insert into description
-            insertIntoDescription(markdown);
-            addToast("success", "Added clickable link to embed description!");
-          }
-        }}
-      />
     </div>
   );
 }
