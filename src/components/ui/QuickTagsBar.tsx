@@ -11,8 +11,10 @@ import {
   Hash,
   Check,
   ChevronDown,
+  Link2,
 } from "lucide-react";
 import { DiscordChannelItem, getChannelIcon } from "./ChannelSelect";
+import { EmbedLinkModal } from "./EmbedLinkModal";
 
 export interface QuickTagItem {
   tag: string;
@@ -40,6 +42,7 @@ export function QuickTagsBar({
   const [lastInserted, setLastInserted] = useState<string | null>(null);
   const [showChannelPicker, setShowChannelPicker] = useState(false);
   const [channelSearch, setChannelSearch] = useState("");
+  const [showLinkModal, setShowLinkModal] = useState(false);
 
   function handleTagClick(tag: string) {
     onInsert(tag);
@@ -240,7 +243,27 @@ export function QuickTagsBar({
             )}
           </div>
         )}
+
+        {/* Quick Embed Link Button */}
+        <button
+          type="button"
+          onClick={() => setShowLinkModal(true)}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gradient-to-r from-indigo-500/15 to-purple-500/15 hover:from-indigo-500/25 hover:to-purple-500/25 text-indigo-300 hover:text-white border border-indigo-500/30 hover:border-indigo-400/60 shadow-sm cursor-pointer transition select-none"
+          title="Create a clickable embed link: [Text](URL)"
+        >
+          <Link2 className="w-3.5 h-3.5 text-indigo-400" />
+          <span>🔗 Embed Link</span>
+        </button>
       </div>
+
+      {/* Embed Link Modal (Text + Link) */}
+      <EmbedLinkModal
+        isOpen={showLinkModal}
+        onClose={() => setShowLinkModal(false)}
+        onInsert={(markdown) => {
+          handleTagClick(markdown);
+        }}
+      />
     </div>
   );
 }
