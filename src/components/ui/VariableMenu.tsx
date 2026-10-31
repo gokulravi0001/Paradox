@@ -23,6 +23,7 @@ export function VariableMenu({
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
 
   const userVars = [
+    { tag: "{user.displayName}", label: "Display Name", desc: "User's server display nickname (@Name)" },
     { tag: "{user.name}", label: "Username", desc: "User's display name or username" },
     { tag: "{user.mention}", label: "User Mention", desc: "Mentions the user (@User)" },
     { tag: "{user.avatar}", label: "Member Avatar / PFP", desc: "Direct CDN link to member's profile picture" },

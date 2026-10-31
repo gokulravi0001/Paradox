@@ -14,6 +14,7 @@ export async function onGuildMemberAdd(member: GuildMember) {
     if (!config) return;
 
     const userPfp = member.user.displayAvatarURL({ extension: "png", size: 256 });
+    const userDisplayName = member.displayName || member.user.globalName || member.user.username;
     const userName = member.user.username;
     const userMention = `<@${member.id}>`;
     const serverName = member.guild.name;
@@ -24,7 +25,12 @@ export async function onGuildMemberAdd(member: GuildMember) {
       if (!text) return "";
       let s = text
         .replace(/{user\.mention}/g, userMention)
-        .replace(/{user\.name}/g, userName)
+        .replace(/{user\.displayName}/gi, userDisplayName)
+        .replace(/{user\.display_name}/gi, userDisplayName)
+        .replace(/{user\.name}/g, userDisplayName)
+        .replace(/{user\.username}/g, userName)
+        .replace(/{user\.tag}/g, `@${userName}`)
+        .replace(/{user\.handle}/g, `@${userName}`)
         .replace(/{user\.avatar}/g, userPfp)
         .replace(/{user\.pfp}/g, userPfp)
         .replace(/{user\.id}/g, member.id)
@@ -84,7 +90,11 @@ export async function onGuildMemberAdd(member: GuildMember) {
             const raw = JSON.parse(config.welcomeEmbed);
             embed = new EmbedBuilder();
 
-            if (raw.title) embed.setTitle(replaceTags(raw.title));
+            if (raw.title) {
+              let titleHeader = replaceTags(raw.title);
+              titleHeader = titleHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);
+              embed.setTitle(titleHeader);
+            }
             if (raw.description) embed.setDescription(replaceTags(raw.description));
             if (raw.color) {
               embed.setColor(parseInt(raw.color.replace("#", ""), 16) || 0x5865f2);
@@ -94,8 +104,12 @@ export async function onGuildMemberAdd(member: GuildMember) {
 
             // Member PFP and Name in Author
             if (raw.authorName) {
+              let authorHeader = replaceTags(raw.authorName);
+              // In Discord Embed Author Header, <@id> does not format as a mention; it shows literal <@id>.
+              // Convert any raw mentions in the author header to @DisplayName
+              authorHeader = authorHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);
               embed.setAuthor({
-                name: replaceTags(raw.authorName),
+                name: authorHeader,
                 iconURL: raw.authorIconUrl ? replaceTags(raw.authorIconUrl) : userPfp,
               });
             }

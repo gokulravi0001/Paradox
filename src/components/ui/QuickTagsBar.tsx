@@ -118,6 +118,12 @@ export function QuickTagsBar({
       desc: "User display username",
     },
     {
+      tag: "{user.displayName}",
+      label: "Display Name",
+      icon: <User className="w-3 h-3 text-purple-400" />,
+      desc: "Member server display nickname (@Name)",
+    },
+    {
       tag: "{server.name}",
       label: "Server Name",
       icon: <Landmark className="w-3 h-3 text-emerald-400" />,

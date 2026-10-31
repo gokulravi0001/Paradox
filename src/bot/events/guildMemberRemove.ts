@@ -19,6 +19,7 @@ export async function onGuildMemberRemove(member: GuildMember | PartialGuildMemb
     const userPfp = member.user
       ? member.user.displayAvatarURL({ extension: "png", size: 256 })
       : "https://cdn.discordapp.com/embed/avatars/0.png";
+    const userDisplayName = (member as any).displayName || member.user?.globalName || member.user?.username || "A member";
     const userName = member.user?.username || "A member";
     const serverName = member.guild.name;
     const memberCount = String(member.guild.memberCount);
@@ -27,8 +28,13 @@ export async function onGuildMemberRemove(member: GuildMember | PartialGuildMemb
     const replaceTags = (text?: string | null): string => {
       if (!text) return "";
       let s = text
-        .replace(/{user\.mention}/g, userName)
-        .replace(/{user\.name}/g, userName)
+        .replace(/{user\.mention}/g, `@${userDisplayName}`)
+        .replace(/{user\.displayName}/gi, userDisplayName)
+        .replace(/{user\.display_name}/gi, userDisplayName)
+        .replace(/{user\.name}/g, userDisplayName)
+        .replace(/{user\.username}/g, userName)
+        .replace(/{user\.tag}/g, `@${userName}`)
+        .replace(/{user\.handle}/g, `@${userName}`)
         .replace(/{user\.avatar}/g, userPfp)
         .replace(/{user\.pfp}/g, userPfp)
         .replace(/{user\.id}/g, member.id)
@@ -71,7 +77,11 @@ export async function onGuildMemberRemove(member: GuildMember | PartialGuildMemb
         const raw = JSON.parse(config.goodbyeEmbed);
         embed = new EmbedBuilder();
 
-        if (raw.title) embed.setTitle(replaceTags(raw.title));
+        if (raw.title) {
+          let titleHeader = replaceTags(raw.title);
+          titleHeader = titleHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);
+          embed.setTitle(titleHeader);
+        }
         if (raw.description) embed.setDescription(replaceTags(raw.description));
         if (raw.color) {
           embed.setColor(parseInt(raw.color.replace("#", ""), 16) || 0xda373c);
@@ -81,8 +91,10 @@ export async function onGuildMemberRemove(member: GuildMember | PartialGuildMemb
 
         // Member PFP and Name in Author
         if (raw.authorName) {
+          let authorHeader = replaceTags(raw.authorName);
+          authorHeader = authorHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);
           embed.setAuthor({
-            name: replaceTags(raw.authorName),
+            name: authorHeader,
             iconURL: raw.authorIconUrl ? replaceTags(raw.authorIconUrl) : userPfp,
           });
         }

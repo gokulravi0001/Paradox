@@ -54,6 +54,7 @@ export async function POST(
       : "https://cdn.discordapp.com/embed/avatars/0.png";
 
     const targetGuild = auth.context!.guild;
+    const userDisplayName = auth.context!.user.global_name || auth.context!.user.username;
     const serverName = targetGuild?.name || "Discord Server";
     const serverIconUrl = targetGuild?.icon
       ? `https://cdn.discordapp.com/icons/${targetGuild.id}/${targetGuild.icon}.png?size=256`
@@ -63,7 +64,12 @@ export async function POST(
       if (!str) return undefined;
       let s = str
         .replace(/{user\.mention}/g, `<@${auth.context!.user.id}>`)
-        .replace(/{user\.name}/g, auth.context!.user.username)
+        .replace(/{user\.displayName}/gi, userDisplayName)
+        .replace(/{user\.display_name}/gi, userDisplayName)
+        .replace(/{user\.name}/g, userDisplayName)
+        .replace(/{user\.username}/g, auth.context!.user.username)
+        .replace(/{user\.tag}/g, `@${auth.context!.user.username}`)
+        .replace(/{user\.handle}/g, `@${auth.context!.user.username}`)
         .replace(/{user\.avatar}/g, userAvatarUrl)
         .replace(/{user\.pfp}/g, userAvatarUrl)
         .replace(/{user\.id}/g, auth.context!.user.id)
@@ -100,11 +106,20 @@ export async function POST(
       return s;
     };
 
+    let resolvedAuthor = resolveTags(embed.authorName);
+    if (resolvedAuthor) {
+      resolvedAuthor = resolvedAuthor.replace(/<@!?\d+>/g, `@${userDisplayName}`);
+    }
+    let resolvedTitle = resolveTags(embed.title);
+    if (resolvedTitle) {
+      resolvedTitle = resolvedTitle.replace(/<@!?\d+>/g, `@${userDisplayName}`);
+    }
+
     const resolvedEmbed = {
       ...embed,
-      title: resolveTags(embed.title),
+      title: resolvedTitle,
       description: resolveTags(embed.description),
-      authorName: resolveTags(embed.authorName),
+      authorName: resolvedAuthor,
       authorIconUrl: resolveTags(embed.authorIconUrl),
       thumbnailUrl: resolveTags(embed.thumbnailUrl),
       imageUrl: resolveTags(embed.imageUrl),

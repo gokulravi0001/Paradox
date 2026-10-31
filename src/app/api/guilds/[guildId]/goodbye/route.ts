@@ -106,11 +106,18 @@ export async function POST(
 
     const channels = await fetchGuildChannels(guildId).catch(() => []);
 
+    const userDisplayName = auth.context!.user.global_name || auth.context!.user.username;
+
     const resolveTags = (str?: string | null): string | undefined => {
       if (!str) return undefined;
       let s = str
-        .replace(/{user\.mention}/g, `<@${auth.context!.user.id}>`)
-        .replace(/{user\.name}/g, auth.context!.user.username)
+        .replace(/{user\.mention}/g, `@${userDisplayName}`)
+        .replace(/{user\.displayName}/gi, userDisplayName)
+        .replace(/{user\.display_name}/gi, userDisplayName)
+        .replace(/{user\.name}/g, userDisplayName)
+        .replace(/{user\.username}/g, auth.context!.user.username)
+        .replace(/{user\.tag}/g, `@${auth.context!.user.username}`)
+        .replace(/{user\.handle}/g, `@${auth.context!.user.username}`)
         .replace(/{user\.avatar}/g, userAvatarUrl)
         .replace(/{user\.pfp}/g, userAvatarUrl)
         .replace(/{user\.id}/g, auth.context!.user.id)
@@ -148,10 +155,17 @@ export async function POST(
       const resolvedThumb = resolveTags(embed.thumbnailUrl);
       const resolvedImg = resolveTags(embed.imageUrl);
       const resolvedAuthorIcon = resolveTags(embed.authorIconUrl);
-      const resolvedAuthorName = resolveTags(embed.authorName);
+      let resolvedAuthorName = resolveTags(embed.authorName);
+      if (resolvedAuthorName) {
+        resolvedAuthorName = resolvedAuthorName.replace(/<@!?\d+>/g, `@${userDisplayName}`);
+      }
+      let resolvedTitle = resolveTags(embed.title);
+      if (resolvedTitle) {
+        resolvedTitle = resolvedTitle.replace(/<@!?\d+>/g, `@${userDisplayName}`);
+      }
 
       embedPayload = {
-        title: resolveTags(embed.title),
+        title: resolvedTitle,
         description: resolveTags(embed.description),
         color: embed.color ? parseInt(embed.color.replace("#", ""), 16) : 0xda373c,
         author: resolvedAuthorName

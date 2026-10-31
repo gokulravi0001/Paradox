@@ -9,6 +9,7 @@ const STATE_COOKIE_NAME = "paradox_oauth_state";
 export interface SessionUser {
   id: string;
   username: string;
+  global_name?: string | null;
   discriminator?: string | null;
   avatar?: string | null;
   accessToken: string;

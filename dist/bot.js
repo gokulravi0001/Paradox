@@ -1137,14 +1137,15 @@ async function generateQuoteCard(options) {
       authorName = authorName.replace(/<@!?\d+>/g, "").trim() || "Anonymous";
     }
   }
+  const displayAuthor = authorName.startsWith("@") ? authorName : `@${authorName}`;
   const authorY = startY + (lines.length - 1) * lineHeight + 48;
   ctx.font = '22px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = "#E5E7EB";
-  ctx.fillText(`- ${authorName}`, textCenterX, authorY);
+  ctx.fillText(`- ${displayAuthor}`, textCenterX, authorY);
   if (options.authorTag) {
-    const cleanTag = options.authorTag.trim();
-    const tagText = cleanTag.startsWith("@") ? cleanTag : `@${cleanTag}`;
-    if (tagText.toLowerCase() !== `@${authorName.toLowerCase()}`) {
+    const cleanTag = options.authorTag.trim().replace(/^@/, "");
+    const tagText = `@${cleanTag}`;
+    if (tagText.toLowerCase() !== displayAuthor.toLowerCase()) {
       ctx.font = '16px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = "#888888";
       ctx.fillText(tagText, textCenterX, authorY + 28);
@@ -1232,18 +1233,19 @@ async function generateAnimatedQuoteCard(options) {
         authorName = authorName.replace(/<@!?\d+>/g, "").trim() || "Anonymous";
       }
     }
+    const displayAuthor = authorName.startsWith("@") ? authorName : `@${authorName}`;
     const authorY = startY + (lines.length - 1) * lineHeight + 42;
     ctx.save();
     ctx.font = '18px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = pulse > 0 ? "#E5E7EB" : "#D1D5DB";
     ctx.shadowColor = pulse > 0 ? "rgba(168, 85, 247, 0.8)" : "rgba(239, 68, 68, 0.8)";
     ctx.shadowBlur = 4 + Math.abs(pulse) * 6;
-    ctx.fillText(`- ${authorName}`, textCenterX, authorY);
+    ctx.fillText(`- ${displayAuthor}`, textCenterX, authorY);
     ctx.restore();
     if (options.authorTag) {
-      const cleanTag = options.authorTag.trim();
-      const tagText = cleanTag.startsWith("@") ? cleanTag : `@${cleanTag}`;
-      if (tagText.toLowerCase() !== `@${authorName.toLowerCase()}`) {
+      const cleanTag = options.authorTag.trim().replace(/^@/, "");
+      const tagText = `@${cleanTag}`;
+      if (tagText.toLowerCase() !== displayAuthor.toLowerCase()) {
         ctx.font = '14px "Segoe UI", Arial, sans-serif';
         ctx.fillStyle = "#888888";
         ctx.fillText(tagText, textCenterX, authorY + 24);
@@ -2152,17 +2154,20 @@ Click the title above or the button below to enter **${serverName}**!
             if (!bgAttachment) avatarUrl = user.displayAvatarURL({ extension: "png", size: 512 });
           }
         } else {
-          const cleanName = rawOverride.replace(/^@/, "").toLowerCase();
-          const memberMatch = guild?.members.cache.find(
-            (m) => m.displayName.toLowerCase() === cleanName || m.user.username.toLowerCase() === cleanName || m.user.globalName?.toLowerCase() === cleanName
-          );
+          const cleanName = rawOverride.replace(/^@/, "").trim().toLowerCase();
+          let memberMatch = guild ? (await guild.members.fetch({ query: cleanName, limit: 1 }).catch(() => null))?.first() : null;
+          if (!memberMatch) {
+            memberMatch = guild?.members.cache.find(
+              (m) => m.displayName.toLowerCase() === cleanName || m.user.username.toLowerCase() === cleanName || m.user.globalName?.toLowerCase() === cleanName
+            );
+          }
           if (memberMatch) {
             authorUser = memberMatch.user;
             authorName = memberMatch.displayName;
             authorTag = memberMatch.user.username;
             if (!bgAttachment) avatarUrl = memberMatch.displayAvatarURL({ extension: "png", size: 512 });
           } else {
-            authorName = rawOverride.replace(/^@/, "");
+            authorName = rawOverride.replace(/^@/, "").trim();
           }
         }
       }
@@ -2170,6 +2175,7 @@ Click the title above or the button below to enter **${serverName}**!
       if (/<@!?\d+>/.test(authorName)) {
         authorName = authorTag || "Anonymous";
       }
+      authorName = authorName.replace(/^@+/, "").trim();
       if (!quoteText || !quoteText.trim()) {
         return interaction.editReply({
           content: "\u274C Quote text is required. Please provide text in the `quote` option or specify a message to quote."
@@ -2208,7 +2214,7 @@ Click the title above or the button below to enter **${serverName}**!
         });
         const fileAttachment = new import_discord2.AttachmentBuilder(gifBuffer, { name: "aura-animated-quote.gif" });
         return interaction.editReply({
-          content: `\u2728 **Animated Quote by ${authorName}**`,
+          content: `\u2728 **Animated Quote by @${authorName}**`,
           files: [fileAttachment]
         });
       } else {
@@ -2223,7 +2229,7 @@ Click the title above or the button below to enter **${serverName}**!
         });
         const fileAttachment = new import_discord2.AttachmentBuilder(cardBuffer, { name: "aura-quote.png" });
         return interaction.editReply({
-          content: `\u{1F4DC} **Quote by ${authorName}**`,
+          content: `\u{1F4DC} **Quote by @${authorName}**`,
           files: [fileAttachment]
         });
       }
@@ -2285,6 +2291,27 @@ async function handleTextCommand(message, prefix) {
       authorTag = mentionedUser.username;
       avatarUrl = mentionedMember?.displayAvatarURL({ extension: "png", size: 512, forceStatic: true }) || mentionedUser.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
       quoteText = args.slice(1).join(" ").replace(/<@!?\d+>/g, "").trim();
+    } else {
+      const rawText = args.slice(1).join(" ").trim();
+      const dashMatch = rawText.match(/^["“”]?(.*?)["“”]?\s*[-—–]\s*@?([A-Za-z0-9_.\s]+)$/);
+      if (dashMatch) {
+        quoteText = dashMatch[1].trim();
+        const possibleName = dashMatch[2].trim().toLowerCase();
+        let memberMatch = guild ? (await guild.members.fetch({ query: possibleName, limit: 1 }).catch(() => null))?.first() : null;
+        if (!memberMatch) {
+          memberMatch = guild?.members.cache.find(
+            (m) => m.displayName.toLowerCase() === possibleName || m.user.username.toLowerCase() === possibleName || m.user.globalName?.toLowerCase() === possibleName
+          );
+        }
+        if (memberMatch) {
+          authorUser = memberMatch.user;
+          authorName = memberMatch.displayName;
+          authorTag = memberMatch.user.username;
+          avatarUrl = memberMatch.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+        } else {
+          authorName = dashMatch[2].trim();
+        }
+      }
     }
     if (!quoteText || !quoteText.trim()) {
       return message.reply(`\u{1F4A1} **Usage:** Reply to any message and type \`${prefix}quote\` to turn it into a photo quote!`);
@@ -2293,6 +2320,7 @@ async function handleTextCommand(message, prefix) {
     if (/<@!?\d+>/.test(authorName)) {
       authorName = authorTag || "Anonymous";
     }
+    authorName = authorName.replace(/^@+/, "").trim();
     const cleanQuote = await resolveMentionsToNames(quoteText.trim(), guild);
     await message.channel.sendTyping().catch(() => null);
     try {
@@ -2304,7 +2332,10 @@ async function handleTextCommand(message, prefix) {
         serverName: guild?.name
       });
       const fileAttachment = new import_discord2.AttachmentBuilder(cardBuffer, { name: "quote.png" });
-      return message.reply({ files: [fileAttachment] });
+      return message.reply({
+        content: `\u{1F4DC} **Quote by @${authorName}**`,
+        files: [fileAttachment]
+      });
     } catch (err) {
       console.error("[Bot:Quote] Error generating quote card:", err);
       return message.reply(`\u274C Failed to generate quote card: ${err.message}`);
@@ -3425,6 +3456,7 @@ async function onGuildMemberAdd(member) {
     }).catch(() => null);
     if (!config) return;
     const userPfp = member.user.displayAvatarURL({ extension: "png", size: 256 });
+    const userDisplayName = member.displayName || member.user.globalName || member.user.username;
     const userName = member.user.username;
     const userMention = `<@${member.id}>`;
     const serverName = member.guild.name;
@@ -3432,7 +3464,7 @@ async function onGuildMemberAdd(member) {
     const serverIcon = member.guild.iconURL({ extension: "png", size: 256 }) || "https://cdn.discordapp.com/embed/avatars/0.png";
     const replaceTags = (text) => {
       if (!text) return "";
-      let s = text.replace(/{user\.mention}/g, userMention).replace(/{user\.name}/g, userName).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount).replace(/{server\.icon}/g, serverIcon);
+      let s = text.replace(/{user\.mention}/g, userMention).replace(/{user\.displayName}/gi, userDisplayName).replace(/{user\.display_name}/gi, userDisplayName).replace(/{user\.name}/g, userDisplayName).replace(/{user\.username}/g, userName).replace(/{user\.tag}/g, `@${userName}`).replace(/{user\.handle}/g, `@${userName}`).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount).replace(/{server\.icon}/g, serverIcon);
       for (const [, ch] of member.guild.channels.cache) {
         if (!ch) continue;
         const escaped = ch.name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
@@ -3469,7 +3501,11 @@ async function onGuildMemberAdd(member) {
           try {
             const raw = JSON.parse(config.welcomeEmbed);
             embed = new import_discord6.EmbedBuilder();
-            if (raw.title) embed.setTitle(replaceTags(raw.title));
+            if (raw.title) {
+              let titleHeader = replaceTags(raw.title);
+              titleHeader = titleHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);
+              embed.setTitle(titleHeader);
+            }
             if (raw.description) embed.setDescription(replaceTags(raw.description));
             if (raw.color) {
               embed.setColor(parseInt(raw.color.replace("#", ""), 16) || 5793266);
@@ -3477,8 +3513,10 @@ async function onGuildMemberAdd(member) {
               embed.setColor(5793266);
             }
             if (raw.authorName) {
+              let authorHeader = replaceTags(raw.authorName);
+              authorHeader = authorHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);
               embed.setAuthor({
-                name: replaceTags(raw.authorName),
+                name: authorHeader,
                 iconURL: raw.authorIconUrl ? replaceTags(raw.authorIconUrl) : userPfp
               });
             }
@@ -3546,13 +3584,14 @@ async function onGuildMemberRemove(member) {
     const channel = member.guild.channels.cache.get(config.goodbyeChannelId);
     if (!channel || !channel.isTextBased()) return;
     const userPfp = member.user ? member.user.displayAvatarURL({ extension: "png", size: 256 }) : "https://cdn.discordapp.com/embed/avatars/0.png";
+    const userDisplayName = member.displayName || member.user?.globalName || member.user?.username || "A member";
     const userName = member.user?.username || "A member";
     const serverName = member.guild.name;
     const memberCount = String(member.guild.memberCount);
     const serverIcon = member.guild.iconURL({ extension: "png", size: 256 }) || "https://cdn.discordapp.com/embed/avatars/0.png";
     const replaceTags = (text) => {
       if (!text) return "";
-      let s = text.replace(/{user\.mention}/g, userName).replace(/{user\.name}/g, userName).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount).replace(/{server\.icon}/g, serverIcon);
+      let s = text.replace(/{user\.mention}/g, `@${userDisplayName}`).replace(/{user\.displayName}/gi, userDisplayName).replace(/{user\.display_name}/gi, userDisplayName).replace(/{user\.name}/g, userDisplayName).replace(/{user\.username}/g, userName).replace(/{user\.tag}/g, `@${userName}`).replace(/{user\.handle}/g, `@${userName}`).replace(/{user\.avatar}/g, userPfp).replace(/{user\.pfp}/g, userPfp).replace(/{user\.id}/g, member.id).replace(/{server\.name}/g, serverName).replace(/{server\.member_count}/g, memberCount).replace(/{server\.icon}/g, serverIcon);
       for (const [, ch] of member.guild.channels.cache) {
         if (!ch) continue;
         const escaped = ch.name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
@@ -3577,7 +3616,11 @@ async function onGuildMemberRemove(member) {
       try {
         const raw = JSON.parse(config.goodbyeEmbed);
         embed = new import_discord7.EmbedBuilder();
-        if (raw.title) embed.setTitle(replaceTags(raw.title));
+        if (raw.title) {
+          let titleHeader = replaceTags(raw.title);
+          titleHeader = titleHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);
+          embed.setTitle(titleHeader);
+        }
         if (raw.description) embed.setDescription(replaceTags(raw.description));
         if (raw.color) {
           embed.setColor(parseInt(raw.color.replace("#", ""), 16) || 14300988);
@@ -3585,8 +3628,10 @@ async function onGuildMemberRemove(member) {
           embed.setColor(14300988);
         }
         if (raw.authorName) {
+          let authorHeader = replaceTags(raw.authorName);
+          authorHeader = authorHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);
           embed.setAuthor({
-            name: replaceTags(raw.authorName),
+            name: authorHeader,
             iconURL: raw.authorIconUrl ? replaceTags(raw.authorIconUrl) : userPfp
           });
         }

@@ -51,6 +51,33 @@ export async function POST(
       return NextResponse.json({ error: "Destination channel is required." }, { status: 400 });
     }
 
+    const targetGuild = auth.context!.guild;
+    const serverName = targetGuild?.name || "Discord Server";
+    const userDisplayName = auth.context!.user.global_name || auth.context!.user.username;
+    const userAvatarUrl = auth.context!.user.avatar
+      ? `https://cdn.discordapp.com/avatars/${auth.context!.user.id}/${auth.context!.user.avatar}.png?size=256`
+      : "https://cdn.discordapp.com/embed/avatars/0.png";
+    const serverIconUrl = targetGuild?.icon
+      ? `https://cdn.discordapp.com/icons/${targetGuild.id}/${targetGuild.icon}.png?size=256`
+      : "https://cdn.discordapp.com/embed/avatars/0.png";
+
+    const resolveTags = (str?: string | null): string | undefined => {
+      if (!str) return undefined;
+      return str
+        .replace(/{user\.mention}/g, `<@${auth.context!.user.id}>`)
+        .replace(/{user\.displayName}/gi, userDisplayName)
+        .replace(/{user\.display_name}/gi, userDisplayName)
+        .replace(/{user\.name}/g, userDisplayName)
+        .replace(/{user\.username}/g, auth.context!.user.username)
+        .replace(/{user\.tag}/g, `@${auth.context!.user.username}`)
+        .replace(/{user\.handle}/g, `@${auth.context!.user.username}`)
+        .replace(/{user\.avatar}/g, userAvatarUrl)
+        .replace(/{user\.pfp}/g, userAvatarUrl)
+        .replace(/{user\.id}/g, auth.context!.user.id)
+        .replace(/{server\.name}/g, serverName)
+        .replace(/{server\.icon}/g, serverIconUrl);
+    };
+
     let mentionPrefix = "";
     if (mentionType === "EVERYONE") mentionPrefix = "@everyone\n";
     if (mentionType === "HERE") mentionPrefix = "@here\n";
@@ -59,17 +86,23 @@ export async function POST(
     let publishedMessageId = null;
 
     if (publishNow) {
-      const fullContent = mentionPrefix + (content || "");
+      const fullContent = mentionPrefix + (resolveTags(content) || "");
 
       let embedData = undefined;
-      if (embed && (embed.title || embed.description)) {
+      if (embed && (embed.title || embed.description || embed.authorName)) {
+        let resAuthor = resolveTags(embed.authorName);
+        if (resAuthor) resAuthor = resAuthor.replace(/<@!?\d+>/g, `@${userDisplayName}`);
+        let resTitle = resolveTags(embed.title);
+        if (resTitle) resTitle = resTitle.replace(/<@!?\d+>/g, `@${userDisplayName}`);
+
         embedData = {
-          title: embed.title || undefined,
-          description: embed.description || undefined,
+          title: resTitle || undefined,
+          description: resolveTags(embed.description) || undefined,
           color: embed.color ? parseInt(embed.color.replace("#", ""), 16) : 0x5865f2,
-          image: embed.imageUrl ? { url: embed.imageUrl } : undefined,
-          thumbnail: embed.thumbnailUrl ? { url: embed.thumbnailUrl } : undefined,
-          footer: embed.footerText ? { text: embed.footerText } : undefined,
+          author: resAuthor ? { name: resAuthor, icon_url: resolveTags(embed.authorIconUrl) || userAvatarUrl } : undefined,
+          image: embed.imageUrl ? { url: resolveTags(embed.imageUrl) } : undefined,
+          thumbnail: embed.thumbnailUrl ? { url: resolveTags(embed.thumbnailUrl) } : undefined,
+          footer: embed.footerText ? { text: resolveTags(embed.footerText) } : undefined,
           timestamp: embed.timestamp ? new Date().toISOString() : undefined,
         };
       }

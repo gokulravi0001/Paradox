@@ -1303,20 +1303,25 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
             if (!bgAttachment) avatarUrl = user.displayAvatarURL({ extension: "png", size: 512 });
           }
         } else {
-          const cleanName = rawOverride.replace(/^@/, "").toLowerCase();
-          const memberMatch = guild?.members.cache.find(
-            (m) =>
-              m.displayName.toLowerCase() === cleanName ||
-              m.user.username.toLowerCase() === cleanName ||
-              m.user.globalName?.toLowerCase() === cleanName
-          );
+          const cleanName = rawOverride.replace(/^@/, "").trim().toLowerCase();
+          let memberMatch = guild
+            ? (await guild.members.fetch({ query: cleanName, limit: 1 }).catch(() => null))?.first()
+            : null;
+          if (!memberMatch) {
+            memberMatch = guild?.members.cache.find(
+              (m) =>
+                m.displayName.toLowerCase() === cleanName ||
+                m.user.username.toLowerCase() === cleanName ||
+                m.user.globalName?.toLowerCase() === cleanName
+            );
+          }
           if (memberMatch) {
             authorUser = memberMatch.user;
             authorName = memberMatch.displayName;
             authorTag = memberMatch.user.username;
             if (!bgAttachment) avatarUrl = memberMatch.displayAvatarURL({ extension: "png", size: 512 });
           } else {
-            authorName = rawOverride.replace(/^@/, "");
+            authorName = rawOverride.replace(/^@/, "").trim();
           }
         }
       }
@@ -1326,6 +1331,7 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       if (/<@!?\d+>/.test(authorName)) {
         authorName = authorTag || "Anonymous";
       }
+      authorName = authorName.replace(/^@+/, "").trim();
 
       if (!quoteText || !quoteText.trim()) {
         return interaction.editReply({
@@ -1370,7 +1376,7 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
         const fileAttachment = new AttachmentBuilder(gifBuffer, { name: "aura-animated-quote.gif" });
         return interaction.editReply({
-          content: `✨ **Animated Quote by ${authorName}**`,
+          content: `✨ **Animated Quote by @${authorName}**`,
           files: [fileAttachment],
         });
       } else {
@@ -1386,7 +1392,7 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
         const fileAttachment = new AttachmentBuilder(cardBuffer, { name: "aura-quote.png" });
         return interaction.editReply({
-          content: `📜 **Quote by ${authorName}**`,
+          content: `📜 **Quote by @${authorName}**`,
           files: [fileAttachment],
         });
       }
@@ -1472,6 +1478,33 @@ export async function handleTextCommand(message: Message, prefix: string) {
         mentionedMember?.displayAvatarURL({ extension: "png", size: 512, forceStatic: true }) ||
         mentionedUser.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
       quoteText = args.slice(1).join(" ").replace(/<@!?\d+>/g, "").trim();
+    } else {
+      // Check if author was typed like: $quote "Some quote" - @DisplayName
+      const rawText = args.slice(1).join(" ").trim();
+      const dashMatch = rawText.match(/^["“”]?(.*?)["“”]?\s*[-—–]\s*@?([A-Za-z0-9_.\s]+)$/);
+      if (dashMatch) {
+        quoteText = dashMatch[1].trim();
+        const possibleName = dashMatch[2].trim().toLowerCase();
+        let memberMatch = guild
+          ? (await guild.members.fetch({ query: possibleName, limit: 1 }).catch(() => null))?.first()
+          : null;
+        if (!memberMatch) {
+          memberMatch = guild?.members.cache.find(
+            (m) =>
+              m.displayName.toLowerCase() === possibleName ||
+              m.user.username.toLowerCase() === possibleName ||
+              m.user.globalName?.toLowerCase() === possibleName
+          );
+        }
+        if (memberMatch) {
+          authorUser = memberMatch.user;
+          authorName = memberMatch.displayName;
+          authorTag = memberMatch.user.username;
+          avatarUrl = memberMatch.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+        } else {
+          authorName = dashMatch[2].trim();
+        }
+      }
     }
 
     if (!quoteText || !quoteText.trim()) {
@@ -1482,6 +1515,7 @@ export async function handleTextCommand(message: Message, prefix: string) {
     if (/<@!?\d+>/.test(authorName)) {
       authorName = authorTag || "Anonymous";
     }
+    authorName = authorName.replace(/^@+/, "").trim();
 
     const cleanQuote = await resolveMentionsToNames(quoteText.trim(), guild);
 
@@ -1497,7 +1531,10 @@ export async function handleTextCommand(message: Message, prefix: string) {
       });
 
       const fileAttachment = new AttachmentBuilder(cardBuffer, { name: "quote.png" });
-      return message.reply({ files: [fileAttachment] });
+      return message.reply({
+        content: `📜 **Quote by @${authorName}**`,
+        files: [fileAttachment],
+      });
     } catch (err: any) {
       console.error("[Bot:Quote] Error generating quote card:", err);
       return message.reply(`❌ Failed to generate quote card: ${err.message}`);

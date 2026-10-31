@@ -368,16 +368,19 @@ export async function generateQuoteCard(options: QuoteCardOptions): Promise<Buff
     }
   }
 
+  // Format author in @userdisplayname / @usermention format
+  const displayAuthor = authorName.startsWith("@") ? authorName : `@${authorName}`;
+
   const authorY = startY + (lines.length - 1) * lineHeight + 48;
 
   ctx.font = '22px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = "#E5E7EB";
-  ctx.fillText(`- ${authorName}`, textCenterX, authorY);
+  ctx.fillText(`- ${displayAuthor}`, textCenterX, authorY);
 
   if (options.authorTag) {
-    const cleanTag = options.authorTag.trim();
-    const tagText = cleanTag.startsWith("@") ? cleanTag : `@${cleanTag}`;
-    if (tagText.toLowerCase() !== `@${authorName.toLowerCase()}`) {
+    const cleanTag = options.authorTag.trim().replace(/^@/, "");
+    const tagText = `@${cleanTag}`;
+    if (tagText.toLowerCase() !== displayAuthor.toLowerCase()) {
       ctx.font = '16px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = "#888888";
       ctx.fillText(tagText, textCenterX, authorY + 28);
@@ -495,6 +498,9 @@ export async function generateAnimatedQuoteCard(options: QuoteCardOptions): Prom
       }
     }
 
+    // Format author in @userdisplayname / @usermention format
+    const displayAuthor = authorName.startsWith("@") ? authorName : `@${authorName}`;
+
     const authorY = startY + (lines.length - 1) * lineHeight + 42;
 
     ctx.save();
@@ -502,13 +508,13 @@ export async function generateAnimatedQuoteCard(options: QuoteCardOptions): Prom
     ctx.fillStyle = pulse > 0 ? "#E5E7EB" : "#D1D5DB";
     ctx.shadowColor = pulse > 0 ? "rgba(168, 85, 247, 0.8)" : "rgba(239, 68, 68, 0.8)";
     ctx.shadowBlur = 4 + Math.abs(pulse) * 6;
-    ctx.fillText(`- ${authorName}`, textCenterX, authorY);
+    ctx.fillText(`- ${displayAuthor}`, textCenterX, authorY);
     ctx.restore();
 
     if (options.authorTag) {
-      const cleanTag = options.authorTag.trim();
-      const tagText = cleanTag.startsWith("@") ? cleanTag : `@${cleanTag}`;
-      if (tagText.toLowerCase() !== `@${authorName.toLowerCase()}`) {
+      const cleanTag = options.authorTag.trim().replace(/^@/, "");
+      const tagText = `@${cleanTag}`;
+      if (tagText.toLowerCase() !== displayAuthor.toLowerCase()) {
         ctx.font = '14px "Segoe UI", Arial, sans-serif';
         ctx.fillStyle = "#888888";
         ctx.fillText(tagText, textCenterX, authorY + 24);
