@@ -351,41 +351,34 @@ export async function generateQuoteCard(options: QuoteCardOptions): Promise<Buff
   const lines = wrapText(ctx, cleanText, maxTextWidth);
 
   const totalTextHeight = lines.length * lineHeight;
-  const authorBlockHeight = 65;
+  const authorBlockHeight = 38;
   const startY = Math.max(80, (height - (totalTextHeight + authorBlockHeight)) / 2 + fontSize * 0.8);
 
   lines.forEach((line, index) => {
     ctx.fillText(line, textCenterX, startY + index * lineHeight);
   });
 
-  // Author details below text
-  let authorName = options.author?.trim() || "Anonymous";
-  if (/<@!?\d+>/.test(authorName)) {
-    if (options.authorTag) {
-      authorName = options.authorTag.replace(/^@/, "");
-    } else {
-      authorName = authorName.replace(/<@!?\d+>/g, "").trim() || "Anonymous";
-    }
-  }
+  // Author details below text: display strictly as @user.mention and remove username line below
+  const mentionHandle = options.authorTag?.replace(/^@+/, "").trim();
+  let rawAuthor = options.author?.replace(/<@!?\d+>/g, "").replace(/^@+/, "").trim() || "";
 
-  // Format author in @userdisplayname / @usermention format
-  const displayAuthor = authorName.startsWith("@") ? authorName : `@${authorName}`;
+  // Prefer authorTag (Discord username/handle) so it matches @user.mention and never renders as tofu boxes
+  let displayAuthor = "";
+  if (mentionHandle) {
+    displayAuthor = `@${mentionHandle}`;
+  } else if (rawAuthor) {
+    // Normalize stylized Unicode (NFKD) so fancy font glyphs decompose into readable ASCII
+    const normalized = rawAuthor.normalize("NFKD").trim();
+    displayAuthor = `@${normalized}`;
+  } else {
+    displayAuthor = "@Anonymous";
+  }
 
   const authorY = startY + (lines.length - 1) * lineHeight + 48;
 
   ctx.font = '22px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = "#E5E7EB";
   ctx.fillText(`- ${displayAuthor}`, textCenterX, authorY);
-
-  if (options.authorTag) {
-    const cleanTag = options.authorTag.trim().replace(/^@/, "");
-    const tagText = `@${cleanTag}`;
-    if (tagText.toLowerCase() !== displayAuthor.toLowerCase()) {
-      ctx.font = '16px "Segoe UI", Arial, sans-serif';
-      ctx.fillStyle = "#888888";
-      ctx.fillText(tagText, textCenterX, authorY + 28);
-    }
-  }
 
   // Watermark in bottom-right corner (normalize stylized Unicode so glyphs do not render as □ boxes)
   let watermarkText = (options.serverName || "A U R A   T A M I L")
@@ -481,25 +474,26 @@ export async function generateAnimatedQuoteCard(options: QuoteCardOptions): Prom
     const lines = wrapText(ctx, cleanText, maxTextWidth);
 
     const totalTextHeight = lines.length * lineHeight;
-    const authorBlockHeight = 55;
+    const authorBlockHeight = 35;
     const startY = Math.max(60, (height - (totalTextHeight + authorBlockHeight)) / 2 + fontSize * 0.8);
 
     lines.forEach((line, index) => {
       ctx.fillText(line, textCenterX, startY + index * lineHeight);
     });
 
-    // Author with subtle neon pulse
-    let authorName = options.author?.trim() || "Anonymous";
-    if (/<@!?\d+>/.test(authorName)) {
-      if (options.authorTag) {
-        authorName = options.authorTag.replace(/^@/, "");
-      } else {
-        authorName = authorName.replace(/<@!?\d+>/g, "").trim() || "Anonymous";
-      }
-    }
+    // Author with subtle neon pulse: display strictly as @user.mention and remove username line below
+    const mentionHandle = options.authorTag?.replace(/^@+/, "").trim();
+    let rawAuthor = options.author?.replace(/<@!?\d+>/g, "").replace(/^@+/, "").trim() || "";
 
-    // Format author in @userdisplayname / @usermention format
-    const displayAuthor = authorName.startsWith("@") ? authorName : `@${authorName}`;
+    let displayAuthor = "";
+    if (mentionHandle) {
+      displayAuthor = `@${mentionHandle}`;
+    } else if (rawAuthor) {
+      const normalized = rawAuthor.normalize("NFKD").trim();
+      displayAuthor = `@${normalized}`;
+    } else {
+      displayAuthor = "@Anonymous";
+    }
 
     const authorY = startY + (lines.length - 1) * lineHeight + 42;
 
@@ -510,16 +504,6 @@ export async function generateAnimatedQuoteCard(options: QuoteCardOptions): Prom
     ctx.shadowBlur = 4 + Math.abs(pulse) * 6;
     ctx.fillText(`- ${displayAuthor}`, textCenterX, authorY);
     ctx.restore();
-
-    if (options.authorTag) {
-      const cleanTag = options.authorTag.trim().replace(/^@/, "");
-      const tagText = `@${cleanTag}`;
-      if (tagText.toLowerCase() !== displayAuthor.toLowerCase()) {
-        ctx.font = '14px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = "#888888";
-        ctx.fillText(tagText, textCenterX, authorY + 24);
-      }
-    }
 
     // Watermark in bottom-right corner
     let watermarkText = (options.serverName || "A U R A   T A M I L")

@@ -1363,6 +1363,8 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
         bgBuffer = await fetchSafeImageBuffer(bgAttachment.url, 8 * 1024 * 1024);
       }
 
+      const replyAuthor = (authorTag || authorName || "Anonymous").replace(/^@+/, "");
+
       if (isAnimated) {
         const gifBuffer = await generateAnimatedQuoteCard({
           text: cleanQuote,
@@ -1376,7 +1378,7 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
         const fileAttachment = new AttachmentBuilder(gifBuffer, { name: "aura-animated-quote.gif" });
         return interaction.editReply({
-          content: `✨ **Animated Quote by @${authorName}**`,
+          content: `✨ **Animated Quote by @${replyAuthor}**`,
           files: [fileAttachment],
         });
       } else {
@@ -1392,7 +1394,7 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 
         const fileAttachment = new AttachmentBuilder(cardBuffer, { name: "aura-quote.png" });
         return interaction.editReply({
-          content: `📜 **Quote by @${authorName}**`,
+          content: `📜 **Quote by @${replyAuthor}**`,
           files: [fileAttachment],
         });
       }
@@ -1530,9 +1532,10 @@ export async function handleTextCommand(message: Message, prefix: string) {
         serverName: guild?.name,
       });
 
+      const replyAuthor = (authorTag || authorName || "Anonymous").replace(/^@+/, "");
       const fileAttachment = new AttachmentBuilder(cardBuffer, { name: "quote.png" });
       return message.reply({
-        content: `📜 **Quote by @${authorName}**`,
+        content: `📜 **Quote by @${replyAuthor}**`,
         files: [fileAttachment],
       });
     } catch (err: any) {

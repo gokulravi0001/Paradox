@@ -1124,33 +1124,26 @@ async function generateQuoteCard(options) {
   const lineHeight = fontSize * 1.4;
   const lines = wrapText(ctx, cleanText, maxTextWidth);
   const totalTextHeight = lines.length * lineHeight;
-  const authorBlockHeight = 65;
+  const authorBlockHeight = 38;
   const startY = Math.max(80, (height - (totalTextHeight + authorBlockHeight)) / 2 + fontSize * 0.8);
   lines.forEach((line, index) => {
     ctx.fillText(line, textCenterX, startY + index * lineHeight);
   });
-  let authorName = options.author?.trim() || "Anonymous";
-  if (/<@!?\d+>/.test(authorName)) {
-    if (options.authorTag) {
-      authorName = options.authorTag.replace(/^@/, "");
-    } else {
-      authorName = authorName.replace(/<@!?\d+>/g, "").trim() || "Anonymous";
-    }
+  const mentionHandle = options.authorTag?.replace(/^@+/, "").trim();
+  let rawAuthor = options.author?.replace(/<@!?\d+>/g, "").replace(/^@+/, "").trim() || "";
+  let displayAuthor = "";
+  if (mentionHandle) {
+    displayAuthor = `@${mentionHandle}`;
+  } else if (rawAuthor) {
+    const normalized = rawAuthor.normalize("NFKD").trim();
+    displayAuthor = `@${normalized}`;
+  } else {
+    displayAuthor = "@Anonymous";
   }
-  const displayAuthor = authorName.startsWith("@") ? authorName : `@${authorName}`;
   const authorY = startY + (lines.length - 1) * lineHeight + 48;
   ctx.font = '22px "Segoe UI", Arial, sans-serif';
   ctx.fillStyle = "#E5E7EB";
   ctx.fillText(`- ${displayAuthor}`, textCenterX, authorY);
-  if (options.authorTag) {
-    const cleanTag = options.authorTag.trim().replace(/^@/, "");
-    const tagText = `@${cleanTag}`;
-    if (tagText.toLowerCase() !== displayAuthor.toLowerCase()) {
-      ctx.font = '16px "Segoe UI", Arial, sans-serif';
-      ctx.fillStyle = "#888888";
-      ctx.fillText(tagText, textCenterX, authorY + 28);
-    }
-  }
   let watermarkText = (options.serverName || "A U R A   T A M I L").normalize("NFKD").replace(/[^\x20-\x7E]/g, "").trim();
   if (!watermarkText) watermarkText = "A U R A   T A M I L";
   ctx.textAlign = "right";
@@ -1220,20 +1213,22 @@ async function generateAnimatedQuoteCard(options) {
     const lineHeight = fontSize * 1.4;
     const lines = wrapText(ctx, cleanText, maxTextWidth);
     const totalTextHeight = lines.length * lineHeight;
-    const authorBlockHeight = 55;
+    const authorBlockHeight = 35;
     const startY = Math.max(60, (height - (totalTextHeight + authorBlockHeight)) / 2 + fontSize * 0.8);
     lines.forEach((line, index2) => {
       ctx.fillText(line, textCenterX, startY + index2 * lineHeight);
     });
-    let authorName = options.author?.trim() || "Anonymous";
-    if (/<@!?\d+>/.test(authorName)) {
-      if (options.authorTag) {
-        authorName = options.authorTag.replace(/^@/, "");
-      } else {
-        authorName = authorName.replace(/<@!?\d+>/g, "").trim() || "Anonymous";
-      }
+    const mentionHandle = options.authorTag?.replace(/^@+/, "").trim();
+    let rawAuthor = options.author?.replace(/<@!?\d+>/g, "").replace(/^@+/, "").trim() || "";
+    let displayAuthor = "";
+    if (mentionHandle) {
+      displayAuthor = `@${mentionHandle}`;
+    } else if (rawAuthor) {
+      const normalized = rawAuthor.normalize("NFKD").trim();
+      displayAuthor = `@${normalized}`;
+    } else {
+      displayAuthor = "@Anonymous";
     }
-    const displayAuthor = authorName.startsWith("@") ? authorName : `@${authorName}`;
     const authorY = startY + (lines.length - 1) * lineHeight + 42;
     ctx.save();
     ctx.font = '18px "Segoe UI", Arial, sans-serif';
@@ -1242,15 +1237,6 @@ async function generateAnimatedQuoteCard(options) {
     ctx.shadowBlur = 4 + Math.abs(pulse) * 6;
     ctx.fillText(`- ${displayAuthor}`, textCenterX, authorY);
     ctx.restore();
-    if (options.authorTag) {
-      const cleanTag = options.authorTag.trim().replace(/^@/, "");
-      const tagText = `@${cleanTag}`;
-      if (tagText.toLowerCase() !== displayAuthor.toLowerCase()) {
-        ctx.font = '14px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = "#888888";
-        ctx.fillText(tagText, textCenterX, authorY + 24);
-      }
-    }
     let watermarkText = (options.serverName || "A U R A   T A M I L").normalize("NFKD").replace(/[^\x20-\x7E]/g, "").trim();
     if (!watermarkText) watermarkText = "A U R A   T A M I L";
     ctx.textAlign = "right";
@@ -2202,6 +2188,7 @@ Click the title above or the button below to enter **${serverName}**!
         }
         bgBuffer = await fetchSafeImageBuffer(bgAttachment.url, 8 * 1024 * 1024);
       }
+      const replyAuthor = (authorTag || authorName || "Anonymous").replace(/^@+/, "");
       if (isAnimated) {
         const gifBuffer = await generateAnimatedQuoteCard({
           text: cleanQuote,
@@ -2214,7 +2201,7 @@ Click the title above or the button below to enter **${serverName}**!
         });
         const fileAttachment = new import_discord2.AttachmentBuilder(gifBuffer, { name: "aura-animated-quote.gif" });
         return interaction.editReply({
-          content: `\u2728 **Animated Quote by @${authorName}**`,
+          content: `\u2728 **Animated Quote by @${replyAuthor}**`,
           files: [fileAttachment]
         });
       } else {
@@ -2229,7 +2216,7 @@ Click the title above or the button below to enter **${serverName}**!
         });
         const fileAttachment = new import_discord2.AttachmentBuilder(cardBuffer, { name: "aura-quote.png" });
         return interaction.editReply({
-          content: `\u{1F4DC} **Quote by @${authorName}**`,
+          content: `\u{1F4DC} **Quote by @${replyAuthor}**`,
           files: [fileAttachment]
         });
       }
@@ -2331,9 +2318,10 @@ async function handleTextCommand(message, prefix) {
         avatarUrl,
         serverName: guild?.name
       });
+      const replyAuthor = (authorTag || authorName || "Anonymous").replace(/^@+/, "");
       const fileAttachment = new import_discord2.AttachmentBuilder(cardBuffer, { name: "quote.png" });
       return message.reply({
-        content: `\u{1F4DC} **Quote by @${authorName}**`,
+        content: `\u{1F4DC} **Quote by @${replyAuthor}**`,
         files: [fileAttachment]
       });
     } catch (err) {
