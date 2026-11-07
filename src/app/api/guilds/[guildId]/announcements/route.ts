@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeGuildAdmin } from "@/lib/serverAuth";
 import { prisma } from "@/lib/prisma";
-import { postDiscordMessage, createDiscordMessageThread } from "@/lib/discord";
+import { postDiscordMessage, createDiscordMessageThread, createDiscordAdminChannel } from "@/lib/discord";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +97,7 @@ export async function POST(
     const announcementId = crypto.randomUUID();
     let publishedMessageId: string | null = null;
     let createdThreadId: string | null = null;
+    let createdAdminChannelId: string | null = null;
     const cleanThreadTitle = (threadName?.trim() || "💬 Event Ideas / Discussion").slice(0, 100);
 
     if (publishNow) {
@@ -162,6 +163,53 @@ export async function POST(
           console.warn("[Announcements:Thread] Notice: Could not create public thread:", threadErr?.message);
         }
       }
+
+      // If typable announcement is enabled, also create the temporary private channel for Admins & Owner
+      if (allowTyping && publishedMessageId) {
+        try {
+          const ownerId = (targetGuild as any)?.owner_id || undefined;
+          const adminChanRes = await createDiscordAdminChannel(
+            guildId,
+            cleanThreadTitle || "event-ideas",
+            ownerId,
+            {
+              topic: "Temporary private channel for announcement responses. Visible only to Admins and the Server Owner.",
+            }
+          );
+          createdAdminChannelId = adminChanRes.id;
+
+          await postDiscordMessage(createdAdminChannelId, {
+            embeds: [
+              {
+                title: "🔒 Temporary Admin & Owner Response Log",
+                description:
+                  `This private channel was automatically created to log member responses for the announcement posted in <#${channelId}>.\n\n` +
+                  `• **Access:** Only Server Owner & Administrators have permission to view this channel.\n` +
+                  `• **Submissions:** Whenever a member clicks **[💡 Type Your Idea / Feedback]** on the announcement and submits the text field, their response will appear here in real time.\n\n` +
+                  `*When the event/collection is complete, click the red button below to close and delete this channel.*`,
+                color: 0xf59e0b,
+                footer: { text: "Paradox • Temporary Admin Log" },
+                timestamp: new Date().toISOString(),
+              },
+            ],
+            components: [
+              {
+                type: 1,
+                components: [
+                  {
+                    type: 2,
+                    style: 4,
+                    custom_id: `delete_temp_channel_${announcementId}`,
+                    label: "🗑️ Close & Delete Temporary Channel",
+                  },
+                ],
+              },
+            ],
+          }).catch(() => null);
+        } catch (adminChanErr: any) {
+          console.warn("[Announcements:AdminChannel] Notice: Could not create admin channel:", adminChanErr?.message);
+        }
+      }
     }
 
     const announcement = await prisma.announcement.create({
@@ -181,6 +229,7 @@ export async function POST(
         allowTyping: Boolean(allowTyping),
         threadName: allowTyping ? cleanThreadTitle : null,
         threadId: createdThreadId,
+        adminChannelId: createdAdminChannelId,
       },
       include: {
         responses: true,

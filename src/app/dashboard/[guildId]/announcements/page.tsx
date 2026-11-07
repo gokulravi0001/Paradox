@@ -44,6 +44,7 @@ interface AnnouncementItem {
   allowTyping?: boolean;
   threadName?: string | null;
   threadId?: string | null;
+  adminChannelId?: string | null;
   publishedAt: string | null;
   createdAt: string;
   responses?: AnnouncementResponseItem[];
@@ -519,9 +520,11 @@ export default function AnnouncementsPage() {
                     How this works:
                   </div>
                   <ul className="list-disc list-inside space-y-0.5 text-zinc-300">
-                    <li>A public thread is created right under your announcement so members can chat without permissions in the announcement channel.</li>
-                    <li>A <strong>[💡 Type Your Idea / Feedback]</strong> button is attached so members can submit clean responses via a Discord modal.</li>
-                    <li>Submitted ideas are saved here in your dashboard and forwarded to the thread automatically.</li>
+                    <li>A <strong>[💡 Type Your Idea / Feedback]</strong> button is attached directly to the announcement.</li>
+                    <li>Clicking it opens Discord's native multiline text field modal for members to type their thoughts.</li>
+                    <li>A <strong>temporary private channel (🔒-ideas-...)</strong> is auto-created, visible <strong>ONLY to the Server Owner & Admins</strong>.</li>
+                    <li>Every submission with the member's username and avatar is logged to this private channel in real time.</li>
+                    <li>Admins/Owner can close and delete the temporary channel anytime with one click using the attached <strong>[🗑️ Close Channel]</strong> button.</li>
                   </ul>
                 </div>
               </div>
@@ -566,6 +569,10 @@ export default function AnnouncementsPage() {
                 <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
                 <span className="text-white font-medium text-[11px]">{threadTitle || "💬 Event Ideas / Discussion"}</span>
                 <span className="text-[10px] text-zinc-500">(Auto-created thread)</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-amber-400/90 pl-1 border-l-2 border-amber-500">
+                <span className="font-bold text-[11px]">🔒 Private Admin Channel:</span>
+                <span className="text-[10px] text-zinc-300">Auto-created for Owner & Admins only</span>
               </div>
             </div>
           )}

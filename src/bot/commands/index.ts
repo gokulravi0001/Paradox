@@ -25,6 +25,7 @@ import {
   fetchSafeImageBuffer,
   validateImageUrl,
 } from "../services/imageGenerator";
+import { ensureAdminIdeasChannel } from "../services/channelManager";
 
 export const SLASH_COMMANDS_DATA = [
   new SlashCommandBuilder()
@@ -1480,6 +1481,7 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       });
 
       let createdThreadId: string | null = null;
+      let createdAdminChannelId: string | null = null;
       if (allowTyping) {
         try {
           const thread = await sentMsg.startThread({
@@ -1492,6 +1494,17 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
           });
         } catch (threadErr: any) {
           console.warn("[Bot:AnnounceThread] Notice: Could not start thread:", threadErr?.message);
+        }
+
+        try {
+          const adminChan = await ensureAdminIdeasChannel(
+            guild,
+            { id: announcementId, channelId: channel.id, title: "Broadcast Announcement" },
+            threadTitle
+          );
+          createdAdminChannelId = adminChan?.id || null;
+        } catch (adminChanErr: any) {
+          console.warn("[Bot:AnnounceAdminChan] Notice: Could not create admin channel:", adminChanErr?.message);
         }
       }
 
@@ -1509,11 +1522,12 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
           allowTyping,
           threadName: allowTyping ? threadTitle : null,
           threadId: createdThreadId,
+          adminChannelId: createdAdminChannelId,
         },
       });
 
       return interaction.editReply({
-        content: `✅ **Announcement Broadcasted!** Posted to <#${channel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}>` : ""}.`,
+        content: `✅ **Announcement Broadcasted!** Posted to <#${channel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}>` : ""}${createdAdminChannelId ? ` and private admin log <#${createdAdminChannelId}>` : ""}.`,
       });
     } catch (err: any) {
       return interaction.editReply({
@@ -2208,6 +2222,7 @@ export async function handleTextCommand(message: Message, prefix: string) {
       });
 
       let createdThreadId: string | null = null;
+      let createdAdminChannelId: string | null = null;
       if (isTypable) {
         try {
           const thread = await sentMsg.startThread({
@@ -2220,6 +2235,17 @@ export async function handleTextCommand(message: Message, prefix: string) {
           });
         } catch (threadErr: any) {
           console.warn("[Bot:AnnounceTextThread] Notice: Could not start thread:", threadErr?.message);
+        }
+
+        try {
+          const adminChan = await ensureAdminIdeasChannel(
+            guild,
+            { id: announcementId, channelId: targetChannel.id, title: "Broadcast Announcement" },
+            "event-ideas"
+          );
+          createdAdminChannelId = adminChan?.id || null;
+        } catch (adminChanErr: any) {
+          console.warn("[Bot:AnnounceTextAdminChan] Notice: Could not create admin channel:", adminChanErr?.message);
         }
       }
 
@@ -2236,11 +2262,12 @@ export async function handleTextCommand(message: Message, prefix: string) {
           allowTyping: isTypable,
           threadName: isTypable ? "💬 Event Ideas / Discussion" : null,
           threadId: createdThreadId,
+          adminChannelId: createdAdminChannelId,
         },
       });
 
       return message.reply(
-        `✅ **Announcement Published!** Sent to <#${targetChannel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}> for member ideas` : ""}.`
+        `✅ **Announcement Published!** Sent to <#${targetChannel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}>` : ""}${createdAdminChannelId ? ` and private admin log <#${createdAdminChannelId}>` : ""}.`
       );
     } catch (err: any) {
       return message.reply(`❌ Failed to send announcement: ${err.message}`);

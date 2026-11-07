@@ -877,7 +877,7 @@ function createBotClient() {
 }
 
 // ../DC BOTS/Paradox/src/bot/events/ready.ts
-var import_discord3 = require("discord.js");
+var import_discord4 = require("discord.js");
 
 // ../DC BOTS/Paradox/src/lib/prisma.ts
 var import_client = require("@prisma/client");
@@ -889,7 +889,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 // ../DC BOTS/Paradox/src/bot/commands/index.ts
-var import_discord2 = require("discord.js");
+var import_discord3 = require("discord.js");
 var import_crypto = __toESM(require("crypto"));
 
 // ../DC BOTS/Paradox/src/bot/services/imageGenerator.ts
@@ -1253,15 +1253,92 @@ async function generateAnimatedQuoteCard(options) {
   return Buffer.from(gif.bytes());
 }
 
+// ../DC BOTS/Paradox/src/bot/services/channelManager.ts
+var import_discord2 = require("discord.js");
+async function ensureAdminIdeasChannel(guild, announcement, title) {
+  if (announcement.adminChannelId) {
+    const existing = await guild.channels.fetch(announcement.adminChannelId).catch(() => null);
+    if (existing) return existing;
+  }
+  const botMember = await guild.members.fetchMe().catch(() => null);
+  const permissionOverwrites = [
+    {
+      id: guild.id,
+      // @everyone role
+      deny: [import_discord2.PermissionsBitField.Flags.ViewChannel]
+    }
+  ];
+  if (botMember) {
+    permissionOverwrites.push({
+      id: botMember.id,
+      allow: [
+        import_discord2.PermissionsBitField.Flags.ViewChannel,
+        import_discord2.PermissionsBitField.Flags.SendMessages,
+        import_discord2.PermissionsBitField.Flags.EmbedLinks,
+        import_discord2.PermissionsBitField.Flags.ManageChannels,
+        import_discord2.PermissionsBitField.Flags.ReadMessageHistory
+      ]
+    });
+  }
+  if (guild.ownerId) {
+    permissionOverwrites.push({
+      id: guild.ownerId,
+      allow: [
+        import_discord2.PermissionsBitField.Flags.ViewChannel,
+        import_discord2.PermissionsBitField.Flags.SendMessages,
+        import_discord2.PermissionsBitField.Flags.ReadMessageHistory
+      ]
+    });
+  }
+  const adminRoles = guild.roles.cache.filter(
+    (r) => r.permissions.has(import_discord2.PermissionsBitField.Flags.Administrator) || r.permissions.has(import_discord2.PermissionsBitField.Flags.ManageGuild)
+  );
+  for (const role of adminRoles.values()) {
+    permissionOverwrites.push({
+      id: role.id,
+      allow: [
+        import_discord2.PermissionsBitField.Flags.ViewChannel,
+        import_discord2.PermissionsBitField.Flags.SendMessages,
+        import_discord2.PermissionsBitField.Flags.ReadMessageHistory
+      ]
+    });
+  }
+  const cleanName = (title || announcement.title || "event-ideas").toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 80);
+  const finalName = cleanName.startsWith("ideas-") ? `\u{1F512}-${cleanName}` : `\u{1F512}-ideas-${cleanName}`;
+  const channel = await guild.channels.create({
+    name: finalName,
+    type: import_discord2.ChannelType.GuildText,
+    topic: "Temporary private channel for announcement responses. Visible only to Admins and the Server Owner.",
+    permissionOverwrites
+  });
+  await prisma.announcement.update({
+    where: { id: announcement.id },
+    data: { adminChannelId: channel.id }
+  }).catch(() => null);
+  const headerEmbed = new import_discord2.EmbedBuilder().setColor(16096779).setTitle("\u{1F512} Temporary Admin & Owner Response Log").setDescription(
+    `This private channel was automatically created to log member responses for the announcement in <#${announcement.channelId}>.
+
+\u2022 **Access:** Only Server Owner & Administrators have permission to view this channel.
+\u2022 **Submissions:** Whenever a member clicks **[\u{1F4A1} Type Your Idea / Feedback]** on the announcement and submits the text field, their response will appear here in real time.
+
+*When the event/collection is complete, click the red button below to close and delete this channel.*`
+  ).setFooter({ text: "Paradox \u2022 Temporary Admin Log" }).setTimestamp();
+  const headerRow = new import_discord2.ActionRowBuilder().addComponents(
+    new import_discord2.ButtonBuilder().setCustomId(`delete_temp_channel_${announcement.id}`).setLabel("\u{1F5D1}\uFE0F Close & Delete Temporary Channel").setStyle(import_discord2.ButtonStyle.Danger)
+  );
+  await channel.send({ embeds: [headerEmbed], components: [headerRow] }).catch(() => null);
+  return channel;
+}
+
 // ../DC BOTS/Paradox/src/bot/commands/index.ts
 var SLASH_COMMANDS_DATA = [
-  new import_discord2.SlashCommandBuilder().setName("help").setDescription("Explore Paradox commands, features, and dashboard link"),
-  new import_discord2.SlashCommandBuilder().setName("ping").setDescription("Check bot latency and gateway connection"),
-  new import_discord2.SlashCommandBuilder().setName("dashboard").setDescription("Get a direct link to this server's web companion dashboard"),
-  new import_discord2.SlashCommandBuilder().setName("roles").setDescription("List active visual role decks and reaction roles for this server"),
-  new import_discord2.SlashCommandBuilder().setName("serverinfo").setDescription("Display server statistics and bot permission health"),
+  new import_discord3.SlashCommandBuilder().setName("help").setDescription("Explore Paradox commands, features, and dashboard link"),
+  new import_discord3.SlashCommandBuilder().setName("ping").setDescription("Check bot latency and gateway connection"),
+  new import_discord3.SlashCommandBuilder().setName("dashboard").setDescription("Get a direct link to this server's web companion dashboard"),
+  new import_discord3.SlashCommandBuilder().setName("roles").setDescription("List active visual role decks and reaction roles for this server"),
+  new import_discord3.SlashCommandBuilder().setName("serverinfo").setDescription("Display server statistics and bot permission health"),
   // 1. Specialist: Reaction Roles Command (with Multi-Mode Logic & Prerequisites)
-  new import_discord2.SlashCommandBuilder().setName("reactionrole").setDescription("Specialist: Manage emoji reaction roles with custom mode logic").addSubcommand(
+  new import_discord3.SlashCommandBuilder().setName("reactionrole").setDescription("Specialist: Manage emoji reaction roles with custom mode logic").addSubcommand(
     (sub) => sub.setName("add").setDescription("Add an emoji reaction role with specialized mode logic").addStringOption(
       (opt) => opt.setName("message_id").setDescription("The Discord Message ID").setRequired(true)
     ).addStringOption(
@@ -1278,7 +1355,7 @@ var SLASH_COMMANDS_DATA = [
     ).addRoleOption(
       (opt) => opt.setName("required_role").setDescription("Prerequisite role needed to claim this role")
     ).addChannelOption(
-      (opt) => opt.setName("channel").setDescription("The channel containing the message (defaults to current)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
+      (opt) => opt.setName("channel").setDescription("The channel containing the message (defaults to current)").addChannelTypes(import_discord3.ChannelType.GuildText, import_discord3.ChannelType.GuildAnnouncement)
     ).addStringOption(
       (opt) => opt.setName("description").setDescription("Perk description displayed on claim")
     ).addStringOption(
@@ -1333,7 +1410,7 @@ var SLASH_COMMANDS_DATA = [
     )
   ),
   // 2. Specialist: Visual Role Deck Command (Interactive Clickable Buttons & Animated GIF Header)
-  new import_discord2.SlashCommandBuilder().setName("roledeck").setDescription("Specialist: Deploy interactive Visual Role Deck with buttons and banner GIF").addStringOption(
+  new import_discord3.SlashCommandBuilder().setName("roledeck").setDescription("Specialist: Deploy interactive Visual Role Deck with buttons and banner GIF").addStringOption(
     (opt) => opt.setName("title").setDescription("Title for the role panel").setRequired(true)
   ).addRoleOption(
     (opt) => opt.setName("role1").setDescription("First role to include").setRequired(true)
@@ -1352,16 +1429,16 @@ var SLASH_COMMANDS_DATA = [
   ).addStringOption(
     (opt) => opt.setName("description").setDescription("Description text above buttons")
   ).addChannelOption(
-    (opt) => opt.setName("channel").setDescription("Destination channel (defaults to current)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
+    (opt) => opt.setName("channel").setDescription("Destination channel (defaults to current)").addChannelTypes(import_discord3.ChannelType.GuildText, import_discord3.ChannelType.GuildAnnouncement)
   ),
   // 3. Specialist: Social Video Fixer Command
-  new import_discord2.SlashCommandBuilder().setName("videofix").setDescription("Specialist: Social Video Embed Fixer (Twitter, TikTok, Instagram, Reddit, Bluesky, Threads)").addSubcommand(
+  new import_discord3.SlashCommandBuilder().setName("videofix").setDescription("Specialist: Social Video Embed Fixer (Twitter, TikTok, Instagram, Reddit, Bluesky, Threads)").addSubcommand(
     (sub) => sub.setName("status").setDescription("Check video fixer status, supported providers, and settings")
   ).addSubcommand(
     (sub) => sub.setName("toggle").setDescription("Enable or disable video fixer server-wide")
   ).addSubcommand(
     (sub) => sub.setName("ignore").setDescription("Mute/unmute video fixing in a specific channel").addChannelOption(
-      (opt) => opt.setName("channel").setDescription("Target channel").setRequired(true).addChannelTypes(import_discord2.ChannelType.GuildText)
+      (opt) => opt.setName("channel").setDescription("Target channel").setRequired(true).addChannelTypes(import_discord3.ChannelType.GuildText)
     )
   ).addSubcommand(
     (sub) => sub.setName("deletebutton").setDescription("Toggle the author \u{1F5D1}\uFE0F Dismiss button on fixed previews").addBooleanOption(
@@ -1369,8 +1446,8 @@ var SLASH_COMMANDS_DATA = [
     )
   ),
   // 4. Rich Embed Publisher & Editor
-  new import_discord2.SlashCommandBuilder().setName("embed").setDescription("Create or edit a rich Discord embed in any channel").addChannelOption(
-    (opt) => opt.setName("channel").setDescription("Destination channel").setRequired(true).addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
+  new import_discord3.SlashCommandBuilder().setName("embed").setDescription("Create or edit a rich Discord embed in any channel").addChannelOption(
+    (opt) => opt.setName("channel").setDescription("Destination channel").setRequired(true).addChannelTypes(import_discord3.ChannelType.GuildText, import_discord3.ChannelType.GuildAnnouncement)
   ).addStringOption(
     (opt) => opt.setName("title").setDescription("Embed title").setRequired(true)
   ).addStringOption(
@@ -1385,15 +1462,15 @@ var SLASH_COMMANDS_DATA = [
     (opt) => opt.setName("thumbnail").setDescription("Small top-right thumbnail icon URL")
   ),
   // 5. AURA Feature 1: Clickable Server Invite Embed
-  new import_discord2.SlashCommandBuilder().setName("postinvite").setDescription("Post a stylish server invite embed with native preview").addStringOption(
+  new import_discord3.SlashCommandBuilder().setName("postinvite").setDescription("Post a stylish server invite embed with native preview").addStringOption(
     (opt) => opt.setName("custom_message").setDescription("Custom message or tagline for the invite embed")
   ).addChannelOption(
-    (opt) => opt.setName("channel").setDescription("Channel to post the invite into (defaults to current channel)").addChannelTypes(import_discord2.ChannelType.GuildText, import_discord2.ChannelType.GuildAnnouncement)
+    (opt) => opt.setName("channel").setDescription("Channel to post the invite into (defaults to current channel)").addChannelTypes(import_discord3.ChannelType.GuildText, import_discord3.ChannelType.GuildAnnouncement)
   ).addStringOption(
     (opt) => opt.setName("invite_url").setDescription("Override custom invite URL (e.g. https://discord.gg/yourcode)")
   ),
   // 6. AURA Feature 2: Make It a GIF
-  new import_discord2.SlashCommandBuilder().setName("gif").setDescription("Convert a static image into an animated GIF with neon effects").addAttachmentOption(
+  new import_discord3.SlashCommandBuilder().setName("gif").setDescription("Convert a static image into an animated GIF with neon effects").addAttachmentOption(
     (opt) => opt.setName("image").setDescription("Upload a static image to animate (PNG, JPG, WEBP)")
   ).addStringOption(
     (opt) => opt.setName("url").setDescription("Or provide a direct image URL to animate")
@@ -1405,7 +1482,7 @@ var SLASH_COMMANDS_DATA = [
     )
   ),
   // 7. AURA Feature 3: Make It a Quote (Photo Quote with User Avatar & Message)
-  new import_discord2.SlashCommandBuilder().setName("quote").setDescription("Turn a message or text into an AURA photo quote with the user's avatar").addStringOption(
+  new import_discord3.SlashCommandBuilder().setName("quote").setDescription("Turn a message or text into an AURA photo quote with the user's avatar").addStringOption(
     (opt) => opt.setName("quote").setDescription("Quote text to display (or leave blank if providing message ID/link)")
   ).addStringOption(
     (opt) => opt.setName("message").setDescription("Discord Message ID or Link to quote directly")
@@ -1417,7 +1494,7 @@ var SLASH_COMMANDS_DATA = [
     (opt) => opt.setName("background").setDescription("Optional custom background image attachment")
   ),
   // 8. AURA Feature 4: Animated Quote
-  new import_discord2.SlashCommandBuilder().setName("animatedquote").setDescription("Generate an animated glowing quote card GIF with user photo").addStringOption(
+  new import_discord3.SlashCommandBuilder().setName("animatedquote").setDescription("Generate an animated glowing quote card GIF with user photo").addStringOption(
     (opt) => opt.setName("quote").setDescription("Quote text to display (or leave blank if providing message ID/link)")
   ).addStringOption(
     (opt) => opt.setName("message").setDescription("Discord Message ID or Link to quote directly")
@@ -1429,9 +1506,9 @@ var SLASH_COMMANDS_DATA = [
     (opt) => opt.setName("background").setDescription("Optional custom background image attachment")
   ),
   // 9. Context Menu: Right-Click Any Message -> Apps -> "Quote Message"
-  new import_discord2.ContextMenuCommandBuilder().setName("Quote Message").setType(import_discord2.ApplicationCommandType.Message),
+  new import_discord3.ContextMenuCommandBuilder().setName("Quote Message").setType(import_discord3.ApplicationCommandType.Message),
   // 10. Typable / Interactive Announcement with Discussion Thread
-  new import_discord2.SlashCommandBuilder().setName("announce").setDescription("Broadcast an announcement with an optional discussion thread for typing ideas").setDefaultMemberPermissions(import_discord2.PermissionsBitField.Flags.ManageGuild).addChannelOption(
+  new import_discord3.SlashCommandBuilder().setName("announce").setDescription("Broadcast an announcement with an optional discussion thread for typing ideas").setDefaultMemberPermissions(import_discord3.PermissionsBitField.Flags.ManageGuild).addChannelOption(
     (opt) => opt.setName("channel").setDescription("Target channel for the announcement").setRequired(true)
   ).addStringOption(
     (opt) => opt.setName("message").setDescription("Announcement message text").setRequired(true)
@@ -1502,16 +1579,16 @@ async function resolveMentionsToNames(text, guild) {
 async function handleSlashCommand(interaction) {
   const { commandName, guildId, guild, client, memberPermissions } = interaction;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const isManager = memberPermissions?.has(import_discord2.PermissionsBitField.Flags.ManageGuild) || memberPermissions?.has(import_discord2.PermissionsBitField.Flags.Administrator);
+  const isManager = memberPermissions?.has(import_discord3.PermissionsBitField.Flags.ManageGuild) || memberPermissions?.has(import_discord3.PermissionsBitField.Flags.Administrator);
   if (commandName === "ping") {
     const ping = client.ws.ping;
-    const embed = new import_discord2.EmbedBuilder().setColor(5763719).setTitle("\u{1F3D3} Pong!").setDescription(`Gateway WebSocket Latency: **${ping}ms**`).setTimestamp();
+    const embed = new import_discord3.EmbedBuilder().setColor(5763719).setTitle("\u{1F3D3} Pong!").setDescription(`Gateway WebSocket Latency: **${ping}ms**`).setTimestamp();
     return interaction.reply({ embeds: [embed] });
   }
   if (commandName === "help") {
     const config = guildId ? await prisma.guildConfig.findUnique({ where: { id: guildId } }).catch(() => null) : null;
     const prefix = config?.prefix || "$";
-    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u{1F916} Paradox Specialist Bot \u2014 Features & Commands").setDescription(
+    const embed = new import_discord3.EmbedBuilder().setColor(5793266).setTitle("\u{1F916} Paradox Specialist Bot \u2014 Features & Commands").setDescription(
       `Paradox is a dual-specialist bot built for **Visual Role Decks & Reaction Roles** and **High-Performance Social Video Link Fixes**.
 
 Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
@@ -1545,8 +1622,8 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
         value: "`/postinvite [message] [channel] [url]` \u2014 Staff: Post branded invite embed & native preview\n`/gif <image|url> [style]` \u2014 Transform a static picture into an animated GIF\n`/quote <quote> [author] [background]` \u2014 Generate an AURA quote card image\n`/animatedquote <quote> [author] [background]` \u2014 Generate an animated glowing quote card GIF"
       }
     ).setFooter({ text: "Paradox \u2022 Specialist Discord Bot" }).setTimestamp();
-    const row = new import_discord2.ActionRowBuilder().addComponents(
-      new import_discord2.ButtonBuilder().setLabel("Open Web Dashboard").setStyle(import_discord2.ButtonStyle.Link).setURL(guildId ? `${appUrl}/dashboard/${guildId}` : `${appUrl}/dashboard`)
+    const row = new import_discord3.ActionRowBuilder().addComponents(
+      new import_discord3.ButtonBuilder().setLabel("Open Web Dashboard").setStyle(import_discord3.ButtonStyle.Link).setURL(guildId ? `${appUrl}/dashboard/${guildId}` : `${appUrl}/dashboard`)
     );
     return interaction.reply({ embeds: [embed], components: [row] });
   }
@@ -1564,7 +1641,7 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
       const listText = mappings.map(
         (m) => `\u2022 ${m.emoji} **${m.roleName}** [Mode: \`${m.mode || "TOGGLE"}\`] in <#${m.channelId}> \u2014 Msg: \`${m.messageId}\``
       ).join("\n");
-      const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(`\u{1F3AD} Active Reaction Roles (${mappings.length})`).setDescription(listText).setTimestamp();
+      const embed = new import_discord3.EmbedBuilder().setColor(5793266).setTitle(`\u{1F3AD} Active Reaction Roles (${mappings.length})`).setDescription(listText).setTimestamp();
       return interaction.reply({ embeds: [embed], ephemeral: true });
     }
     if (!isManager) {
@@ -1597,7 +1674,7 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
       const targetChannel = interaction.options.getChannel("channel") || interaction.channel;
       if (!targetChannel) return interaction.reply({ content: "Invalid channel.", ephemeral: true });
       const botMember = await guild.members.fetchMe().catch(() => null);
-      if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
+      if (!botMember || !botMember.permissions.has(import_discord3.PermissionsBitField.Flags.ManageRoles)) {
         return interaction.reply({ content: "\u274C Bot lacks **Manage Roles** permission.", ephemeral: true });
       }
       if (role.position >= botMember.roles.highest.position) {
@@ -1630,7 +1707,7 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
           confirmGif: celebrationGif || null
         }
       });
-      const embed = new import_discord2.EmbedBuilder().setColor(5763719).setTitle("\u2705 Reaction Role Configured!").setDescription(
+      const embed = new import_discord3.EmbedBuilder().setColor(5763719).setTitle("\u2705 Reaction Role Configured!").setDescription(
         `Reacting with ${emoji} on message \`${messageId}\` will assign **${role.name}**.
 
 \u2022 **Mode:** \`${mode}\`
@@ -1777,7 +1854,7 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
     const e3 = interaction.options.getString("emoji3");
     if (r3 && e3) deckRoles.push({ role: r3, emoji: e3 });
     const botMember = await guild.members.fetchMe().catch(() => null);
-    if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
+    if (!botMember || !botMember.permissions.has(import_discord3.PermissionsBitField.Flags.ManageRoles)) {
       return interaction.reply({ content: "\u274C Bot lacks **Manage Roles** permission.", ephemeral: true });
     }
     for (const item of deckRoles) {
@@ -1788,9 +1865,9 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
         });
       }
     }
-    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(`\u2728 ${title}`).setDescription(desc).setFooter({ text: `Paradox Role Deck \u2022 Mode: ${mode}` }).setTimestamp();
+    const embed = new import_discord3.EmbedBuilder().setColor(5793266).setTitle(`\u2728 ${title}`).setDescription(desc).setFooter({ text: `Paradox Role Deck \u2022 Mode: ${mode}` }).setTimestamp();
     if (bannerGif) embed.setImage(bannerGif);
-    const row = new import_discord2.ActionRowBuilder();
+    const row = new import_discord3.ActionRowBuilder();
     for (const item of deckRoles) {
       embed.addFields({
         name: `${item.emoji} ${item.role.name}`,
@@ -1798,7 +1875,7 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
         inline: true
       });
       row.addComponents(
-        new import_discord2.ButtonBuilder().setCustomId(`rr_role_${item.role.id}`).setLabel(item.role.name).setStyle(import_discord2.ButtonStyle.Primary)
+        new import_discord3.ButtonBuilder().setCustomId(`rr_role_${item.role.id}`).setLabel(item.role.name).setStyle(import_discord3.ButtonStyle.Primary)
       );
     }
     const sentMsg = await targetChannel.send({ embeds: [embed], components: [row] });
@@ -1835,7 +1912,7 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
         if (config?.videoFixerProviders) providers = JSON.parse(config.videoFixerProviders);
       } catch {
       }
-      const embed = new import_discord2.EmbedBuilder().setColor(enabled ? 5763719 : 15548997).setTitle("\u{1F3A5} Specialist: Social Video Fixer Engine").setDescription(
+      const embed = new import_discord3.EmbedBuilder().setColor(enabled ? 5763719 : 15548997).setTitle("\u{1F3A5} Specialist: Social Video Fixer Engine").setDescription(
         `Status: **${enabled ? "Active \u2705" : "Disabled \u274C"}**
 Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**`
       ).addFields({
@@ -1899,7 +1976,7 @@ Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**
     const colorHex = interaction.options.getString("color") || "#5865F2";
     const image = interaction.options.getString("image");
     const thumbnail = interaction.options.getString("thumbnail");
-    const embed = new import_discord2.EmbedBuilder().setTitle(title).setDescription(description).setTimestamp();
+    const embed = new import_discord3.EmbedBuilder().setTitle(title).setDescription(description).setTimestamp();
     try {
       embed.setColor(parseInt(colorHex.replace("#", ""), 16));
     } catch {
@@ -1935,9 +2012,9 @@ Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**
   }
   if (commandName === "dashboard") {
     const dashboardUrl = guildId ? `${appUrl}/dashboard/${guildId}` : `${appUrl}/dashboard`;
-    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u2699\uFE0F Server Dashboard").setDescription(`Configure Paradox for **${guild?.name}**:`).setTimestamp();
-    const row = new import_discord2.ActionRowBuilder().addComponents(
-      new import_discord2.ButtonBuilder().setLabel("Open Web Dashboard").setStyle(import_discord2.ButtonStyle.Link).setURL(dashboardUrl)
+    const embed = new import_discord3.EmbedBuilder().setColor(5793266).setTitle("\u2699\uFE0F Server Dashboard").setDescription(`Configure Paradox for **${guild?.name}**:`).setTimestamp();
+    const row = new import_discord3.ActionRowBuilder().addComponents(
+      new import_discord3.ButtonBuilder().setLabel("Open Web Dashboard").setStyle(import_discord3.ButtonStyle.Link).setURL(dashboardUrl)
     );
     return interaction.reply({ embeds: [embed], components: [row] });
   }
@@ -1945,7 +2022,7 @@ Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**
     if (!guild) return interaction.reply({ content: "Must be used in a server.", ephemeral: true });
     const botMember = await guild.members.fetchMe().catch(() => null);
     const botRoleName = botMember?.roles.highest.name || "None";
-    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(`\u{1F4CA} Server Info: ${guild.name}`).setThumbnail(guild.iconURL() || null).addFields(
+    const embed = new import_discord3.EmbedBuilder().setColor(5793266).setTitle(`\u{1F4CA} Server Info: ${guild.name}`).setThumbnail(guild.iconURL() || null).addFields(
       { name: "Server ID", value: guild.id, inline: true },
       { name: "Total Members", value: `${guild.memberCount}`, inline: true },
       { name: "Bot Role", value: botRoleName, inline: true }
@@ -2005,7 +2082,7 @@ Author Dismiss Button: **${deleteBtn ? "Enabled \u{1F5D1}\uFE0F" : "Disabled"}**
     const serverIcon = guild.iconURL({ size: 512 });
     const defaultTagline = "Enter the Aura. Find your people. Make memories.";
     const descriptionText = customMessage?.trim() || defaultTagline;
-    const embed = new import_discord2.EmbedBuilder().setColor(9133302).setTitle(`\u2728 Welcome to ${serverName}`).setURL(inviteUrl).setDescription(
+    const embed = new import_discord3.EmbedBuilder().setColor(9133302).setTitle(`\u2728 Welcome to ${serverName}`).setURL(inviteUrl).setDescription(
       `**${descriptionText}**
 
 Click the title above or the button below to enter **${serverName}**!
@@ -2022,8 +2099,8 @@ Click the title above or the button below to enter **${serverName}**!
     if (bannerUrl) {
       embed.setImage(bannerUrl);
     }
-    const row = new import_discord2.ActionRowBuilder().addComponents(
-      new import_discord2.ButtonBuilder().setLabel(`Join ${serverName}`).setStyle(import_discord2.ButtonStyle.Link).setURL(inviteUrl).setEmoji("\u{1F680}")
+    const row = new import_discord3.ActionRowBuilder().addComponents(
+      new import_discord3.ButtonBuilder().setLabel(`Join ${serverName}`).setStyle(import_discord3.ButtonStyle.Link).setURL(inviteUrl).setEmoji("\u{1F680}")
     );
     try {
       await targetChannel.send({
@@ -2077,7 +2154,7 @@ Click the title above or the button below to enter **${serverName}**!
         imageBuffer = await fetchSafeImageBuffer(url, 8 * 1024 * 1024);
       }
       const gifBuffer = await makeImageIntoGif(imageBuffer, style);
-      const fileAttachment = new import_discord2.AttachmentBuilder(gifBuffer, { name: "aura-animated.gif" });
+      const fileAttachment = new import_discord3.AttachmentBuilder(gifBuffer, { name: "aura-animated.gif" });
       return interaction.editReply({
         content: `\u2728 **Animated GIF Ready!** (Style: \`${style}\`)`,
         files: [fileAttachment]
@@ -2218,7 +2295,7 @@ Click the title above or the button below to enter **${serverName}**!
           serverName: guild?.name,
           timestamp
         });
-        const fileAttachment = new import_discord2.AttachmentBuilder(gifBuffer, { name: "aura-animated-quote.gif" });
+        const fileAttachment = new import_discord3.AttachmentBuilder(gifBuffer, { name: "aura-animated-quote.gif" });
         return interaction.editReply({
           content: `\u2728 **Animated Quote by @${replyAuthor}**`,
           files: [fileAttachment]
@@ -2233,7 +2310,7 @@ Click the title above or the button below to enter **${serverName}**!
           serverName: guild?.name,
           timestamp
         });
-        const fileAttachment = new import_discord2.AttachmentBuilder(cardBuffer, { name: "aura-quote.png" });
+        const fileAttachment = new import_discord3.AttachmentBuilder(cardBuffer, { name: "aura-quote.png" });
         return interaction.editReply({
           content: `\u{1F4DC} **Quote by @${replyAuthor}**`,
           files: [fileAttachment]
@@ -2265,8 +2342,8 @@ Click the title above or the button below to enter **${serverName}**!
     let components = void 0;
     if (allowTyping) {
       components = [
-        new import_discord2.ActionRowBuilder().addComponents(
-          new import_discord2.ButtonBuilder().setCustomId(`announcement_idea_${announcementId}`).setLabel("\u{1F4A1} Type Your Idea / Feedback").setStyle(import_discord2.ButtonStyle.Primary).setEmoji("\u{1F4A1}")
+        new import_discord3.ActionRowBuilder().addComponents(
+          new import_discord3.ButtonBuilder().setCustomId(`announcement_idea_${announcementId}`).setLabel("\u{1F4A1} Type Your Idea / Feedback").setStyle(import_discord3.ButtonStyle.Primary).setEmoji("\u{1F4A1}")
         )
       ];
     }
@@ -2276,6 +2353,7 @@ Click the title above or the button below to enter **${serverName}**!
         components
       });
       let createdThreadId = null;
+      let createdAdminChannelId = null;
       if (allowTyping) {
         try {
           const thread = await sentMsg.startThread({
@@ -2289,6 +2367,16 @@ Type your event ideas, thoughts, and suggestions below, or click the **\u{1F4A1}
           });
         } catch (threadErr) {
           console.warn("[Bot:AnnounceThread] Notice: Could not start thread:", threadErr?.message);
+        }
+        try {
+          const adminChan = await ensureAdminIdeasChannel(
+            guild,
+            { id: announcementId, channelId: channel.id, title: "Broadcast Announcement" },
+            threadTitle
+          );
+          createdAdminChannelId = adminChan?.id || null;
+        } catch (adminChanErr) {
+          console.warn("[Bot:AnnounceAdminChan] Notice: Could not create admin channel:", adminChanErr?.message);
         }
       }
       await prisma.announcement.create({
@@ -2304,11 +2392,12 @@ Type your event ideas, thoughts, and suggestions below, or click the **\u{1F4A1}
           messageId: sentMsg.id,
           allowTyping,
           threadName: allowTyping ? threadTitle : null,
-          threadId: createdThreadId
+          threadId: createdThreadId,
+          adminChannelId: createdAdminChannelId
         }
       });
       return interaction.editReply({
-        content: `\u2705 **Announcement Broadcasted!** Posted to <#${channel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}>` : ""}.`
+        content: `\u2705 **Announcement Broadcasted!** Posted to <#${channel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}>` : ""}${createdAdminChannelId ? ` and private admin log <#${createdAdminChannelId}>` : ""}.`
       });
     } catch (err) {
       return interaction.editReply({
@@ -2323,7 +2412,7 @@ async function handleTextCommand(message, prefix) {
   const command = args[0]?.toLowerCase();
   const guild = message.guild;
   const member = message.member;
-  const isManager = member?.permissions.has(import_discord2.PermissionsBitField.Flags.ManageGuild) || member?.permissions.has(import_discord2.PermissionsBitField.Flags.Administrator);
+  const isManager = member?.permissions.has(import_discord3.PermissionsBitField.Flags.ManageGuild) || member?.permissions.has(import_discord3.PermissionsBitField.Flags.Administrator);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   if (command === "ping") {
     const ping = message.client.ws.ping;
@@ -2409,7 +2498,7 @@ async function handleTextCommand(message, prefix) {
         serverName: guild?.name
       });
       const replyAuthor = (authorTag || authorName || "Anonymous").replace(/^@+/, "");
-      const fileAttachment = new import_discord2.AttachmentBuilder(cardBuffer, { name: "quote.png" });
+      const fileAttachment = new import_discord3.AttachmentBuilder(cardBuffer, { name: "quote.png" });
       return message.reply({
         content: `\u{1F4DC} **Quote by @${replyAuthor}**`,
         files: [fileAttachment]
@@ -2420,7 +2509,7 @@ async function handleTextCommand(message, prefix) {
     }
   }
   if (command === "help") {
-    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle("\u{1F916} Paradox Specialist Bot \u2014 Command Guide").setDescription(
+    const embed = new import_discord3.EmbedBuilder().setColor(5793266).setTitle("\u{1F916} Paradox Specialist Bot \u2014 Command Guide").setDescription(
       `Current Server Prefix: \`${prefix}\`
 
 Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
@@ -2481,7 +2570,7 @@ Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
         );
       }
       const botMember = await guild.members.fetchMe().catch(() => null);
-      if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
+      if (!botMember || !botMember.permissions.has(import_discord3.PermissionsBitField.Flags.ManageRoles)) {
         return message.reply("\u274C The bot is missing **Manage Roles** permission.");
       }
       if (roleMention.position >= botMember.roles.highest.position) {
@@ -2514,7 +2603,7 @@ Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
 *Selecting this role will revoke any previously equipped role in this panel.*`);
       }
       const botMember = await guild.members.fetchMe().catch(() => null);
-      if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
+      if (!botMember || !botMember.permissions.has(import_discord3.PermissionsBitField.Flags.ManageRoles)) {
         return message.reply("\u274C The bot is missing **Manage Roles** permission.");
       }
       if (roleMention.position >= botMember.roles.highest.position) {
@@ -2545,7 +2634,7 @@ Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
 *Members can claim this role only once; cannot be removed.*`);
       }
       const botMember = await guild.members.fetchMe().catch(() => null);
-      if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
+      if (!botMember || !botMember.permissions.has(import_discord3.PermissionsBitField.Flags.ManageRoles)) {
         return message.reply("\u274C The bot is missing **Manage Roles** permission.");
       }
       if (roleMention.position >= botMember.roles.highest.position) {
@@ -2576,7 +2665,7 @@ Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
 *Members can toggle multiple roles freely.*`);
       }
       const botMember = await guild.members.fetchMe().catch(() => null);
-      if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
+      if (!botMember || !botMember.permissions.has(import_discord3.PermissionsBitField.Flags.ManageRoles)) {
         return message.reply("\u274C The bot is missing **Manage Roles** permission.");
       }
       if (roleMention.position >= botMember.roles.highest.position) {
@@ -2609,7 +2698,7 @@ Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
 *Requires members to have @requiredRole before they can claim @targetRole.*`);
       }
       const botMember = await guild.members.fetchMe().catch(() => null);
-      if (!botMember || !botMember.permissions.has(import_discord2.PermissionsBitField.Flags.ManageRoles)) {
+      if (!botMember || !botMember.permissions.has(import_discord3.PermissionsBitField.Flags.ManageRoles)) {
         return message.reply("\u274C The bot is missing **Manage Roles** permission.");
       }
       if (targetRole.position >= botMember.roles.highest.position) {
@@ -2798,7 +2887,7 @@ Supported: Twitter/X, TikTok, Instagram Reels, Reddit, Bluesky, Threads`
       if (targetMsg.author.id !== message.client.user?.id) {
         return message.reply(`\u274C Paradox can only edit embed messages originally sent by Paradox itself.`);
       }
-      const embed2 = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(title2).setDescription(desc2).setTimestamp();
+      const embed2 = new import_discord3.EmbedBuilder().setColor(5793266).setTitle(title2).setDescription(desc2).setTimestamp();
       await targetMsg.edit({ embeds: [embed2] });
       return message.reply(`\u2705 Successfully updated embed for message \`${msgId}\`!`);
     }
@@ -2809,7 +2898,7 @@ Supported: Twitter/X, TikTok, Instagram Reels, Reddit, Bluesky, Threads`
       return message.reply(`Usage: \`${prefix}embed <title> | <description>\`
 Or to edit: \`${prefix}embed edit <message_id> <title> | <description>\``);
     }
-    const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(title).setDescription(desc).setTimestamp();
+    const embed = new import_discord3.EmbedBuilder().setColor(5793266).setTitle(title).setDescription(desc).setTimestamp();
     return message.channel.send({ embeds: [embed] });
   }
   if (command === "announce" || command === "announcement") {
@@ -2843,8 +2932,8 @@ Or to edit: \`${prefix}embed edit <message_id> <title> | <description>\``);
     let components = void 0;
     if (isTypable) {
       components = [
-        new import_discord2.ActionRowBuilder().addComponents(
-          new import_discord2.ButtonBuilder().setCustomId(`announcement_idea_${announcementId}`).setLabel("\u{1F4A1} Type Your Idea / Feedback").setStyle(import_discord2.ButtonStyle.Primary).setEmoji("\u{1F4A1}")
+        new import_discord3.ActionRowBuilder().addComponents(
+          new import_discord3.ButtonBuilder().setCustomId(`announcement_idea_${announcementId}`).setLabel("\u{1F4A1} Type Your Idea / Feedback").setStyle(import_discord3.ButtonStyle.Primary).setEmoji("\u{1F4A1}")
         )
       ];
     }
@@ -2854,6 +2943,7 @@ Or to edit: \`${prefix}embed edit <message_id> <title> | <description>\``);
         components
       });
       let createdThreadId = null;
+      let createdAdminChannelId = null;
       if (isTypable) {
         try {
           const thread = await sentMsg.startThread({
@@ -2868,6 +2958,16 @@ Type your event ideas, thoughts, and suggestions below, or click the **\u{1F4A1}
         } catch (threadErr) {
           console.warn("[Bot:AnnounceTextThread] Notice: Could not start thread:", threadErr?.message);
         }
+        try {
+          const adminChan = await ensureAdminIdeasChannel(
+            guild,
+            { id: announcementId, channelId: targetChannel.id, title: "Broadcast Announcement" },
+            "event-ideas"
+          );
+          createdAdminChannelId = adminChan?.id || null;
+        } catch (adminChanErr) {
+          console.warn("[Bot:AnnounceTextAdminChan] Notice: Could not create admin channel:", adminChanErr?.message);
+        }
       }
       await prisma.announcement.create({
         data: {
@@ -2881,11 +2981,12 @@ Type your event ideas, thoughts, and suggestions below, or click the **\u{1F4A1}
           messageId: sentMsg.id,
           allowTyping: isTypable,
           threadName: isTypable ? "\u{1F4AC} Event Ideas / Discussion" : null,
-          threadId: createdThreadId
+          threadId: createdThreadId,
+          adminChannelId: createdAdminChannelId
         }
       });
       return message.reply(
-        `\u2705 **Announcement Published!** Sent to <#${targetChannel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}> for member ideas` : ""}.`
+        `\u2705 **Announcement Published!** Sent to <#${targetChannel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}>` : ""}${createdAdminChannelId ? ` and private admin log <#${createdAdminChannelId}>` : ""}.`
       );
     } catch (err) {
       return message.reply(`\u274C Failed to send announcement: ${err.message}`);
@@ -3014,7 +3115,7 @@ async function ensureDatabaseSchema(prisma2) {
 async function onReady(client) {
   if (!client.user) return;
   console.log(`[Bot] Successfully connected to Discord Gateway as ${client.user.tag} (ID: ${client.user.id})`);
-  client.user.setActivity("Managing servers & video embeds", { type: import_discord3.ActivityType.Custom });
+  client.user.setActivity("Managing servers & video embeds", { type: import_discord4.ActivityType.Custom });
   try {
     if (client.application) {
       console.log(`[Bot] Registering slash commands globally with Discord...`);
@@ -3063,7 +3164,7 @@ async function onReady(client) {
 }
 
 // ../DC BOTS/Paradox/src/bot/events/messageCreate.ts
-var import_discord4 = require("discord.js");
+var import_discord5 = require("discord.js");
 
 // ../DC BOTS/Paradox/src/bot/services/videoTransformer.ts
 function extractAndTransformVideoUrls(content, enabledProviders = ["twitter", "tiktok", "instagram", "reddit", "bluesky", "threads"]) {
@@ -3236,14 +3337,14 @@ ${linksList}`;
       allowedMentions: { users: [] }
     };
     if (config.videoFixerDeleteButton !== false) {
-      const row = new import_discord4.ActionRowBuilder().addComponents(
-        new import_discord4.ButtonBuilder().setCustomId(`rr_del_video_${message.author.id}`).setLabel("Dismiss Preview").setEmoji("\u{1F5D1}\uFE0F").setStyle(import_discord4.ButtonStyle.Secondary)
+      const row = new import_discord5.ActionRowBuilder().addComponents(
+        new import_discord5.ButtonBuilder().setCustomId(`rr_del_video_${message.author.id}`).setLabel("Dismiss Preview").setEmoji("\u{1F5D1}\uFE0F").setStyle(import_discord5.ButtonStyle.Secondary)
       );
       sendPayload.components = [row];
     }
     await message.channel.send(sendPayload);
     const botMember = message.guild.members.me;
-    if (botMember && botMember.permissionsIn(message.channel.id).has(import_discord4.PermissionFlagsBits.ManageMessages)) {
+    if (botMember && botMember.permissionsIn(message.channel.id).has(import_discord5.PermissionFlagsBits.ManageMessages)) {
       await message.suppressEmbeds(true).catch(() => null);
     }
   } catch (err) {
@@ -3388,7 +3489,7 @@ async function onMessageReactionRemove(reaction, user) {
 }
 
 // ../DC BOTS/Paradox/src/bot/events/interactionCreate.ts
-var import_discord5 = require("discord.js");
+var import_discord6 = require("discord.js");
 async function onInteractionCreate(interaction) {
   if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand()) {
     await handleSlashCommand(interaction).catch((err) => {
@@ -3401,7 +3502,7 @@ async function onInteractionCreate(interaction) {
     if (interaction.customId.startsWith("rr_del_video_")) {
       const authorId = interaction.customId.replace("rr_del_video_", "");
       const isAuthor = interaction.user.id === authorId;
-      const isMod = interaction.memberPermissions?.has(import_discord5.PermissionsBitField.Flags.ManageMessages) || interaction.memberPermissions?.has(import_discord5.PermissionsBitField.Flags.Administrator);
+      const isMod = interaction.memberPermissions?.has(import_discord6.PermissionsBitField.Flags.ManageMessages) || interaction.memberPermissions?.has(import_discord6.PermissionsBitField.Flags.Administrator);
       if (isAuthor || isMod) {
         await interaction.message.delete().catch(() => null);
         return;
@@ -3417,11 +3518,29 @@ async function onInteractionCreate(interaction) {
       await handleRoleToggle(interaction, roleId);
       return;
     }
+    if (interaction.customId.startsWith("delete_temp_channel_")) {
+      const isOwner = interaction.guild?.ownerId === interaction.user.id;
+      const isAdmin = interaction.memberPermissions?.has(import_discord6.PermissionsBitField.Flags.Administrator) || interaction.memberPermissions?.has(import_discord6.PermissionsBitField.Flags.ManageGuild);
+      if (!isOwner && !isAdmin) {
+        return interaction.reply({
+          content: "\u274C Only the server owner and administrators can delete this temporary channel.",
+          ephemeral: true
+        });
+      }
+      await interaction.reply({
+        content: "\u{1F5D1}\uFE0F Closing and deleting this temporary channel in 2 seconds...",
+        ephemeral: true
+      });
+      setTimeout(async () => {
+        await interaction.channel?.delete("Temporary announcement ideas channel closed by admin").catch(() => null);
+      }, 2e3);
+      return;
+    }
     if (interaction.customId.startsWith("announcement_idea_")) {
       const announcementId = interaction.customId.replace("announcement_idea_", "");
-      const modal = new import_discord5.ModalBuilder().setCustomId(`announcement_modal_${announcementId}`).setTitle("\u{1F4A1} Submit Your Idea").addComponents(
-        new import_discord5.ActionRowBuilder().addComponents(
-          new import_discord5.TextInputBuilder().setCustomId("idea_text").setLabel("Your Idea / Suggestion").setStyle(import_discord5.TextInputStyle.Paragraph).setPlaceholder("Type your ideas, thoughts, or suggestions below...").setMinLength(2).setMaxLength(1e3).setRequired(true)
+      const modal = new import_discord6.ModalBuilder().setCustomId(`announcement_modal_${announcementId}`).setTitle("\u{1F4A1} Submit Your Idea").addComponents(
+        new import_discord6.ActionRowBuilder().addComponents(
+          new import_discord6.TextInputBuilder().setCustomId("idea_text").setLabel("Your Idea / Suggestion").setStyle(import_discord6.TextInputStyle.Paragraph).setPlaceholder("Type your ideas, thoughts, or suggestions below...").setMinLength(2).setMaxLength(1e3).setRequired(true)
         )
       );
       return await interaction.showModal(modal);
@@ -3457,6 +3576,44 @@ async function onInteractionCreate(interaction) {
             content: ideaText
           }
         });
+        if (interaction.guild) {
+          try {
+            const adminChannel = await ensureAdminIdeasChannel(
+              interaction.guild,
+              announcement,
+              announcement.threadName || announcement.title || void 0
+            );
+            if (adminChannel && "send" in adminChannel) {
+              const submissionEmbed = new import_discord6.EmbedBuilder().setColor(16096779).setAuthor({
+                name: `${userTag} (@${interaction.user.username})`,
+                iconURL: avatarUrl
+              }).setTitle("\u{1F4A1} New Submission Received").addFields(
+                {
+                  name: "\u{1F464} Submitter",
+                  value: `<@${interaction.user.id}> (\`${userTag}\`)`,
+                  inline: true
+                },
+                {
+                  name: "\u{1F194} User ID",
+                  value: `\`${interaction.user.id}\``,
+                  inline: true
+                },
+                {
+                  name: "\u{1F4E2} Source Announcement",
+                  value: announcement.messageId ? `[Jump to Message](https://discord.com/channels/${interaction.guild.id}/${announcement.channelId}/${announcement.messageId})` : `<#${announcement.channelId}>`,
+                  inline: true
+                },
+                {
+                  name: "\u{1F4DD} Submission Content",
+                  value: ideaText.length > 1e3 ? `${ideaText.slice(0, 995)}...` : ideaText
+                }
+              ).setFooter({ text: "Paradox \u2022 Private Admin Response Log" }).setTimestamp();
+              await adminChannel.send({ embeds: [submissionEmbed] });
+            }
+          } catch (adminChanErr) {
+            console.warn("[Bot:AnnouncementIdea] Notice: Could not post to admin channel:", adminChanErr?.message);
+          }
+        }
         if (announcement.threadId && interaction.guild) {
           try {
             const thread = await interaction.guild.channels.fetch(announcement.threadId).catch(() => null);
@@ -3471,7 +3628,7 @@ async function onInteractionCreate(interaction) {
           }
         }
         return interaction.reply({
-          content: `\u2705 **Thank you, <@${interaction.user.id}>!** Your idea has been received and added to the event discussion!`,
+          content: `\u2705 **Thank you, <@${interaction.user.id}>!** Your idea has been securely sent to the server admins and owner!`,
           ephemeral: true
         });
       } catch (err) {
@@ -3509,7 +3666,7 @@ async function handleRoleToggle(interaction, roleId) {
       });
     }
     const botMember = await guild.members.fetchMe().catch(() => null);
-    if (!botMember || !botMember.permissions.has(import_discord5.PermissionsBitField.Flags.ManageRoles)) {
+    if (!botMember || !botMember.permissions.has(import_discord6.PermissionsBitField.Flags.ManageRoles)) {
       return interaction.reply({
         content: "\u26A0\uFE0F The bot lacks the **Manage Roles** permission to assign this role.",
         ephemeral: true
@@ -3643,7 +3800,7 @@ async function sendRoleClaimResponse(interaction, role, mapping, removedNames) {
 **Perks & Details:**
 ${mapping.description}`;
   }
-  const addEmbed = new import_discord5.EmbedBuilder().setColor(role.color || 5793266).setTitle(`\u2728 Role Equipped: ${role.name}`).setDescription(descriptionText).setTimestamp();
+  const addEmbed = new import_discord6.EmbedBuilder().setColor(role.color || 5793266).setTitle(`\u2728 Role Equipped: ${role.name}`).setDescription(descriptionText).setTimestamp();
   if (mapping?.imageUrl) {
     addEmbed.setThumbnail(mapping.imageUrl);
   }
@@ -3658,7 +3815,7 @@ ${mapping.description}`;
   });
 }
 async function sendRoleRemoveResponse(interaction, role, mapping) {
-  const removeEmbed = new import_discord5.EmbedBuilder().setColor(15548997).setTitle(`Role Removed: ${role.name}`).setDescription(`You have removed the **${role.name}** role from your profile.`).setTimestamp();
+  const removeEmbed = new import_discord6.EmbedBuilder().setColor(15548997).setTitle(`Role Removed: ${role.name}`).setDescription(`You have removed the **${role.name}** role from your profile.`).setTimestamp();
   if (mapping?.imageUrl) {
     removeEmbed.setThumbnail(mapping.imageUrl);
   }
@@ -3669,7 +3826,7 @@ async function sendRoleRemoveResponse(interaction, role, mapping) {
 }
 
 // ../DC BOTS/Paradox/src/bot/events/guildMemberAdd.ts
-var import_discord6 = require("discord.js");
+var import_discord7 = require("discord.js");
 async function onGuildMemberAdd(member) {
   if (member.user.bot) return;
   const guildId = member.guild.id;
@@ -3723,7 +3880,7 @@ async function onGuildMemberAdd(member) {
         if (config.welcomeEmbed) {
           try {
             const raw = JSON.parse(config.welcomeEmbed);
-            embed = new import_discord6.EmbedBuilder();
+            embed = new import_discord7.EmbedBuilder();
             if (raw.title) {
               let titleHeader = replaceTags(raw.title);
               titleHeader = titleHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);
@@ -3795,7 +3952,7 @@ async function onGuildMemberAdd(member) {
 }
 
 // ../DC BOTS/Paradox/src/bot/events/guildMemberRemove.ts
-var import_discord7 = require("discord.js");
+var import_discord8 = require("discord.js");
 async function onGuildMemberRemove(member) {
   if (member.user?.bot) return;
   const guildId = member.guild.id;
@@ -3838,7 +3995,7 @@ async function onGuildMemberRemove(member) {
     if (config.goodbyeEmbed) {
       try {
         const raw = JSON.parse(config.goodbyeEmbed);
-        embed = new import_discord7.EmbedBuilder();
+        embed = new import_discord8.EmbedBuilder();
         if (raw.title) {
           let titleHeader = replaceTags(raw.title);
           titleHeader = titleHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);

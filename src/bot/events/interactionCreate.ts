@@ -7,9 +7,13 @@ import {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ChannelType,
 } from "discord.js";
 import { prisma } from "@/lib/prisma";
 import { handleSlashCommand } from "../commands";
+import { ensureAdminIdeasChannel } from "../services/channelManager";
 
 export async function onInteractionCreate(interaction: Interaction) {
   // 1. Handle Slash Commands & Context Menu Commands
@@ -46,6 +50,31 @@ export async function onInteractionCreate(interaction: Interaction) {
     if (interaction.customId.startsWith("rr_role_")) {
       const roleId = interaction.customId.replace("rr_role_", "");
       await handleRoleToggle(interaction, roleId);
+      return;
+    }
+
+    // Delete temporary ideas channel button (Admins & Owner only)
+    if (interaction.customId.startsWith("delete_temp_channel_")) {
+      const isOwner = interaction.guild?.ownerId === interaction.user.id;
+      const isAdmin =
+        interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator) ||
+        interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageGuild);
+
+      if (!isOwner && !isAdmin) {
+        return interaction.reply({
+          content: "❌ Only the server owner and administrators can delete this temporary channel.",
+          ephemeral: true,
+        });
+      }
+
+      await interaction.reply({
+        content: "🗑️ Closing and deleting this temporary channel in 2 seconds...",
+        ephemeral: true,
+      });
+
+      setTimeout(async () => {
+        await (interaction.channel as any)?.delete("Temporary announcement ideas channel closed by admin").catch(() => null);
+      }, 2000);
       return;
     }
 
@@ -97,7 +126,7 @@ export async function onInteractionCreate(interaction: Interaction) {
         const avatarUrl = interaction.user.displayAvatarURL({ extension: "png", size: 256 });
         const userTag = interaction.user.tag || interaction.user.username;
 
-        // Save submitted idea to database
+        // 1. Save submitted idea to database
         await prisma.announcementResponse.create({
           data: {
             announcementId: announcement.id,
@@ -108,7 +137,57 @@ export async function onInteractionCreate(interaction: Interaction) {
           },
         });
 
-        // If the announcement has a discussion thread attached, post the idea directly in the thread
+        // 2. Post to the temporary private channel for Admins & Owner
+        if (interaction.guild) {
+          try {
+            const adminChannel = await ensureAdminIdeasChannel(
+              interaction.guild,
+              announcement,
+              announcement.threadName || announcement.title || undefined
+            );
+
+            if (adminChannel && "send" in adminChannel) {
+              const submissionEmbed = new EmbedBuilder()
+                .setColor(0xf59e0b)
+                .setAuthor({
+                  name: `${userTag} (@${interaction.user.username})`,
+                  iconURL: avatarUrl,
+                })
+                .setTitle("💡 New Submission Received")
+                .addFields(
+                  {
+                    name: "👤 Submitter",
+                    value: `<@${interaction.user.id}> (\`${userTag}\`)`,
+                    inline: true,
+                  },
+                  {
+                    name: "🆔 User ID",
+                    value: `\`${interaction.user.id}\``,
+                    inline: true,
+                  },
+                  {
+                    name: "📢 Source Announcement",
+                    value: announcement.messageId
+                      ? `[Jump to Message](https://discord.com/channels/${interaction.guild.id}/${announcement.channelId}/${announcement.messageId})`
+                      : `<#${announcement.channelId}>`,
+                    inline: true,
+                  },
+                  {
+                    name: "📝 Submission Content",
+                    value: ideaText.length > 1000 ? `${ideaText.slice(0, 995)}...` : ideaText,
+                  }
+                )
+                .setFooter({ text: "Paradox • Private Admin Response Log" })
+                .setTimestamp();
+
+              await (adminChannel as any).send({ embeds: [submissionEmbed] });
+            }
+          } catch (adminChanErr: any) {
+            console.warn("[Bot:AnnouncementIdea] Notice: Could not post to admin channel:", adminChanErr?.message);
+          }
+        }
+
+        // 3. If a public thread is also attached, post it there as well
         if (announcement.threadId && interaction.guild) {
           try {
             const thread = await interaction.guild.channels.fetch(announcement.threadId).catch(() => null);
@@ -123,7 +202,7 @@ export async function onInteractionCreate(interaction: Interaction) {
         }
 
         return interaction.reply({
-          content: `✅ **Thank you, <@${interaction.user.id}>!** Your idea has been received and added to the event discussion!`,
+          content: `✅ **Thank you, <@${interaction.user.id}>!** Your idea has been securely sent to the server admins and owner!`,
           ephemeral: true,
         });
       } catch (err: any) {

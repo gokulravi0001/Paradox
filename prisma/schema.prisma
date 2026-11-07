@@ -96,6 +96,7 @@ model Announcement {
   allowTyping   Boolean     @default(false)
   threadName    String?
   threadId      String?
+  adminChannelId String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 

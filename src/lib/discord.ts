@@ -575,3 +575,109 @@ export async function deleteDiscordMessage(
     };
   }
 }
+
+
+/**
+ * Create a temporary private channel in Discord visible only to Server Admins & Owner
+ */
+export async function createDiscordAdminChannel(
+  guildId: string,
+  channelName: string,
+  ownerId?: string,
+  options?: { topic?: string; parentId?: string }
+): Promise<{ id: string; name: string }> {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) {
+    throw new Error("Bot token not configured or invalid.");
+  }
+
+  // 1. Fetch guild roles to grant VIEW_CHANNEL to roles with ADMINISTRATOR or MANAGE_GUILD
+  const roles = await fetchGuildRoles(guildId).catch(() => []);
+  const adminRoleIds = roles
+    .filter((r) => {
+      try {
+        const perms = BigInt(r.permissions);
+        return (
+          (perms & DISCORD_PERMISSIONS.ADMINISTRATOR) === DISCORD_PERMISSIONS.ADMINISTRATOR ||
+          (perms & DISCORD_PERMISSIONS.MANAGE_GUILD) === DISCORD_PERMISSIONS.MANAGE_GUILD
+        );
+      } catch {
+        return false;
+      }
+    })
+    .map((r) => r.id);
+
+  // 2. Build permission overwrites:
+  // - @everyone (roleId = guildId): Deny VIEW_CHANNEL (1024)
+  // - Admin roles: Allow VIEW_CHANNEL (1024) | SEND_MESSAGES (2048) | READ_MESSAGE_HISTORY (65536)
+  // - Owner: Allow VIEW_CHANNEL | SEND_MESSAGES | READ_MESSAGE_HISTORY
+  const permissionOverwrites: any[] = [
+    {
+      id: guildId,
+      type: 0, // role
+      allow: "0",
+      deny: "1024", // VIEW_CHANNEL
+    },
+  ];
+
+  for (const roleId of adminRoleIds) {
+    permissionOverwrites.push({
+      id: roleId,
+      type: 0, // role
+      allow: "68608", // VIEW_CHANNEL | SEND_MESSAGES | READ_MESSAGE_HISTORY
+      deny: "0",
+    });
+  }
+
+  if (ownerId) {
+    permissionOverwrites.push({
+      id: ownerId,
+      type: 1, // member
+      allow: "68608",
+      deny: "0",
+    });
+  }
+
+  // Also allow Bot member explicitly
+  const botMember = await fetchBotMember(guildId).catch(() => null);
+  if (botMember?.id) {
+    permissionOverwrites.push({
+      id: botMember.id,
+      type: 1, // member
+      allow: "117824", // VIEW_CHANNEL | SEND_MESSAGES | EMBED_LINKS | ATTACH_FILES | READ_MESSAGE_HISTORY | MANAGE_CHANNELS
+      deny: "0",
+    });
+  }
+
+  const cleanName = channelName
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-")
+    .slice(0, 85);
+
+  const finalName = cleanName.startsWith("ideas-") ? `🔒-${cleanName}` : `🔒-ideas-${cleanName}`;
+
+  const response = await fetch(`${DISCORD_API_ENDPOINT}/guilds/${guildId}/channels`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: finalName,
+      type: 0, // GuildText
+      topic:
+        options?.topic ||
+        "Temporary private channel for announcement responses. Visible only to Admins and the Server Owner.",
+      parent_id: options?.parentId || undefined,
+      permission_overwrites: permissionOverwrites,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: response.statusText }));
+    console.warn("[Discord:CreateAdminChannel] Error:", err);
+    throw new Error(err.message || `Failed to create admin channel: ${response.status}`);
+  }
+
+  return response.json();
+}
