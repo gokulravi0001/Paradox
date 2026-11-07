@@ -3520,6 +3520,7 @@ async function onMessageReactionRemove(reaction, user) {
 
 // ../DC BOTS/Paradox/src/bot/events/interactionCreate.ts
 var import_discord6 = require("discord.js");
+var recentSubmissions = /* @__PURE__ */ new Map();
 async function onInteractionCreate(interaction) {
   if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand()) {
     await handleSlashCommand(interaction).catch((err) => {
@@ -3579,20 +3580,28 @@ async function onInteractionCreate(interaction) {
     if (interaction.customId.startsWith("announcement_modal_")) {
       const announcementId = interaction.customId.replace("announcement_modal_", "");
       const ideaText = interaction.fields.getTextInputValue("idea_text")?.trim();
+      await interaction.deferReply({ ephemeral: true }).catch(() => null);
       if (!ideaText) {
-        return interaction.reply({
-          content: "\u274C Idea text cannot be empty.",
-          ephemeral: true
+        return interaction.editReply({
+          content: "\u274C Idea text cannot be empty."
         });
       }
+      const dedupKey = `${interaction.user.id}_${announcementId}_${ideaText}`;
+      const lastSubmit = recentSubmissions.get(dedupKey);
+      if (lastSubmit && Date.now() - lastSubmit < 6e3) {
+        return interaction.editReply({
+          content: "\u2705 You have already submitted this response! Thank you for your feedback."
+        });
+      }
+      recentSubmissions.set(dedupKey, Date.now());
+      setTimeout(() => recentSubmissions.delete(dedupKey), 6e4);
       try {
         const announcement = await prisma.announcement.findUnique({
           where: { id: announcementId }
         });
         if (!announcement) {
-          return interaction.reply({
-            content: "\u26A0\uFE0F Announcement record not found.",
-            ephemeral: true
+          return interaction.editReply({
+            content: "\u26A0\uFE0F Announcement record not found."
           });
         }
         const avatarUrl = interaction.user.displayAvatarURL({ extension: "png", size: 256 });
@@ -3657,15 +3666,13 @@ async function onInteractionCreate(interaction) {
             console.warn("[Bot:AnnouncementIdea] Notice: Could not forward to thread:", err?.message);
           }
         }
-        return interaction.reply({
-          content: `\u2705 **Thank you, <@${interaction.user.id}>!** Your idea has been securely sent to the server admins and owner!`,
-          ephemeral: true
+        return interaction.editReply({
+          content: `\u2705 **Thank you, <@${interaction.user.id}>!** Your idea has been securely sent to the server admins and owner!`
         });
       } catch (err) {
         console.error("[Bot:AnnouncementModal] Error saving idea:", err);
-        return interaction.reply({
-          content: "\u274C Failed to submit your idea. Please try again.",
-          ephemeral: true
+        return interaction.editReply({
+          content: "\u274C Failed to submit your idea. Please try again."
         });
       }
     }

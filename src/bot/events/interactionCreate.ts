@@ -15,6 +15,9 @@ import { prisma } from "@/lib/prisma";
 import { handleSlashCommand } from "../commands";
 import { ensureAdminIdeasChannel } from "../services/channelManager";
 
+// In-memory cache to debounce accidental double-clicks from members
+const recentSubmissions = new Map<string, number>();
+
 export async function onInteractionCreate(interaction: Interaction) {
   // 1. Handle Slash Commands & Context Menu Commands
   if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand()) {
@@ -104,12 +107,28 @@ export async function onInteractionCreate(interaction: Interaction) {
       const announcementId = interaction.customId.replace("announcement_modal_", "");
       const ideaText = interaction.fields.getTextInputValue("idea_text")?.trim();
 
+      // Immediately acknowledge interaction to Discord within milliseconds so modal closes cleanly
+      // and Discord never shows the red "Something went wrong" timeout banner
+      await interaction.deferReply({ ephemeral: true }).catch(() => null);
+
       if (!ideaText) {
-        return interaction.reply({
+        return interaction.editReply({
           content: "❌ Idea text cannot be empty.",
-          ephemeral: true,
         });
       }
+
+      // Prevent accidental rapid duplicate submissions from the same user
+      const dedupKey = `${interaction.user.id}_${announcementId}_${ideaText}`;
+      const lastSubmit = recentSubmissions.get(dedupKey);
+      if (lastSubmit && Date.now() - lastSubmit < 6000) {
+        return interaction.editReply({
+          content: "✅ You have already submitted this response! Thank you for your feedback.",
+        });
+      }
+      recentSubmissions.set(dedupKey, Date.now());
+
+      // Clean up old debounce keys after 1 minute
+      setTimeout(() => recentSubmissions.delete(dedupKey), 60000);
 
       try {
         const announcement = await prisma.announcement.findUnique({
@@ -117,9 +136,8 @@ export async function onInteractionCreate(interaction: Interaction) {
         });
 
         if (!announcement) {
-          return interaction.reply({
+          return interaction.editReply({
             content: "⚠️ Announcement record not found.",
-            ephemeral: true,
           });
         }
 
@@ -201,15 +219,13 @@ export async function onInteractionCreate(interaction: Interaction) {
           }
         }
 
-        return interaction.reply({
+        return interaction.editReply({
           content: `✅ **Thank you, <@${interaction.user.id}>!** Your idea has been securely sent to the server admins and owner!`,
-          ephemeral: true,
         });
       } catch (err: any) {
         console.error("[Bot:AnnouncementModal] Error saving idea:", err);
-        return interaction.reply({
+        return interaction.editReply({
           content: "❌ Failed to submit your idea. Please try again.",
-          ephemeral: true,
         });
       }
     }
