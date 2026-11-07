@@ -34,9 +34,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// node_modules/gifenc/dist/gifenc.js
+// ../DC BOTS/Paradox/node_modules/gifenc/dist/gifenc.js
 var require_gifenc = __commonJS({
-  "node_modules/gifenc/dist/gifenc.js"(exports2) {
+  "../DC BOTS/Paradox/node_modules/gifenc/dist/gifenc.js"(exports2) {
     var __defProp2 = Object.defineProperty;
     var __markAsModule = (target) => __defProp2(target, "__esModule", { value: true });
     var __export2 = (target, all) => {
@@ -846,16 +846,16 @@ var require_gifenc = __commonJS({
   }
 });
 
-// src/bot/index.ts
-var index_exports = {};
-__export(index_exports, {
+// ../DC BOTS/Paradox/src/bot/index.ts
+var bot_exports = {};
+__export(bot_exports, {
   SLASH_COMMANDS_DATA: () => SLASH_COMMANDS_DATA,
   startBot: () => startBot
 });
-module.exports = __toCommonJS(index_exports);
+module.exports = __toCommonJS(bot_exports);
 var import_dotenv = __toESM(require("dotenv"));
 
-// src/bot/client.ts
+// ../DC BOTS/Paradox/src/bot/client.ts
 var import_discord = require("discord.js");
 function createBotClient() {
   return new import_discord.Client({
@@ -876,10 +876,10 @@ function createBotClient() {
   });
 }
 
-// src/bot/events/ready.ts
+// ../DC BOTS/Paradox/src/bot/events/ready.ts
 var import_discord3 = require("discord.js");
 
-// src/lib/prisma.ts
+// ../DC BOTS/Paradox/src/lib/prisma.ts
 var import_client = require("@prisma/client");
 var prisma = global.prisma || new import_client.PrismaClient({
   log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"]
@@ -888,10 +888,11 @@ if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;
 }
 
-// src/bot/commands/index.ts
+// ../DC BOTS/Paradox/src/bot/commands/index.ts
 var import_discord2 = require("discord.js");
+var import_crypto = __toESM(require("crypto"));
 
-// src/bot/services/imageGenerator.ts
+// ../DC BOTS/Paradox/src/bot/services/imageGenerator.ts
 var import_canvas = require("@napi-rs/canvas");
 var gifencModule = __toESM(require_gifenc());
 var GIFEncoder2 = gifencModule.GIFEncoder || gifencModule.default;
@@ -1252,7 +1253,7 @@ async function generateAnimatedQuoteCard(options) {
   return Buffer.from(gif.bytes());
 }
 
-// src/bot/commands/index.ts
+// ../DC BOTS/Paradox/src/bot/commands/index.ts
 var SLASH_COMMANDS_DATA = [
   new import_discord2.SlashCommandBuilder().setName("help").setDescription("Explore Paradox commands, features, and dashboard link"),
   new import_discord2.SlashCommandBuilder().setName("ping").setDescription("Check bot latency and gateway connection"),
@@ -1428,7 +1429,23 @@ var SLASH_COMMANDS_DATA = [
     (opt) => opt.setName("background").setDescription("Optional custom background image attachment")
   ),
   // 9. Context Menu: Right-Click Any Message -> Apps -> "Quote Message"
-  new import_discord2.ContextMenuCommandBuilder().setName("Quote Message").setType(import_discord2.ApplicationCommandType.Message)
+  new import_discord2.ContextMenuCommandBuilder().setName("Quote Message").setType(import_discord2.ApplicationCommandType.Message),
+  // 10. Typable / Interactive Announcement with Discussion Thread
+  new import_discord2.SlashCommandBuilder().setName("announce").setDescription("Broadcast an announcement with an optional discussion thread for typing ideas").setDefaultMemberPermissions(import_discord2.PermissionsBitField.Flags.ManageGuild).addChannelOption(
+    (opt) => opt.setName("channel").setDescription("Target channel for the announcement").setRequired(true)
+  ).addStringOption(
+    (opt) => opt.setName("message").setDescription("Announcement message text").setRequired(true)
+  ).addBooleanOption(
+    (opt) => opt.setName("allow_typing").setDescription("Create a discussion thread and idea button for members to type below")
+  ).addStringOption(
+    (opt) => opt.setName("thread_title").setDescription("Title for the discussion thread (e.g. \u{1F4AC} Event Ideas)")
+  ).addStringOption(
+    (opt) => opt.setName("mention").setDescription("Audience mention to ping").addChoices(
+      { name: "None", value: "NONE" },
+      { name: "@everyone", value: "EVERYONE" },
+      { name: "@here", value: "HERE" }
+    )
+  )
 ];
 async function resolveMessageFromInput(channel, input) {
   if (!input) return null;
@@ -2228,6 +2245,77 @@ Click the title above or the button below to enter **${serverName}**!
       });
     }
   }
+  if (commandName === "announce") {
+    if (!isManager) {
+      return interaction.reply({
+        content: "\u26D4 You need **Manage Server** permissions to broadcast announcements.",
+        ephemeral: true
+      });
+    }
+    const channel = interaction.options.getChannel("channel");
+    const messageText = interaction.options.getString("message", true);
+    const allowTyping = interaction.options.getBoolean("allow_typing") ?? false;
+    const threadTitle = interaction.options.getString("thread_title") || "\u{1F4AC} Event Ideas / Discussion";
+    const mention = interaction.options.getString("mention") || "NONE";
+    await interaction.deferReply({ ephemeral: true });
+    let mentionPrefix = "";
+    if (mention === "EVERYONE") mentionPrefix = "@everyone\n";
+    if (mention === "HERE") mentionPrefix = "@here\n";
+    const announcementId = import_crypto.default.randomUUID();
+    let components = void 0;
+    if (allowTyping) {
+      components = [
+        new import_discord2.ActionRowBuilder().addComponents(
+          new import_discord2.ButtonBuilder().setCustomId(`announcement_idea_${announcementId}`).setLabel("\u{1F4A1} Type Your Idea / Feedback").setStyle(import_discord2.ButtonStyle.Primary).setEmoji("\u{1F4A1}")
+        )
+      ];
+    }
+    try {
+      const sentMsg = await channel.send({
+        content: mentionPrefix + messageText,
+        components
+      });
+      let createdThreadId = null;
+      if (allowTyping) {
+        try {
+          const thread = await sentMsg.startThread({
+            name: threadTitle.slice(0, 100),
+            autoArchiveDuration: 1440
+          });
+          createdThreadId = thread.id;
+          await thread.send({
+            content: `\u{1F44B} **Welcome to the discussion thread for this announcement!**
+Type your event ideas, thoughts, and suggestions below, or click the **\u{1F4A1} Type Your Idea** button above to submit feedback directly! \u{1F447}`
+          });
+        } catch (threadErr) {
+          console.warn("[Bot:AnnounceThread] Notice: Could not start thread:", threadErr?.message);
+        }
+      }
+      await prisma.announcement.create({
+        data: {
+          id: announcementId,
+          guildId: guild.id,
+          channelId: channel.id,
+          title: "Broadcast Announcement",
+          content: messageText,
+          mentionType: mention,
+          status: "PUBLISHED",
+          publishedAt: /* @__PURE__ */ new Date(),
+          messageId: sentMsg.id,
+          allowTyping,
+          threadName: allowTyping ? threadTitle : null,
+          threadId: createdThreadId
+        }
+      });
+      return interaction.editReply({
+        content: `\u2705 **Announcement Broadcasted!** Posted to <#${channel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}>` : ""}.`
+      });
+    } catch (err) {
+      return interaction.editReply({
+        content: `\u274C Failed to broadcast announcement: ${err.message}`
+      });
+    }
+  }
 }
 async function handleTextCommand(message, prefix) {
   const content = message.content.slice(prefix.length).trim();
@@ -2724,12 +2812,91 @@ Or to edit: \`${prefix}embed edit <message_id> <title> | <description>\``);
     const embed = new import_discord2.EmbedBuilder().setColor(5793266).setTitle(title).setDescription(desc).setTimestamp();
     return message.channel.send({ embeds: [embed] });
   }
+  if (command === "announce" || command === "announcement") {
+    if (!guild || !member) return;
+    if (!isManager) {
+      return message.reply("\u26D4 You need **Manage Server** permissions to broadcast announcements.");
+    }
+    const channelMention = message.mentions.channels.first();
+    let targetChannel = channelMention || message.channel;
+    let announcementContent = "";
+    let isTypable = false;
+    if (args[1]?.toLowerCase() === "ideas" || args[1]?.toLowerCase() === "typable") {
+      isTypable = true;
+      targetChannel = message.mentions.channels.first() || message.channel;
+      announcementContent = args.slice(2).filter((a) => !a.startsWith("<#")).join(" ").trim();
+    } else {
+      if (channelMention) {
+        announcementContent = args.slice(1).filter((a) => !a.startsWith("<#")).join(" ").trim();
+      } else {
+        announcementContent = args.slice(1).join(" ").trim();
+      }
+    }
+    if (!announcementContent) {
+      return message.reply(
+        `\u{1F4A1} **Usage:**
+\u2022 \`${prefix}announce #channel <your announcement>\` \u2014 Standard announcement
+\u2022 \`${prefix}announce ideas #channel <your announcement>\` \u2014 Typable announcement with discussion thread for ideas!`
+      );
+    }
+    const announcementId = import_crypto.default.randomUUID();
+    let components = void 0;
+    if (isTypable) {
+      components = [
+        new import_discord2.ActionRowBuilder().addComponents(
+          new import_discord2.ButtonBuilder().setCustomId(`announcement_idea_${announcementId}`).setLabel("\u{1F4A1} Type Your Idea / Feedback").setStyle(import_discord2.ButtonStyle.Primary).setEmoji("\u{1F4A1}")
+        )
+      ];
+    }
+    try {
+      const sentMsg = await targetChannel.send({
+        content: announcementContent,
+        components
+      });
+      let createdThreadId = null;
+      if (isTypable) {
+        try {
+          const thread = await sentMsg.startThread({
+            name: "\u{1F4AC} Event Ideas / Discussion",
+            autoArchiveDuration: 1440
+          });
+          createdThreadId = thread.id;
+          await thread.send({
+            content: `\u{1F44B} **Welcome to the discussion thread for this announcement!**
+Type your event ideas, thoughts, and suggestions below, or click the **\u{1F4A1} Type Your Idea** button above to submit feedback directly! \u{1F447}`
+          });
+        } catch (threadErr) {
+          console.warn("[Bot:AnnounceTextThread] Notice: Could not start thread:", threadErr?.message);
+        }
+      }
+      await prisma.announcement.create({
+        data: {
+          id: announcementId,
+          guildId: guild.id,
+          channelId: targetChannel.id,
+          title: "Broadcast Announcement",
+          content: announcementContent,
+          status: "PUBLISHED",
+          publishedAt: /* @__PURE__ */ new Date(),
+          messageId: sentMsg.id,
+          allowTyping: isTypable,
+          threadName: isTypable ? "\u{1F4AC} Event Ideas / Discussion" : null,
+          threadId: createdThreadId
+        }
+      });
+      return message.reply(
+        `\u2705 **Announcement Published!** Sent to <#${targetChannel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}> for member ideas` : ""}.`
+      );
+    } catch (err) {
+      return message.reply(`\u274C Failed to send announcement: ${err.message}`);
+    }
+  }
   if (command === "dashboard") {
     return message.reply(`Manage Paradox in the web dashboard: ${appUrl}/dashboard/${guild?.id}`);
   }
 }
 
-// src/bot/services/ensureDb.ts
+// ../DC BOTS/Paradox/src/bot/services/ensureDb.ts
 async function ensureDatabaseSchema(prisma2) {
   try {
     console.log("[Database] Checking and ensuring database tables exist...");
@@ -2843,7 +3010,7 @@ async function ensureDatabaseSchema(prisma2) {
   }
 }
 
-// src/bot/events/ready.ts
+// ../DC BOTS/Paradox/src/bot/events/ready.ts
 async function onReady(client) {
   if (!client.user) return;
   console.log(`[Bot] Successfully connected to Discord Gateway as ${client.user.tag} (ID: ${client.user.id})`);
@@ -2895,10 +3062,10 @@ async function onReady(client) {
   }
 }
 
-// src/bot/events/messageCreate.ts
+// ../DC BOTS/Paradox/src/bot/events/messageCreate.ts
 var import_discord4 = require("discord.js");
 
-// src/bot/services/videoTransformer.ts
+// ../DC BOTS/Paradox/src/bot/services/videoTransformer.ts
 function extractAndTransformVideoUrls(content, enabledProviders = ["twitter", "tiktok", "instagram", "reddit", "bluesky", "threads"]) {
   if (!content || typeof content !== "string") return [];
   const results = [];
@@ -3024,7 +3191,7 @@ function extractAndTransformVideoUrls(content, enabledProviders = ["twitter", "t
   return results;
 }
 
-// src/bot/events/messageCreate.ts
+// ../DC BOTS/Paradox/src/bot/events/messageCreate.ts
 async function onMessageCreate(message) {
   if (message.author.bot || message.webhookId) return;
   if (!message.guild || !("send" in message.channel)) return;
@@ -3084,7 +3251,7 @@ ${linksList}`;
   }
 }
 
-// src/bot/services/reactionRoleService.ts
+// ../DC BOTS/Paradox/src/bot/services/reactionRoleService.ts
 function normalizeEmoji(reaction) {
   if (reaction.emoji.id) {
     return `${reaction.emoji.name}:${reaction.emoji.id}`;
@@ -3188,7 +3355,7 @@ async function handleReactionRemove(reaction, user) {
   }
 }
 
-// src/bot/events/messageReactionAdd.ts
+// ../DC BOTS/Paradox/src/bot/events/messageReactionAdd.ts
 async function onMessageReactionAdd(reaction, user) {
   try {
     if (reaction.partial) {
@@ -3204,7 +3371,7 @@ async function onMessageReactionAdd(reaction, user) {
   }
 }
 
-// src/bot/events/messageReactionRemove.ts
+// ../DC BOTS/Paradox/src/bot/events/messageReactionRemove.ts
 async function onMessageReactionRemove(reaction, user) {
   try {
     if (reaction.partial) {
@@ -3220,7 +3387,7 @@ async function onMessageReactionRemove(reaction, user) {
   }
 }
 
-// src/bot/events/interactionCreate.ts
+// ../DC BOTS/Paradox/src/bot/events/interactionCreate.ts
 var import_discord5 = require("discord.js");
 async function onInteractionCreate(interaction) {
   if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand()) {
@@ -3248,6 +3415,72 @@ async function onInteractionCreate(interaction) {
     if (interaction.customId.startsWith("rr_role_")) {
       const roleId = interaction.customId.replace("rr_role_", "");
       await handleRoleToggle(interaction, roleId);
+      return;
+    }
+    if (interaction.customId.startsWith("announcement_idea_")) {
+      const announcementId = interaction.customId.replace("announcement_idea_", "");
+      const modal = new import_discord5.ModalBuilder().setCustomId(`announcement_modal_${announcementId}`).setTitle("\u{1F4A1} Submit Your Idea").addComponents(
+        new import_discord5.ActionRowBuilder().addComponents(
+          new import_discord5.TextInputBuilder().setCustomId("idea_text").setLabel("Your Idea / Suggestion").setStyle(import_discord5.TextInputStyle.Paragraph).setPlaceholder("Type your ideas, thoughts, or suggestions below...").setMinLength(2).setMaxLength(1e3).setRequired(true)
+        )
+      );
+      return await interaction.showModal(modal);
+    }
+  } else if (interaction.isModalSubmit()) {
+    if (interaction.customId.startsWith("announcement_modal_")) {
+      const announcementId = interaction.customId.replace("announcement_modal_", "");
+      const ideaText = interaction.fields.getTextInputValue("idea_text")?.trim();
+      if (!ideaText) {
+        return interaction.reply({
+          content: "\u274C Idea text cannot be empty.",
+          ephemeral: true
+        });
+      }
+      try {
+        const announcement = await prisma.announcement.findUnique({
+          where: { id: announcementId }
+        });
+        if (!announcement) {
+          return interaction.reply({
+            content: "\u26A0\uFE0F Announcement record not found.",
+            ephemeral: true
+          });
+        }
+        const avatarUrl = interaction.user.displayAvatarURL({ extension: "png", size: 256 });
+        const userTag = interaction.user.tag || interaction.user.username;
+        await prisma.announcementResponse.create({
+          data: {
+            announcementId: announcement.id,
+            userId: interaction.user.id,
+            userTag,
+            userAvatar: avatarUrl,
+            content: ideaText
+          }
+        });
+        if (announcement.threadId && interaction.guild) {
+          try {
+            const thread = await interaction.guild.channels.fetch(announcement.threadId).catch(() => null);
+            if (thread && "send" in thread) {
+              await thread.send({
+                content: `\u{1F4A1} **New Idea from <@${interaction.user.id}>:**
+> ${ideaText.replace(/\n/g, "\n> ")}`
+              });
+            }
+          } catch (err) {
+            console.warn("[Bot:AnnouncementIdea] Notice: Could not forward to thread:", err?.message);
+          }
+        }
+        return interaction.reply({
+          content: `\u2705 **Thank you, <@${interaction.user.id}>!** Your idea has been received and added to the event discussion!`,
+          ephemeral: true
+        });
+      } catch (err) {
+        console.error("[Bot:AnnouncementModal] Error saving idea:", err);
+        return interaction.reply({
+          content: "\u274C Failed to submit your idea. Please try again.",
+          ephemeral: true
+        });
+      }
     }
   } else if (interaction.isStringSelectMenu()) {
     if (interaction.customId.startsWith("rr_select_")) {
@@ -3435,7 +3668,7 @@ async function sendRoleRemoveResponse(interaction, role, mapping) {
   });
 }
 
-// src/bot/events/guildMemberAdd.ts
+// ../DC BOTS/Paradox/src/bot/events/guildMemberAdd.ts
 var import_discord6 = require("discord.js");
 async function onGuildMemberAdd(member) {
   if (member.user.bot) return;
@@ -3561,7 +3794,7 @@ async function onGuildMemberAdd(member) {
   }
 }
 
-// src/bot/events/guildMemberRemove.ts
+// ../DC BOTS/Paradox/src/bot/events/guildMemberRemove.ts
 var import_discord7 = require("discord.js");
 async function onGuildMemberRemove(member) {
   if (member.user?.bot) return;
@@ -3669,7 +3902,7 @@ async function onGuildMemberRemove(member) {
   }
 }
 
-// src/bot/index.ts
+// ../DC BOTS/Paradox/src/bot/index.ts
 import_dotenv.default.config();
 async function startBot() {
   const token = process.env.DISCORD_BOT_TOKEN;

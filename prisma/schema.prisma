@@ -93,12 +93,30 @@ model Announcement {
   scheduledAt   DateTime?
   publishedAt   DateTime?
   messageId     String?
+  allowTyping   Boolean     @default(false)
+  threadName    String?
+  threadId      String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
   guild         GuildConfig @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  responses     AnnouncementResponse[]
 
   @@index([guildId])
+}
+
+model AnnouncementResponse {
+  id             String       @id @default(cuid())
+  announcementId String
+  userId         String
+  userTag        String
+  userAvatar     String?
+  content        String
+  createdAt      DateTime     @default(now())
+
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@index([announcementId])
 }
 
 model Event {

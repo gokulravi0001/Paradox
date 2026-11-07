@@ -412,6 +412,45 @@ export async function postDiscordMessage(
 }
 
 /**
+ * Create a public thread on a Discord message for member replies / typing ideas
+ */
+export async function createDiscordMessageThread(
+  channelId: string,
+  messageId: string,
+  name: string
+): Promise<{ id: string; name: string }> {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) {
+    throw new Error("Bot token not configured or invalid.");
+  }
+
+  const cleanName = (name || "💬 Event Ideas / Discussion").slice(0, 100);
+
+  const response = await fetch(
+    `${DISCORD_API_ENDPOINT}/channels/${channelId}/messages/${messageId}/threads`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: cleanName,
+        auto_archive_duration: 1440, // 24 hours
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: response.statusText }));
+    console.warn("[Discord:CreateThread] Warning creating thread:", err);
+    throw new Error(err.message || `Discord thread creation failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
  * Edit existing embed message in Discord channel
  */
 export async function editDiscordEmbed(

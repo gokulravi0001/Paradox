@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeGuildAdmin } from "@/lib/serverAuth";
 import { prisma } from "@/lib/prisma";
-import { postDiscordMessage } from "@/lib/discord";
+import { postDiscordMessage, createDiscordMessageThread } from "@/lib/discord";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,14 @@ export async function GET(
   try {
     const announcements = await prisma.announcement.findMany({
       where: { guildId },
+      include: {
+        responses: {
+          orderBy: { createdAt: "desc" },
+        },
+        _count: {
+          select: { responses: true },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
 
@@ -45,6 +54,8 @@ export async function POST(
       mentionRoleId,
       publishNow = true,
       scheduledAt,
+      allowTyping = false,
+      threadName,
     } = body;
 
     if (!channelId) {
@@ -83,7 +94,10 @@ export async function POST(
     if (mentionType === "HERE") mentionPrefix = "@here\n";
     if (mentionType === "ROLE" && mentionRoleId) mentionPrefix = `<@&${mentionRoleId}>\n`;
 
-    let publishedMessageId = null;
+    const announcementId = crypto.randomUUID();
+    let publishedMessageId: string | null = null;
+    let createdThreadId: string | null = null;
+    const cleanThreadTitle = (threadName?.trim() || "💬 Event Ideas / Discussion").slice(0, 100);
 
     if (publishNow) {
       const fullContent = mentionPrefix + (resolveTags(content) || "");
@@ -107,16 +121,52 @@ export async function POST(
         };
       }
 
+      // If typable announcement is enabled, attach interactive button component
+      let components: Record<string, unknown>[] | undefined = undefined;
+      if (allowTyping) {
+        components = [
+          {
+            type: 1, // ActionRow
+            components: [
+              {
+                type: 2, // Button
+                style: 1, // Primary (Blurple)
+                custom_id: `announcement_idea_${announcementId}`,
+                label: "💡 Type Your Idea / Feedback",
+                emoji: { name: "💡" },
+              },
+            ],
+          },
+        ];
+      }
+
       const res = await postDiscordMessage(channelId, {
         content: fullContent || undefined,
         embeds: embedData ? [embedData] : undefined,
+        components,
       });
 
       publishedMessageId = res.id;
+
+      // If typable announcement is enabled, create a public discussion thread directly under the message
+      if (allowTyping && publishedMessageId) {
+        try {
+          const threadRes = await createDiscordMessageThread(channelId, publishedMessageId, cleanThreadTitle);
+          createdThreadId = threadRes.id;
+
+          // Post welcoming starter message inside the thread so members can type directly
+          await postDiscordMessage(createdThreadId, {
+            content: `👋 **Welcome to the discussion thread for this announcement!**\nType your event ideas, suggestions, and feedback below, or click the **💡 Type Your Idea** button above to submit feedback directly! 👇`,
+          }).catch(() => null);
+        } catch (threadErr: any) {
+          console.warn("[Announcements:Thread] Notice: Could not create public thread:", threadErr?.message);
+        }
+      }
     }
 
     const announcement = await prisma.announcement.create({
       data: {
+        id: announcementId,
         guildId,
         channelId,
         title: title || "Broadcast Announcement",
@@ -128,6 +178,15 @@ export async function POST(
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         publishedAt: publishNow ? new Date() : null,
         messageId: publishedMessageId,
+        allowTyping: Boolean(allowTyping),
+        threadName: allowTyping ? cleanThreadTitle : null,
+        threadId: createdThreadId,
+      },
+      include: {
+        responses: true,
+        _count: {
+          select: { responses: true },
+        },
       },
     });
 

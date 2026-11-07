@@ -12,6 +12,10 @@ import {
   Trash2,
   CheckCircle2,
   Users,
+  MessageSquare,
+  Lightbulb,
+  Copy,
+  X,
 } from "lucide-react";
 import { ChannelSelect, DiscordChannelItem } from "@/components/ui/ChannelSelect";
 import { RoleSelect, DiscordRoleItem } from "@/components/ui/RoleSelect";
@@ -21,6 +25,15 @@ import { DiscordPreview } from "@/components/ui/DiscordPreview";
 import { ToastContainer, ToastMessage } from "@/components/ui/Toast";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
+interface AnnouncementResponseItem {
+  id: string;
+  userId: string;
+  userTag: string;
+  userAvatar: string | null;
+  content: string;
+  createdAt: string;
+}
+
 interface AnnouncementItem {
   id: string;
   channelId: string;
@@ -28,8 +41,15 @@ interface AnnouncementItem {
   content: string;
   status: string;
   mentionType: string;
+  allowTyping?: boolean;
+  threadName?: string | null;
+  threadId?: string | null;
   publishedAt: string | null;
   createdAt: string;
+  responses?: AnnouncementResponseItem[];
+  _count?: {
+    responses: number;
+  };
 }
 
 export default function AnnouncementsPage() {
@@ -57,6 +77,12 @@ export default function AnnouncementsPage() {
   );
   const [embedColor, setEmbedColor] = useState("#5865F2");
   const [embedImageUrl, setEmbedImageUrl] = useState("");
+
+  // Typable / Discussion Options
+  const [allowTyping, setAllowTyping] = useState(false);
+  const [threadTitle, setThreadTitle] = useState("💬 Event Ideas / Discussion");
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<AnnouncementItem | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
 
   function addToast(type: ToastMessage["type"], message: string, title?: string) {
     setToasts((prev) => [...prev, { id: Math.random().toString(), type, message, title }]);
@@ -145,6 +171,8 @@ export default function AnnouncementsPage() {
           mentionType,
           mentionRoleId: mentionType === "ROLE" ? mentionRoleId : null,
           publishNow: true,
+          allowTyping,
+          threadName: allowTyping ? threadTitle : null,
           embed: attachEmbed
             ? {
                 title: embedTitle,
@@ -445,6 +473,60 @@ export default function AnnouncementsPage() {
               </div>
             )}
           </div>
+
+          {/* Typable / Ideas Section */}
+          <div className="p-5 rounded-2xl bg-discord-card border border-white/5 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <Lightbulb className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold text-white">Typable Announcement / Ideas Collection</span>
+                </div>
+                <p className="text-[11px] text-zinc-400">
+                  Allows server members to type and submit ideas directly via a Discord button, modal & dedicated discussion thread.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAllowTyping((prev) => !prev)}
+                className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer p-0.5 ${
+                  allowTyping ? "bg-amber-500" : "bg-zinc-700"
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                    allowTyping ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {allowTyping && (
+              <div className="space-y-3 animate-in fade-in">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-300">Discussion Thread Name</label>
+                  <input
+                    type="text"
+                    value={threadTitle}
+                    onChange={(e) => setThreadTitle(e.target.value)}
+                    placeholder="💬 Event Ideas / Discussion"
+                    className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    How this works:
+                  </div>
+                  <ul className="list-disc list-inside space-y-0.5 text-zinc-300">
+                    <li>A public thread is created right under your announcement so members can chat without permissions in the announcement channel.</li>
+                    <li>A <strong>[💡 Type Your Idea / Feedback]</strong> button is attached so members can submit clean responses via a Discord modal.</li>
+                    <li>Submitted ideas are saved here in your dashboard and forwarded to the thread automatically.</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right Preview */}
@@ -467,36 +549,187 @@ export default function AnnouncementsPage() {
             channelMap={channelMap}
           />
 
+          {allowTyping && (
+            <div className="p-3 rounded-xl bg-discord-card border border-amber-500/30 space-y-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled
+                  className="px-3 py-1.5 rounded-lg bg-discord-blurple/80 text-white text-[11px] font-bold flex items-center gap-1.5 shadow"
+                >
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Type Your Idea / Feedback</span>
+                </button>
+                <span className="text-[10px] text-zinc-400">Attached to announcement message</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-zinc-400 pl-1 border-l-2 border-zinc-600">
+                <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-white font-medium text-[11px]">{threadTitle || "💬 Event Ideas / Discussion"}</span>
+                <span className="text-[10px] text-zinc-500">(Auto-created thread)</span>
+              </div>
+            </div>
+          )}
+
           {/* Past Announcements Feed */}
           {announcements.length > 0 && (
             <div className="p-4 rounded-2xl bg-discord-card border border-white/5 space-y-3">
-              <span className="text-xs font-bold text-white">Recent Announcements</span>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {announcements.map((a) => (
-                  <div
-                    key={a.id}
-                    className="p-2.5 rounded-xl bg-discord-dark/50 border border-white/5 flex items-center justify-between gap-2 text-xs"
-                  >
-                    <div className="min-w-0">
-                      <div className="font-semibold text-white truncate">{a.title || "Announcement"}</div>
-                      <div className="text-[10px] text-zinc-500">
-                        #{channels.find((c) => c.id === a.channelId)?.name || a.channelId} • {new Date(a.createdAt).toLocaleDateString()}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">Recent Announcements</span>
+                <span className="text-[10px] text-zinc-500">{announcements.length} sent</span>
+              </div>
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {announcements.map((a) => {
+                  const ideaCount = a._count?.responses ?? a.responses?.length ?? 0;
+                  return (
+                    <div
+                      key={a.id}
+                      className="p-3 rounded-xl bg-discord-dark/50 border border-white/5 flex items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-semibold text-white truncate">{a.title || "Announcement"}</span>
+                          {a.allowTyping && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                              <Lightbulb className="w-2.5 h-2.5" />
+                              Typable
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-zinc-500 mt-0.5">
+                          #{channels.find((c) => c.id === a.channelId)?.name || a.channelId} • {new Date(a.createdAt).toLocaleDateString()}
+                          {a.threadName && ` • Thread: ${a.threadName}`}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {a.allowTyping && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAnnouncement(a)}
+                            className="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[10px] font-bold flex items-center gap-1 transition"
+                            title="View member ideas"
+                          >
+                            <Lightbulb className="w-3 h-3" />
+                            <span>{ideaCount} {ideaCount === 1 ? "Idea" : "Ideas"}</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(a.id)}
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-discord-red hover:bg-discord-red/10 transition"
+                          title="Delete announcement record"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(a.id)}
-                      className="p-1 rounded text-zinc-500 hover:text-discord-red transition"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Ideas Collection Viewer Modal */}
+      {selectedAnnouncement && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-lg rounded-2xl bg-discord-card border border-white/10 p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400">
+                  <Lightbulb className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Member Ideas & Suggestions</h3>
+                  <p className="text-[10px] text-zinc-400">
+                    {selectedAnnouncement.threadName || selectedAnnouncement.title || "Announcement Discussion"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedAnnouncement(null);
+                  setCopiedAll(false);
+                }}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Ideas list */}
+            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+              {(!selectedAnnouncement.responses || selectedAnnouncement.responses.length === 0) ? (
+                <div className="py-8 text-center text-zinc-500 text-xs">
+                  <Lightbulb className="w-6 h-6 mx-auto mb-2 opacity-40 text-amber-400" />
+                  No ideas submitted yet. Server members can click the <strong>💡 Type Your Idea</strong> button on the Discord announcement!
+                </div>
+              ) : (
+                selectedAnnouncement.responses.map((resp) => (
+                  <div key={resp.id} className="p-3 rounded-xl bg-discord-dark/70 border border-white/5 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-2">
+                        {resp.userAvatar ? (
+                          <img src={resp.userAvatar} alt="" className="w-4 h-4 rounded-full" />
+                        ) : (
+                          <Users className="w-3.5 h-3.5 text-zinc-400" />
+                        )}
+                        <span className="font-bold text-white">@{resp.userTag}</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-500">
+                        {new Date(resp.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-200 whitespace-pre-wrap leading-relaxed pl-6">
+                      {resp.content}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <span className="text-[11px] text-zinc-400">
+                Total: <strong>{selectedAnnouncement.responses?.length || 0}</strong> submissions
+              </span>
+              <div className="flex items-center gap-2">
+                {selectedAnnouncement.responses && selectedAnnouncement.responses.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allText = selectedAnnouncement.responses
+                        ?.map((r) => `@${r.userTag}: ${r.content}`)
+                        .join("\n\n");
+                      if (allText) {
+                        navigator.clipboard.writeText(allText);
+                        setCopiedAll(true);
+                        setTimeout(() => setCopiedAll(false), 2000);
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-1.5 transition"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>{copiedAll ? "Copied All!" : "Copy All Ideas"}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAnnouncement(null);
+                    setCopiedAll(false);
+                  }}
+                  className="px-4 py-1.5 rounded-xl bg-discord-blurple text-white text-xs font-bold transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

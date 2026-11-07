@@ -3,6 +3,10 @@ import {
   GuildMember,
   EmbedBuilder,
   PermissionsBitField,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
 } from "discord.js";
 import { prisma } from "@/lib/prisma";
 import { handleSlashCommand } from "../commands";
@@ -42,6 +46,93 @@ export async function onInteractionCreate(interaction: Interaction) {
     if (interaction.customId.startsWith("rr_role_")) {
       const roleId = interaction.customId.replace("rr_role_", "");
       await handleRoleToggle(interaction, roleId);
+      return;
+    }
+
+    // Typable Announcement "💡 Type Your Idea / Feedback" button
+    if (interaction.customId.startsWith("announcement_idea_")) {
+      const announcementId = interaction.customId.replace("announcement_idea_", "");
+      const modal = new ModalBuilder()
+        .setCustomId(`announcement_modal_${announcementId}`)
+        .setTitle("💡 Submit Your Idea")
+        .addComponents(
+          new ActionRowBuilder<TextInputBuilder>().addComponents(
+            new TextInputBuilder()
+              .setCustomId("idea_text")
+              .setLabel("Your Idea / Suggestion")
+              .setStyle(TextInputStyle.Paragraph)
+              .setPlaceholder("Type your ideas, thoughts, or suggestions below...")
+              .setMinLength(2)
+              .setMaxLength(1000)
+              .setRequired(true)
+          )
+        );
+      return await interaction.showModal(modal);
+    }
+  } else if (interaction.isModalSubmit()) {
+    // Handle submission of ideas from Typable Announcement Modal
+    if (interaction.customId.startsWith("announcement_modal_")) {
+      const announcementId = interaction.customId.replace("announcement_modal_", "");
+      const ideaText = interaction.fields.getTextInputValue("idea_text")?.trim();
+
+      if (!ideaText) {
+        return interaction.reply({
+          content: "❌ Idea text cannot be empty.",
+          ephemeral: true,
+        });
+      }
+
+      try {
+        const announcement = await prisma.announcement.findUnique({
+          where: { id: announcementId },
+        });
+
+        if (!announcement) {
+          return interaction.reply({
+            content: "⚠️ Announcement record not found.",
+            ephemeral: true,
+          });
+        }
+
+        const avatarUrl = interaction.user.displayAvatarURL({ extension: "png", size: 256 });
+        const userTag = interaction.user.tag || interaction.user.username;
+
+        // Save submitted idea to database
+        await prisma.announcementResponse.create({
+          data: {
+            announcementId: announcement.id,
+            userId: interaction.user.id,
+            userTag,
+            userAvatar: avatarUrl,
+            content: ideaText,
+          },
+        });
+
+        // If the announcement has a discussion thread attached, post the idea directly in the thread
+        if (announcement.threadId && interaction.guild) {
+          try {
+            const thread = await interaction.guild.channels.fetch(announcement.threadId).catch(() => null);
+            if (thread && "send" in thread) {
+              await (thread as any).send({
+                content: `💡 **New Idea from <@${interaction.user.id}>:**\n> ${ideaText.replace(/\n/g, "\n> ")}`,
+              });
+            }
+          } catch (err: any) {
+            console.warn("[Bot:AnnouncementIdea] Notice: Could not forward to thread:", err?.message);
+          }
+        }
+
+        return interaction.reply({
+          content: `✅ **Thank you, <@${interaction.user.id}>!** Your idea has been received and added to the event discussion!`,
+          ephemeral: true,
+        });
+      } catch (err: any) {
+        console.error("[Bot:AnnouncementModal] Error saving idea:", err);
+        return interaction.reply({
+          content: "❌ Failed to submit your idea. Please try again.",
+          ephemeral: true,
+        });
+      }
     }
   } else if (interaction.isStringSelectMenu()) {
     if (interaction.customId.startsWith("rr_select_")) {

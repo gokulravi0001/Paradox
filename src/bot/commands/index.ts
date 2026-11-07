@@ -16,6 +16,7 @@ import {
   User,
   GuildMember,
 } from "discord.js";
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import {
   generateQuoteCard,
@@ -361,6 +362,34 @@ export const SLASH_COMMANDS_DATA = [
   new ContextMenuCommandBuilder()
     .setName("Quote Message")
     .setType(ApplicationCommandType.Message),
+
+  // 10. Typable / Interactive Announcement with Discussion Thread
+  new SlashCommandBuilder()
+    .setName("announce")
+    .setDescription("Broadcast an announcement with an optional discussion thread for typing ideas")
+    .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild)
+    .addChannelOption((opt) =>
+      opt.setName("channel").setDescription("Target channel for the announcement").setRequired(true)
+    )
+    .addStringOption((opt) =>
+      opt.setName("message").setDescription("Announcement message text").setRequired(true)
+    )
+    .addBooleanOption((opt) =>
+      opt.setName("allow_typing").setDescription("Create a discussion thread and idea button for members to type below")
+    )
+    .addStringOption((opt) =>
+      opt.setName("thread_title").setDescription("Title for the discussion thread (e.g. 💬 Event Ideas)")
+    )
+    .addStringOption((opt) =>
+      opt
+        .setName("mention")
+        .setDescription("Audience mention to ping")
+        .addChoices(
+          { name: "None", value: "NONE" },
+          { name: "@everyone", value: "EVERYONE" },
+          { name: "@here", value: "HERE" }
+        )
+    ),
 ];
 
 /**
@@ -1408,6 +1437,90 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       });
     }
   }
+
+  // /announce
+  if (commandName === "announce") {
+    if (!isManager) {
+      return interaction.reply({
+        content: "⛔ You need **Manage Server** permissions to broadcast announcements.",
+        ephemeral: true,
+      });
+    }
+
+    const channel = interaction.options.getChannel("channel") as TextChannel;
+    const messageText = interaction.options.getString("message", true);
+    const allowTyping = interaction.options.getBoolean("allow_typing") ?? false;
+    const threadTitle = interaction.options.getString("thread_title") || "💬 Event Ideas / Discussion";
+    const mention = interaction.options.getString("mention") || "NONE";
+
+    await interaction.deferReply({ ephemeral: true });
+
+    let mentionPrefix = "";
+    if (mention === "EVERYONE") mentionPrefix = "@everyone\n";
+    if (mention === "HERE") mentionPrefix = "@here\n";
+
+    const announcementId = crypto.randomUUID();
+    let components: any = undefined;
+    if (allowTyping) {
+      components = [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`announcement_idea_${announcementId}`)
+            .setLabel("💡 Type Your Idea / Feedback")
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji("💡")
+        ),
+      ];
+    }
+
+    try {
+      const sentMsg = await channel.send({
+        content: mentionPrefix + messageText,
+        components,
+      });
+
+      let createdThreadId: string | null = null;
+      if (allowTyping) {
+        try {
+          const thread = await sentMsg.startThread({
+            name: threadTitle.slice(0, 100),
+            autoArchiveDuration: 1440,
+          });
+          createdThreadId = thread.id;
+          await thread.send({
+            content: `👋 **Welcome to the discussion thread for this announcement!**\nType your event ideas, thoughts, and suggestions below, or click the **💡 Type Your Idea** button above to submit feedback directly! 👇`,
+          });
+        } catch (threadErr: any) {
+          console.warn("[Bot:AnnounceThread] Notice: Could not start thread:", threadErr?.message);
+        }
+      }
+
+      await prisma.announcement.create({
+        data: {
+          id: announcementId,
+          guildId: guild.id,
+          channelId: channel.id,
+          title: "Broadcast Announcement",
+          content: messageText,
+          mentionType: mention,
+          status: "PUBLISHED",
+          publishedAt: new Date(),
+          messageId: sentMsg.id,
+          allowTyping,
+          threadName: allowTyping ? threadTitle : null,
+          threadId: createdThreadId,
+        },
+      });
+
+      return interaction.editReply({
+        content: `✅ **Announcement Broadcasted!** Posted to <#${channel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}>` : ""}.`,
+      });
+    } catch (err: any) {
+      return interaction.editReply({
+        content: `❌ Failed to broadcast announcement: ${err.message}`,
+      });
+    }
+  }
 }
 
 /**
@@ -2039,6 +2152,99 @@ export async function handleTextCommand(message: Message, prefix: string) {
       .setTimestamp();
 
     return message.channel.send({ embeds: [embed] });
+  }
+
+  // $announce or $announcement
+  if (command === "announce" || command === "announcement") {
+    if (!guild || !member) return;
+    if (!isManager) {
+      return message.reply("⛔ You need **Manage Server** permissions to broadcast announcements.");
+    }
+
+    const channelMention = message.mentions.channels.first() as TextChannel | undefined;
+    let targetChannel: TextChannel = channelMention || (message.channel as TextChannel);
+    let announcementContent = "";
+    let isTypable = false;
+
+    // Syntax: $announce #channel <text> OR $announce ideas #channel <text>
+    if (args[1]?.toLowerCase() === "ideas" || args[1]?.toLowerCase() === "typable") {
+      isTypable = true;
+      targetChannel = (message.mentions.channels.first() as TextChannel) || (message.channel as TextChannel);
+      announcementContent = args.slice(2).filter((a) => !a.startsWith("<#")).join(" ").trim();
+    } else {
+      if (channelMention) {
+        announcementContent = args.slice(1).filter((a) => !a.startsWith("<#")).join(" ").trim();
+      } else {
+        announcementContent = args.slice(1).join(" ").trim();
+      }
+    }
+
+    if (!announcementContent) {
+      return message.reply(
+        `💡 **Usage:**\n` +
+        `• \`${prefix}announce #channel <your announcement>\` — Standard announcement\n` +
+        `• \`${prefix}announce ideas #channel <your announcement>\` — Typable announcement with discussion thread for ideas!`
+      );
+    }
+
+    const announcementId = crypto.randomUUID();
+    let components: any = undefined;
+    if (isTypable) {
+      components = [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`announcement_idea_${announcementId}`)
+            .setLabel("💡 Type Your Idea / Feedback")
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji("💡")
+        ),
+      ];
+    }
+
+    try {
+      const sentMsg = await targetChannel.send({
+        content: announcementContent,
+        components,
+      });
+
+      let createdThreadId: string | null = null;
+      if (isTypable) {
+        try {
+          const thread = await sentMsg.startThread({
+            name: "💬 Event Ideas / Discussion",
+            autoArchiveDuration: 1440,
+          });
+          createdThreadId = thread.id;
+          await thread.send({
+            content: `👋 **Welcome to the discussion thread for this announcement!**\nType your event ideas, thoughts, and suggestions below, or click the **💡 Type Your Idea** button above to submit feedback directly! 👇`,
+          });
+        } catch (threadErr: any) {
+          console.warn("[Bot:AnnounceTextThread] Notice: Could not start thread:", threadErr?.message);
+        }
+      }
+
+      await prisma.announcement.create({
+        data: {
+          id: announcementId,
+          guildId: guild.id,
+          channelId: targetChannel.id,
+          title: "Broadcast Announcement",
+          content: announcementContent,
+          status: "PUBLISHED",
+          publishedAt: new Date(),
+          messageId: sentMsg.id,
+          allowTyping: isTypable,
+          threadName: isTypable ? "💬 Event Ideas / Discussion" : null,
+          threadId: createdThreadId,
+        },
+      });
+
+      return message.reply(
+        `✅ **Announcement Published!** Sent to <#${targetChannel.id}>${createdThreadId ? ` with discussion thread <#${createdThreadId}> for member ideas` : ""}.`
+      );
+    } catch (err: any) {
+      return message.reply(`❌ Failed to send announcement: ${err.message}`);
+    }
   }
 
   if (command === "dashboard") {
