@@ -1522,6 +1522,10 @@ var SLASH_COMMANDS_DATA = [
       { name: "@everyone", value: "EVERYONE" },
       { name: "@here", value: "HERE" }
     )
+  ).addAttachmentOption(
+    (opt) => opt.setName("image").setDescription("Optional Image or animated GIF file to attach with the announcement")
+  ).addStringOption(
+    (opt) => opt.setName("image_url").setDescription("Optional direct Image or GIF URL to attach with the announcement")
   )
 ];
 async function resolveMessageFromInput(channel, input) {
@@ -2334,6 +2338,8 @@ Click the title above or the button below to enter **${serverName}**!
     const allowTyping = interaction.options.getBoolean("allow_typing") ?? false;
     const threadTitle = interaction.options.getString("thread_title") || "\u{1F4AC} Event Ideas / Discussion";
     const mention = interaction.options.getString("mention") || "NONE";
+    const imageAttachment = interaction.options.getAttachment("image");
+    const imageUrl = interaction.options.getString("image_url") || imageAttachment?.url || null;
     await interaction.deferReply({ ephemeral: true });
     let mentionPrefix = "";
     if (mention === "EVERYONE") mentionPrefix = "@everyone\n";
@@ -2347,9 +2353,16 @@ Click the title above or the button below to enter **${serverName}**!
         )
       ];
     }
+    const files = [];
+    if (imageAttachment) {
+      files.push(new import_discord3.AttachmentBuilder(imageAttachment.url, { name: imageAttachment.name || "announcement.png" }));
+    } else if (imageUrl) {
+      files.push(new import_discord3.AttachmentBuilder(imageUrl, { name: "announcement.gif" }));
+    }
     try {
       const sentMsg = await channel.send({
         content: mentionPrefix + messageText,
+        files: files.length > 0 ? files : void 0,
         components
       });
       let createdThreadId = null;
@@ -2386,6 +2399,7 @@ Type your event ideas, thoughts, and suggestions below, or click the **\u{1F4A1}
           channelId: channel.id,
           title: "Broadcast Announcement",
           content: messageText,
+          embed: imageUrl ? JSON.stringify({ imageUrl }) : null,
           mentionType: mention,
           status: "PUBLISHED",
           publishedAt: /* @__PURE__ */ new Date(),
@@ -2937,9 +2951,24 @@ Or to edit: \`${prefix}embed edit <message_id> <title> | <description>\``);
         )
       ];
     }
+    const files = [];
+    let attachedImageUrl = null;
+    if (message.attachments.size > 0) {
+      const att = message.attachments.first();
+      files.push(new import_discord3.AttachmentBuilder(att.url, { name: att.name || "announcement.png" }));
+      attachedImageUrl = att.url;
+    } else {
+      const urlMatch = announcementContent.match(/(https?:\/\/\S+\.(?:png|jpe?g|gif|webp)(?:\?\S*)?)$/i);
+      if (urlMatch) {
+        attachedImageUrl = urlMatch[1];
+        files.push(new import_discord3.AttachmentBuilder(attachedImageUrl, { name: "announcement.gif" }));
+        announcementContent = announcementContent.replace(urlMatch[0], "").trim();
+      }
+    }
     try {
       const sentMsg = await targetChannel.send({
-        content: announcementContent,
+        content: announcementContent || void 0,
+        files: files.length > 0 ? files : void 0,
         components
       });
       let createdThreadId = null;
@@ -2976,6 +3005,7 @@ Type your event ideas, thoughts, and suggestions below, or click the **\u{1F4A1}
           channelId: targetChannel.id,
           title: "Broadcast Announcement",
           content: announcementContent,
+          embed: attachedImageUrl ? JSON.stringify({ imageUrl: attachedImageUrl }) : null,
           status: "PUBLISHED",
           publishedAt: /* @__PURE__ */ new Date(),
           messageId: sentMsg.id,

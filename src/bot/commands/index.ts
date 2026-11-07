@@ -390,6 +390,12 @@ export const SLASH_COMMANDS_DATA = [
           { name: "@everyone", value: "EVERYONE" },
           { name: "@here", value: "HERE" }
         )
+    )
+    .addAttachmentOption((opt) =>
+      opt.setName("image").setDescription("Optional Image or animated GIF file to attach with the announcement")
+    )
+    .addStringOption((opt) =>
+      opt.setName("image_url").setDescription("Optional direct Image or GIF URL to attach with the announcement")
     ),
 ];
 
@@ -1453,6 +1459,8 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
     const allowTyping = interaction.options.getBoolean("allow_typing") ?? false;
     const threadTitle = interaction.options.getString("thread_title") || "💬 Event Ideas / Discussion";
     const mention = interaction.options.getString("mention") || "NONE";
+    const imageAttachment = interaction.options.getAttachment("image");
+    const imageUrl = interaction.options.getString("image_url") || imageAttachment?.url || null;
 
     await interaction.deferReply({ ephemeral: true });
 
@@ -1474,9 +1482,17 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       ];
     }
 
+    const files: any[] = [];
+    if (imageAttachment) {
+      files.push(new AttachmentBuilder(imageAttachment.url, { name: imageAttachment.name || "announcement.png" }));
+    } else if (imageUrl) {
+      files.push(new AttachmentBuilder(imageUrl, { name: "announcement.gif" }));
+    }
+
     try {
       const sentMsg = await channel.send({
         content: mentionPrefix + messageText,
+        files: files.length > 0 ? files : undefined,
         components,
       });
 
@@ -1515,6 +1531,7 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
           channelId: channel.id,
           title: "Broadcast Announcement",
           content: messageText,
+          embed: imageUrl ? JSON.stringify({ imageUrl }) : null,
           mentionType: mention,
           status: "PUBLISHED",
           publishedAt: new Date(),
@@ -2215,9 +2232,25 @@ export async function handleTextCommand(message: Message, prefix: string) {
       ];
     }
 
+    const files: any[] = [];
+    let attachedImageUrl: string | null = null;
+    if (message.attachments.size > 0) {
+      const att = message.attachments.first()!;
+      files.push(new AttachmentBuilder(att.url, { name: att.name || "announcement.png" }));
+      attachedImageUrl = att.url;
+    } else {
+      const urlMatch = announcementContent.match(/(https?:\/\/\S+\.(?:png|jpe?g|gif|webp)(?:\?\S*)?)$/i);
+      if (urlMatch) {
+        attachedImageUrl = urlMatch[1];
+        files.push(new AttachmentBuilder(attachedImageUrl, { name: "announcement.gif" }));
+        announcementContent = announcementContent.replace(urlMatch[0], "").trim();
+      }
+    }
+
     try {
       const sentMsg = await targetChannel.send({
-        content: announcementContent,
+        content: announcementContent || undefined,
+        files: files.length > 0 ? files : undefined,
         components,
       });
 
@@ -2256,6 +2289,7 @@ export async function handleTextCommand(message: Message, prefix: string) {
           channelId: targetChannel.id,
           title: "Broadcast Announcement",
           content: announcementContent,
+          embed: attachedImageUrl ? JSON.stringify({ imageUrl: attachedImageUrl }) : null,
           status: "PUBLISHED",
           publishedAt: new Date(),
           messageId: sentMsg.id,

@@ -142,6 +142,18 @@ export function DiscordPreview({
             </div>
           )}
 
+          {/* Standalone Attachment Image/GIF (When no embed is present) */}
+          {!hasEmbed && resolvedImage && (
+            <div className="pt-2">
+              <img
+                src={resolvedImage}
+                alt=""
+                className="max-h-80 max-w-xl w-full object-cover rounded-md bg-black/20"
+                onError={(e) => ((e.target as HTMLElement).style.display = "none")}
+              />
+            </div>
+          )}
+
           {/* Rich Discord Embed */}
           {hasEmbed && (
             <div

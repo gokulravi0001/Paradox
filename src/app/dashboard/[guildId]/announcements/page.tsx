@@ -16,6 +16,7 @@ import {
   Lightbulb,
   Copy,
   X,
+  Image as ImageIcon,
 } from "lucide-react";
 import { ChannelSelect, DiscordChannelItem } from "@/components/ui/ChannelSelect";
 import { RoleSelect, DiscordRoleItem } from "@/components/ui/RoleSelect";
@@ -174,6 +175,7 @@ export default function AnnouncementsPage() {
           publishNow: true,
           allowTyping,
           threadName: allowTyping ? threadTitle : null,
+          imageUrl: embedImageUrl || undefined,
           embed: attachEmbed
             ? {
                 title: embedTitle,
@@ -462,18 +464,38 @@ export default function AnnouncementsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-300">Banner Image URL</label>
+                  <label className="text-xs font-semibold text-zinc-300">Banner Image or Animated GIF URL</label>
                   <input
                     type="url"
                     value={embedImageUrl}
                     onChange={(e) => setEmbedImageUrl(e.target.value)}
-                    placeholder="https://.../announcement.gif"
+                    placeholder="https://.../announcement.gif (Direct PNG, JPG, or GIF link)"
                     className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-discord-blurple"
                   />
                 </div>
               </div>
             )}
           </div>
+
+          {/* Standalone Image / GIF Attachment (When Rich Embed is disabled) */}
+          {!attachEmbed && (
+            <div className="p-5 rounded-2xl bg-discord-card border border-white/5 space-y-3">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-discord-blurple" />
+                <label className="text-xs font-bold text-white">Attach Image or Animated GIF</label>
+              </div>
+              <input
+                type="url"
+                value={embedImageUrl}
+                onChange={(e) => setEmbedImageUrl(e.target.value)}
+                placeholder="https://.../banner.gif (Direct image or GIF link)"
+                className="w-full px-3 py-2 rounded-xl bg-discord-dark border border-white/10 text-xs text-white focus:outline-none focus:border-discord-blurple"
+              />
+              <p className="text-[11px] text-zinc-400">
+                Attach an animated GIF or photo to your announcement. It will be displayed directly below your message.
+              </p>
+            </div>
+          )}
 
           {/* Typable / Ideas Section */}
           <div className="p-5 rounded-2xl bg-discord-card border border-white/5 space-y-4">

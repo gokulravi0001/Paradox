@@ -99,6 +99,7 @@ export async function POST(
     let createdThreadId: string | null = null;
     let createdAdminChannelId: string | null = null;
     const cleanThreadTitle = (threadName?.trim() || "💬 Event Ideas / Discussion").slice(0, 100);
+    const mediaUrl = resolveTags(embed?.imageUrl || body.imageUrl);
 
     if (publishNow) {
       const fullContent = mentionPrefix + (resolveTags(content) || "");
@@ -115,10 +116,14 @@ export async function POST(
           description: resolveTags(embed.description) || undefined,
           color: embed.color ? parseInt(embed.color.replace("#", ""), 16) : 0x5865f2,
           author: resAuthor ? { name: resAuthor, icon_url: resolveTags(embed.authorIconUrl) || userAvatarUrl } : undefined,
-          image: embed.imageUrl ? { url: resolveTags(embed.imageUrl) } : undefined,
+          image: mediaUrl ? { url: mediaUrl } : undefined,
           thumbnail: embed.thumbnailUrl ? { url: resolveTags(embed.thumbnailUrl) } : undefined,
           footer: embed.footerText ? { text: resolveTags(embed.footerText) } : undefined,
           timestamp: embed.timestamp ? new Date().toISOString() : undefined,
+        };
+      } else if (mediaUrl) {
+        embedData = {
+          image: { url: mediaUrl },
         };
       }
 
@@ -219,7 +224,7 @@ export async function POST(
         channelId,
         title: title || "Broadcast Announcement",
         content: content || "",
-        embed: embed ? JSON.stringify(embed) : null,
+        embed: embed ? JSON.stringify(embed) : mediaUrl ? JSON.stringify({ imageUrl: mediaUrl }) : null,
         mentionType,
         mentionRoleId: mentionRoleId || null,
         status: publishNow ? "PUBLISHED" : scheduledAt ? "SCHEDULED" : "DRAFT",
