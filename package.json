@@ -4,8 +4,9 @@
   "description": "Production Discord Bot & Web Companion Dashboard",
   "main": "index.js",
   "scripts": {
-    "build": "next build",
-    "start": "node index.js",
+    "build": "npm run build:bot && next build",
+    "start": "node server.js",
+    "start:all": "node server.js",
     "start:bot": "node index.js",
     "bot": "node index.js",
     "deploy:commands": "node deploy-commands.js",
