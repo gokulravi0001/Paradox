@@ -681,3 +681,253 @@ export async function createDiscordAdminChannel(
 
   return response.json();
 }
+
+/**
+ * Official Discord Activity Application IDs
+ */
+export const DISCORD_ACTIVITIES = {
+  WATCH_TOGETHER: {
+    id: "880218394199220274",
+    name: "Watch Together (YouTube)",
+    description: "Watch YouTube videos, movies, and playlists synchronized in HD with friends in VC.",
+    emoji: "🍿",
+  },
+  VPLAYER_TOGETHER: {
+    id: "755600276941176913",
+    name: "Watch Together (Official)",
+    description: "Synchronized embedded video player inside Discord Voice Channel.",
+    emoji: "🎬",
+  },
+  GARTIC_PHONE: {
+    id: "1007373375591141447",
+    name: "Gartic Phone",
+    description: "The telephone game with voice and drawings.",
+    emoji: "🎨",
+  },
+  PUTT_PARTY: {
+    id: "945737671529947148",
+    name: "Putt Party",
+    description: "Multiplayer mini-golf tournament in voice chat.",
+    emoji: "⛳",
+  },
+  POKER_NIGHT: {
+    id: "755827207812677713",
+    name: "Poker Night",
+    description: "Texas Hold'em poker in voice channel.",
+    emoji: "🃏",
+  },
+  CHESS_IN_THE_PARK: {
+    id: "832012774040141894",
+    name: "Chess in the Park",
+    description: "Multiplayer chess board in voice channel.",
+    emoji: "♟️",
+  },
+} as const;
+
+export type DiscordActivityKey = keyof typeof DISCORD_ACTIVITIES;
+
+/**
+ * Fetch voice channels for a guild
+ */
+export async function fetchGuildVoiceChannels(guildId: string): Promise<DiscordChannel[]> {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) return [];
+
+  try {
+    const response = await fetch(`${DISCORD_API_ENDPOINT}/guilds/${guildId}/channels`, {
+      headers: { Authorization: `Bot ${botToken}` },
+    });
+    if (!response.ok) return [];
+    const channels: DiscordChannel[] = await response.json();
+    return channels
+      .filter((c) => c.type === 2 || c.type === 13) // Voice (2) or Stage (13)
+      .sort((a, b) => a.position - b.position);
+  } catch (err) {
+    console.error("[fetchGuildVoiceChannels] Error:", err);
+    return [];
+  }
+}
+
+/**
+ * Generate a Discord Activity Invite Link in a Voice Channel
+ * Creates target_type: 2 (Embedded Application) invite
+ */
+export async function createDiscordActivityInvite(
+  channelId: string,
+  applicationId: string,
+  options?: { maxAge?: number; maxUses?: number }
+): Promise<{
+  code: string;
+  inviteUrl: string;
+  channelId: string;
+  applicationId: string;
+}> {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) {
+    throw new Error("Discord Bot token not configured or invalid.");
+  }
+
+  const response = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}/invites`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      max_age: options?.maxAge ?? 86400, // 24 hours
+      max_uses: options?.maxUses ?? 0, // unlimited
+      target_type: 2, // 2 = Embedded Application / Activity
+      target_application_id: applicationId,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: response.statusText }));
+    console.warn("[Discord:CreateActivityInvite] Error:", err);
+    let msg = err.message || `Failed to create activity invite: ${response.status}`;
+    if (err.code === 50013 || msg.includes("Missing Permissions")) {
+      msg = "Missing Permissions: Paradox needs 'Create Instant Invite' and 'Use Embedded Activities' permissions in this voice channel.";
+    }
+    throw new Error(msg);
+  }
+
+  const data = await response.json();
+  const code = data.code;
+  const inviteUrl = `https://discord.gg/${code}`;
+
+  return {
+    code,
+    inviteUrl,
+    channelId,
+    applicationId,
+  };
+}
+
+/**
+ * Optimizes Voice Channel Bitrate & Video Quality Mode for Cinema / Movie Streaming
+ * Discord video_quality_mode:
+ * 1 = AUTO (Default, Discord aggressively compresses down to 360p/480p on bandwidth jitter)
+ * 2 = FULL (Forces full 720p/1080p high quality without auto-downscaling)
+ */
+export async function optimizeVoiceChannelForCinema(
+  channelId: string,
+  options?: {
+    guildId?: string;
+    preferredBitrate?: number;
+    videoQualityMode?: number;
+  }
+): Promise<{
+  channelId: string;
+  name: string;
+  oldBitrate?: number;
+  newBitrate: number;
+  videoQualityMode: number;
+  maxTierBitrate: number;
+}> {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) {
+    throw new Error("Discord Bot token not configured or invalid.");
+  }
+
+  // 1. Fetch channel details to know current bitrate & guild
+  let currentBitrate = 64000;
+  let channelName = "voice-channel";
+  let guildId = options?.guildId;
+
+  try {
+    const chRes = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}`, {
+      headers: { Authorization: `Bot ${botToken}` },
+    });
+    if (chRes.ok) {
+      const chData = await chRes.json();
+      currentBitrate = chData.bitrate || 64000;
+      channelName = chData.name || "voice-channel";
+      if (!guildId && chData.guild_id) {
+        guildId = chData.guild_id;
+      }
+    }
+  } catch {}
+
+  // 2. Determine max bitrate from guild boost tier
+  // Tier 0: 96,000 bps
+  // Tier 1: 128,000 bps
+  // Tier 2: 256,000 bps
+  // Tier 3: 384,000 bps
+  let maxTierBitrate = 96000;
+
+  if (guildId) {
+    try {
+      const gRes = await fetch(`${DISCORD_API_ENDPOINT}/guilds/${guildId}`, {
+        headers: { Authorization: `Bot ${botToken}` },
+      });
+      if (gRes.ok) {
+        const gData = await gRes.json();
+        const tier = gData.premium_tier || 0;
+        if (tier === 3) maxTierBitrate = 384000;
+        else if (tier === 2) maxTierBitrate = 256000;
+        else if (tier === 1) maxTierBitrate = 128000;
+        else maxTierBitrate = 96000;
+      }
+    } catch {}
+  }
+
+  const targetBitrate = options?.preferredBitrate
+    ? Math.min(options.preferredBitrate, maxTierBitrate)
+    : maxTierBitrate;
+
+  const targetQualityMode = options?.videoQualityMode ?? 2; // 2 = FULL
+
+  // 3. Patch the voice channel
+  const patchRes = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      bitrate: targetBitrate,
+      video_quality_mode: targetQualityMode,
+    }),
+  });
+
+  if (!patchRes.ok) {
+    // If setting maxBitrate fails due to guild tier restriction, try 96000 fallback
+    if (targetBitrate > 96000) {
+      const fallbackRes = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          bitrate: 96000,
+          video_quality_mode: targetQualityMode,
+        }),
+      });
+
+      if (fallbackRes.ok) {
+        return {
+          channelId,
+          name: channelName,
+          oldBitrate: currentBitrate,
+          newBitrate: 96000,
+          videoQualityMode: targetQualityMode,
+          maxTierBitrate: 96000,
+        };
+      }
+    }
+
+    const err = await patchRes.json().catch(() => ({ message: patchRes.statusText }));
+    console.warn("[Discord:OptimizeVoiceChannel] Error:", err);
+    throw new Error(err.message || `Failed to optimize voice channel: ${patchRes.status}`);
+  }
+
+  return {
+    channelId,
+    name: channelName,
+    oldBitrate: currentBitrate,
+    newBitrate: targetBitrate,
+    videoQualityMode: targetQualityMode,
+    maxTierBitrate,
+  };
+}

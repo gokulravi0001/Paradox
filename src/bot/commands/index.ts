@@ -26,6 +26,11 @@ import {
   validateImageUrl,
 } from "../services/imageGenerator";
 import { ensureAdminIdeasChannel } from "../services/channelManager";
+import {
+  DISCORD_ACTIVITIES,
+  createDiscordActivityInvite,
+  optimizeVoiceChannelForCinema,
+} from "@/lib/discord";
 
 export const SLASH_COMMANDS_DATA = [
   new SlashCommandBuilder()
@@ -397,6 +402,57 @@ export const SLASH_COMMANDS_DATA = [
     .addStringOption((opt) =>
       opt.setName("image_url").setDescription("Optional direct Image or GIF URL to attach with the announcement")
     ),
+
+  // 11. Watch Movie / VC Cinema Launcher (No Quality Loss)
+  new SlashCommandBuilder()
+    .setName("watch")
+    .setDescription("Launch synchronized movie or YouTube player in VC with uncapped high-def video quality")
+    .addStringOption((opt) =>
+      opt
+        .setName("activity")
+        .setDescription("Video Activity or Player to launch in Voice Channel")
+        .addChoices(
+          { name: "🍿 YouTube Together (Synced HD Player)", value: "WATCH_TOGETHER" },
+          { name: "🎬 Watch Together (Embedded VPlayer)", value: "VPLAYER_TOGETHER" },
+          { name: "🎨 Gartic Phone (Drawing & Laughs)", value: "GARTIC_PHONE" },
+          { name: "♟️ Chess in the Park", value: "CHESS_IN_THE_PARK" },
+          { name: "⛳ Putt Party (Mini-Golf)", value: "PUTT_PARTY" },
+          { name: "🃏 Poker Night (Texas Hold'em)", value: "POKER_NIGHT" }
+        )
+    )
+    .addChannelOption((opt) =>
+      opt
+        .setName("channel")
+        .setDescription("Target voice channel (defaults to your current voice channel)")
+        .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice)
+    )
+    .addBooleanOption((opt) =>
+      opt
+        .setName("optimize_quality")
+        .setDescription("Automatically boost voice channel bitrate to max tier and lock Full Video Quality")
+    ),
+
+  // 12. Voice Channel Cinema Mode Optimizer
+  new SlashCommandBuilder()
+    .setName("cinema")
+    .setDescription("Boost voice channel bitrate & video quality mode to maximum + cinema streaming guide")
+    .addChannelOption((opt) =>
+      opt
+        .setName("channel")
+        .setDescription("Target voice channel (defaults to your current voice channel)")
+        .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice)
+    )
+    .addIntegerOption((opt) =>
+      opt
+        .setName("bitrate")
+        .setDescription("Target audio/video bitrate in kbps (up to server tier limit)")
+        .addChoices(
+          { name: "384 kbps (Tier 3 Cinema Master Quality)", value: 384000 },
+          { name: "256 kbps (Tier 2 Ultra Quality)", value: 256000 },
+          { name: "128 kbps (Tier 1 High Definition)", value: 128000 },
+          { name: "96 kbps (Standard Server Maximum)", value: 96000 }
+        )
+    ),
 ];
 
 /**
@@ -538,6 +594,14 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
             "`/gif <image|url> [style]` — Transform a static picture into an animated GIF\n" +
             "`/quote <quote> [author] [background]` — Generate an AURA quote card image\n" +
             "`/animatedquote <quote> [author] [background]` — Generate an animated glowing quote card GIF",
+        },
+        {
+          name: "🎬 5. VC Cinema & Watch Party (Zero Quality Loss)",
+          value:
+            "`/watch [activity] [channel]` — Launch synchronized YouTube or Watch Together activity in VC\n" +
+            "`/cinema [channel] [bitrate]` — Unlock maximum audio bitrate & Full Video Quality mode (Mode 2)\n" +
+            `\`${prefix}watch [activity]\` — Instant 1-click watch party launcher in your VC\n` +
+            `\`${prefix}cinema\` — Instant VC bitrate and video quality boost with black-screen fix guide`,
         }
       )
       .setFooter({ text: "Paradox • Specialist Discord Bot" })
@@ -1552,6 +1616,172 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       });
     }
   }
+
+  // /watch (or /movienight)
+  if (commandName === "watch") {
+    await interaction.deferReply();
+    const chosenActivityKey = (interaction.options.getString("activity") || "WATCH_TOGETHER") as keyof typeof DISCORD_ACTIVITIES;
+    const targetChannel = interaction.options.getChannel("channel");
+    const optimizeQuality = interaction.options.getBoolean("optimize_quality") ?? true;
+
+    const member = interaction.member as GuildMember;
+    const voiceChannel = targetChannel || member?.voice?.channel;
+
+    if (!voiceChannel || (voiceChannel.type !== ChannelType.GuildVoice && voiceChannel.type !== ChannelType.GuildStageVoice)) {
+      return interaction.editReply({
+        content: "⚠️ **No Voice Channel Found!**\nPlease join a voice channel first, or select a voice channel in the `channel:` option of this command.",
+      });
+    }
+
+    const activity = DISCORD_ACTIVITIES[chosenActivityKey] || DISCORD_ACTIVITIES.WATCH_TOGETHER;
+
+    try {
+      const inviteData = await createDiscordActivityInvite(voiceChannel.id, activity.id);
+
+      let qualityInfo: any = null;
+      if (optimizeQuality) {
+        qualityInfo = await optimizeVoiceChannelForCinema(voiceChannel.id, { guildId: guild?.id }).catch((err) => {
+          console.warn("[Bot:Watch] Could not auto-optimize voice channel:", err.message);
+          return null;
+        });
+      }
+
+      const bitrateKbps = qualityInfo?.newBitrate ? Math.round(qualityInfo.newBitrate / 1000) : 96;
+
+      const embed = new EmbedBuilder()
+        .setColor(0xeb0400)
+        .setTitle(`🎬 Cinema Lounge & Watch Party: ${activity.name}`)
+        .setDescription(
+          `Stream movies, anime, and videos with friends in <#${voiceChannel.id}> with **zero video quality loss**, **no frame stuttering**, and **uncapped audio**!\n\n` +
+          `📺 **Activity:** ${activity.emoji} **${activity.name}**\n` +
+          `🔊 **Channel Audio Bitrate:** **${bitrateKbps} kbps** (Uncapped HD)\n` +
+          `🎥 **Video Quality Mode:** **FULL High-Definition (Resolution Lock enabled)**\n\n` +
+          `👉 **Click the button below to launch the player directly in your Voice Channel!**`
+        )
+        .addFields(
+          {
+            name: "🌟 Why Watch Without Screen-Sharing?",
+            value:
+              "• **Native Source Resolution:** Videos stream directly from the video host in 1080p/4K to each person rather than being downscaled by Discord WebRTC screen-sharing.\n" +
+              "• **Zero Black Screen:** Completely bypasses DRM hardware-acceleration black screens from streaming sites.\n" +
+              "• **Synced Controls:** Anyone in the VC can pause, play, or scrub forward together in exact sync!",
+          },
+          {
+            name: "🛡️ Streaming from Browser / Screen Share?",
+            value:
+              "If you screen share a browser window (Netflix, Prime, Anime), turn off **Hardware Acceleration** (`Settings > System > Use graphics acceleration when available -> OFF`) to prevent Discord's black screen!",
+          }
+        )
+        .setFooter({ text: "Paradox Cinema • Uncapped Quality Watch Party" })
+        .setTimestamp();
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setLabel(`🚀 Launch ${activity.name}`)
+          .setStyle(ButtonStyle.Link)
+          .setURL(inviteData.inviteUrl),
+        new ButtonBuilder()
+          .setLabel("🍿 Join Voice Channel")
+          .setStyle(ButtonStyle.Link)
+          .setURL(`https://discord.com/channels/${guildId}/${voiceChannel.id}`),
+        new ButtonBuilder()
+          .setLabel("🎥 Open Web Theater")
+          .setStyle(ButtonStyle.Link)
+          .setURL(`${appUrl}/dashboard/${guildId}/theater`)
+      );
+
+      return interaction.editReply({
+        embeds: [embed],
+        components: [row],
+      });
+    } catch (err: any) {
+      return interaction.editReply({
+        content: `❌ **Failed to launch Watch Party:** ${err.message}`,
+      });
+    }
+  }
+
+  // /cinema
+  if (commandName === "cinema") {
+    await interaction.deferReply();
+    const targetChannel = interaction.options.getChannel("channel");
+    const chosenBitrate = interaction.options.getInteger("bitrate");
+
+    const member = interaction.member as GuildMember;
+    const voiceChannel = targetChannel || member?.voice?.channel;
+
+    if (!voiceChannel || (voiceChannel.type !== ChannelType.GuildVoice && voiceChannel.type !== ChannelType.GuildStageVoice)) {
+      return interaction.editReply({
+        content: "⚠️ **No Voice Channel Found!**\nPlease join a voice channel first, or select a voice channel in the `channel:` option of this command.",
+      });
+    }
+
+    try {
+      const result = await optimizeVoiceChannelForCinema(voiceChannel.id, {
+        guildId: guild?.id,
+        preferredBitrate: chosenBitrate || undefined,
+        videoQualityMode: 2, // FULL
+      });
+
+      const oldKbps = result.oldBitrate ? Math.round(result.oldBitrate / 1000) : 64;
+      const newKbps = Math.round(result.newBitrate / 1000);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x57f287)
+        .setTitle("🍿 Voice Channel Cinema Mode Activated")
+        .setDescription(
+          `Successfully optimized **<#${voiceChannel.id}>** for high-fidelity movie and video streaming!\n\n` +
+          `🔊 **Audio Bitrate:** **${newKbps} kbps** (Upgraded from ${oldKbps} kbps)\n` +
+          `🎬 **Video Quality Mode:** **FULL High-Definition (Resolution Lock enabled)**`
+        )
+        .addFields(
+          {
+            name: "🛡️ Step 1: Prevent Discord Black Screen (DRM Fix)",
+            value:
+              "When streaming Netflix, Disney+, Prime Video, or anime sites in Discord:\n" +
+              "1. Open Chrome, Brave, or Edge **Settings** ⚙️\n" +
+              "2. Search for **Hardware Acceleration** (under System)\n" +
+              "3. Turn **OFF** *'Use graphics acceleration when available'*\n" +
+              "4. Relaunch browser — black screen is permanently gone!",
+          },
+          {
+            name: "🎧 Step 2: Unmuffled Movie Audio",
+            value:
+              "In Discord **User Settings > Voice & Video**:\n" +
+              "• Set **Noise Suppression** to **None** or **Standard** (disable *Krisp*, which mistakenly cuts out movie soundtracks and whisper dialogue!)\n" +
+              "• Enable **High Packet Priority (Quality of Service)** for lag-free audio.",
+          },
+          {
+            name: "📺 Step 3: Stream Settings",
+            value:
+              "• Share the **Application Window** (not Entire Screen) for crisp text & 0 frame tearing.\n" +
+              "• Choose **Source** resolution and **60 FPS** (or 30 FPS for cinematic films to eliminate micro-stuttering).",
+          }
+        )
+        .setFooter({ text: "Paradox Cinema Optimizer • Maximum Bitrate & Full Video Quality" })
+        .setTimestamp();
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setLabel("🍿 Join Voice Channel")
+          .setStyle(ButtonStyle.Link)
+          .setURL(`https://discord.com/channels/${guildId}/${voiceChannel.id}`),
+        new ButtonBuilder()
+          .setLabel("🎥 Open Web Theater")
+          .setStyle(ButtonStyle.Link)
+          .setURL(`${appUrl}/dashboard/${guildId}/theater`)
+      );
+
+      return interaction.editReply({
+        embeds: [embed],
+        components: [row],
+      });
+    } catch (err: any) {
+      return interaction.editReply({
+        content: `❌ **Failed to optimize voice channel:** ${err.message}`,
+      });
+    }
+  }
 }
 
 /**
@@ -1728,6 +1958,12 @@ export async function handleTextCommand(message: Message, prefix: string) {
             `\`${prefix}embed edit <msgId> <title> | <description>\` — Edit existing embed\n` +
             `\`${prefix}prefix <newPrefix>\` — Change server prefix\n` +
             `\`${prefix}dashboard\` — Web dashboard link`,
+        },
+        {
+          name: "🎬 VC Cinema & Watch Party (Zero Quality Loss)",
+          value:
+            `\`${prefix}watch [activity]\` — Instant 1-click watch party launcher in your VC\n` +
+            `\`${prefix}cinema\` — Instant VC bitrate and video quality boost with black-screen fix guide`,
         }
       )
       .setFooter({ text: "Type '/' to use interactive Discord slash commands!" })
@@ -2305,6 +2541,154 @@ export async function handleTextCommand(message: Message, prefix: string) {
       );
     } catch (err: any) {
       return message.reply(`❌ Failed to send announcement: ${err.message}`);
+    }
+  }
+
+  // $watch, $movie, $movienight
+  if (command === "watch" || command === "movie" || command === "movienight") {
+    if (!guild || !member) return;
+    const voiceChannel = member.voice?.channel;
+
+    if (!voiceChannel || (voiceChannel.type !== ChannelType.GuildVoice && voiceChannel.type !== ChannelType.GuildStageVoice)) {
+      return message.reply(
+        `⚠️ **You must be in a voice channel first!**\nJoin a voice channel and type \`${prefix}watch\` to launch a crystal-clear movie or YouTube watch party with zero quality drops!`
+      );
+    }
+
+    const activityArg = args[1]?.toLowerCase();
+    let activity = DISCORD_ACTIVITIES.WATCH_TOGETHER;
+    if (activityArg?.includes("vplayer") || activityArg?.includes("official")) {
+      activity = DISCORD_ACTIVITIES.VPLAYER_TOGETHER;
+    } else if (activityArg?.includes("gartic")) {
+      activity = DISCORD_ACTIVITIES.GARTIC_PHONE;
+    } else if (activityArg?.includes("chess")) {
+      activity = DISCORD_ACTIVITIES.CHESS_IN_THE_PARK;
+    } else if (activityArg?.includes("putt") || activityArg?.includes("golf")) {
+      activity = DISCORD_ACTIVITIES.PUTT_PARTY;
+    }
+
+    try {
+      const inviteData = await createDiscordActivityInvite(voiceChannel.id, activity.id);
+      const qualityInfo = await optimizeVoiceChannelForCinema(voiceChannel.id, { guildId: guild.id }).catch(() => null);
+      const bitrateKbps = qualityInfo?.newBitrate ? Math.round(qualityInfo.newBitrate / 1000) : 96;
+
+      const embed = new EmbedBuilder()
+        .setColor(0xeb0400)
+        .setTitle(`🎬 Cinema Lounge & Watch Party: ${activity.name}`)
+        .setDescription(
+          `Stream movies, anime, and videos with friends in <#${voiceChannel.id}> with **zero video quality loss**, **no frame stuttering**, and **uncapped audio**!\n\n` +
+          `📺 **Activity:** ${activity.emoji} **${activity.name}**\n` +
+          `🔊 **Channel Audio Bitrate:** **${bitrateKbps} kbps** (Uncapped HD)\n` +
+          `🎥 **Video Quality Mode:** **FULL High-Definition (Resolution Lock enabled)**\n\n` +
+          `👉 **Click the button below to launch the player directly in your Voice Channel!**`
+        )
+        .addFields(
+          {
+            name: "🌟 Why Watch Without Screen-Sharing?",
+            value:
+              "• **Native Source Resolution:** Streams in 1080p/4K directly from source to each viewer.\n" +
+              "• **Zero Black Screen:** Completely bypasses DRM hardware-acceleration black screens.\n" +
+              "• **Synced Controls:** Anyone in the VC can pause, play, or scrub forward together in exact sync!",
+          },
+          {
+            name: "🛡️ Streaming from Browser / Screen Share?",
+            value:
+              "If you screen share a browser window (Netflix, Prime, Anime), turn off **Hardware Acceleration** (`Settings > System > Use graphics acceleration when available -> OFF`) to prevent Discord's black screen!",
+          }
+        )
+        .setFooter({ text: "Paradox Cinema • Uncapped Quality Watch Party" })
+        .setTimestamp();
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setLabel(`🚀 Launch ${activity.name}`)
+          .setStyle(ButtonStyle.Link)
+          .setURL(inviteData.inviteUrl),
+        new ButtonBuilder()
+          .setLabel("🍿 Join Voice Channel")
+          .setStyle(ButtonStyle.Link)
+          .setURL(`https://discord.com/channels/${guild.id}/${voiceChannel.id}`),
+        new ButtonBuilder()
+          .setLabel("🎥 Open Web Theater")
+          .setStyle(ButtonStyle.Link)
+          .setURL(`${appUrl}/dashboard/${guild.id}/theater`)
+      );
+
+      return message.reply({ embeds: [embed], components: [row] });
+    } catch (err: any) {
+      return message.reply(`❌ **Failed to launch Watch Party:** ${err.message}`);
+    }
+  }
+
+  // $cinema, $moviemode
+  if (command === "cinema" || command === "moviemode") {
+    if (!guild || !member) return;
+    const voiceChannel = member.voice?.channel;
+
+    if (!voiceChannel || (voiceChannel.type !== ChannelType.GuildVoice && voiceChannel.type !== ChannelType.GuildStageVoice)) {
+      return message.reply(
+        `⚠️ **You must be in a voice channel first!**\nJoin a voice channel and type \`${prefix}cinema\` to optimize bitrate and video quality!`
+      );
+    }
+
+    try {
+      const result = await optimizeVoiceChannelForCinema(voiceChannel.id, {
+        guildId: guild.id,
+        videoQualityMode: 2,
+      });
+
+      const oldKbps = result.oldBitrate ? Math.round(result.oldBitrate / 1000) : 64;
+      const newKbps = Math.round(result.newBitrate / 1000);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x57f287)
+        .setTitle("🍿 Voice Channel Cinema Mode Activated")
+        .setDescription(
+          `Successfully optimized **<#${voiceChannel.id}>** for high-fidelity movie and video streaming!\n\n` +
+          `🔊 **Audio Bitrate:** **${newKbps} kbps** (Upgraded from ${oldKbps} kbps)\n` +
+          `🎬 **Video Quality Mode:** **FULL High-Definition (Resolution Lock enabled)**`
+        )
+        .addFields(
+          {
+            name: "🛡️ Step 1: Prevent Discord Black Screen (DRM Fix)",
+            value:
+              "When streaming Netflix, Disney+, Prime Video, or anime sites in Discord:\n" +
+              "1. Open Chrome, Brave, or Edge **Settings** ⚙️\n" +
+              "2. Search for **Hardware Acceleration** (under System)\n" +
+              "3. Turn **OFF** *'Use graphics acceleration when available'*\n" +
+              "4. Relaunch browser — black screen is permanently gone!",
+          },
+          {
+            name: "🎧 Step 2: Unmuffled Movie Audio",
+            value:
+              "In Discord **User Settings > Voice & Video**:\n" +
+              "• Set **Noise Suppression** to **None** or **Standard** (disable *Krisp*, which mistakenly cuts out movie soundtracks and whisper dialogue!)\n" +
+              "• Enable **High Packet Priority (Quality of Service)** for lag-free audio.",
+          },
+          {
+            name: "📺 Step 3: Stream Settings",
+            value:
+              "• Share the **Application Window** (not Entire Screen) for crisp text & 0 frame tearing.\n" +
+              "• Choose **Source** resolution and **60 FPS** (or 30 FPS for cinematic films to save bandwidth).",
+          }
+        )
+        .setFooter({ text: "Paradox Cinema Optimizer • Maximum Bitrate & Full Video Quality" })
+        .setTimestamp();
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setLabel("🍿 Join Voice Channel")
+          .setStyle(ButtonStyle.Link)
+          .setURL(`https://discord.com/channels/${guild.id}/${voiceChannel.id}`),
+        new ButtonBuilder()
+          .setLabel("🎥 Open Web Theater")
+          .setStyle(ButtonStyle.Link)
+          .setURL(`${appUrl}/dashboard/${guild.id}/theater`)
+      );
+
+      return message.reply({ embeds: [embed], components: [row] });
+    } catch (err: any) {
+      return message.reply(`❌ **Failed to optimize voice channel:** ${err.message}`);
     }
   }
 

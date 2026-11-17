@@ -877,7 +877,7 @@ function createBotClient() {
 }
 
 // ../DC BOTS/Paradox/src/bot/events/ready.ts
-var import_discord4 = require("discord.js");
+var import_discord5 = require("discord.js");
 
 // ../DC BOTS/Paradox/src/lib/prisma.ts
 var import_client = require("@prisma/client");
@@ -1330,6 +1330,190 @@ async function ensureAdminIdeasChannel(guild, announcement, title) {
   return channel;
 }
 
+// ../DC BOTS/Paradox/src/lib/discord.ts
+var DISCORD_API_ENDPOINT = "https://discord.com/api/v10";
+var DISCORD_PERMISSIONS = {
+  ADMINISTRATOR: BigInt(8),
+  MANAGE_GUILD: BigInt(32),
+  MANAGE_ROLES: BigInt(268435456),
+  MANAGE_CHANNELS: BigInt(16),
+  SEND_MESSAGES: BigInt(2048),
+  EMBED_LINKS: BigInt(16384),
+  ATTACH_FILES: BigInt(32768),
+  READ_MESSAGE_HISTORY: BigInt(65536),
+  ADD_REACTIONS: BigInt(64),
+  VIEW_CHANNEL: BigInt(1024),
+  MANAGE_MESSAGES: BigInt(8192)
+};
+var REQUIRED_BOT_PERMISSIONS = DISCORD_PERMISSIONS.VIEW_CHANNEL | DISCORD_PERMISSIONS.SEND_MESSAGES | DISCORD_PERMISSIONS.EMBED_LINKS | DISCORD_PERMISSIONS.ATTACH_FILES | DISCORD_PERMISSIONS.READ_MESSAGE_HISTORY | DISCORD_PERMISSIONS.ADD_REACTIONS | DISCORD_PERMISSIONS.MANAGE_ROLES | DISCORD_PERMISSIONS.MANAGE_MESSAGES;
+var DISCORD_ACTIVITIES = {
+  WATCH_TOGETHER: {
+    id: "880218394199220274",
+    name: "Watch Together (YouTube)",
+    description: "Watch YouTube videos, movies, and playlists synchronized in HD with friends in VC.",
+    emoji: "\u{1F37F}"
+  },
+  VPLAYER_TOGETHER: {
+    id: "755600276941176913",
+    name: "Watch Together (Official)",
+    description: "Synchronized embedded video player inside Discord Voice Channel.",
+    emoji: "\u{1F3AC}"
+  },
+  GARTIC_PHONE: {
+    id: "1007373375591141447",
+    name: "Gartic Phone",
+    description: "The telephone game with voice and drawings.",
+    emoji: "\u{1F3A8}"
+  },
+  PUTT_PARTY: {
+    id: "945737671529947148",
+    name: "Putt Party",
+    description: "Multiplayer mini-golf tournament in voice chat.",
+    emoji: "\u26F3"
+  },
+  POKER_NIGHT: {
+    id: "755827207812677713",
+    name: "Poker Night",
+    description: "Texas Hold'em poker in voice channel.",
+    emoji: "\u{1F0CF}"
+  },
+  CHESS_IN_THE_PARK: {
+    id: "832012774040141894",
+    name: "Chess in the Park",
+    description: "Multiplayer chess board in voice channel.",
+    emoji: "\u265F\uFE0F"
+  }
+};
+async function createDiscordActivityInvite(channelId, applicationId, options) {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) {
+    throw new Error("Discord Bot token not configured or invalid.");
+  }
+  const response = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}/invites`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      max_age: options?.maxAge ?? 86400,
+      // 24 hours
+      max_uses: options?.maxUses ?? 0,
+      // unlimited
+      target_type: 2,
+      // 2 = Embedded Application / Activity
+      target_application_id: applicationId
+    })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: response.statusText }));
+    console.warn("[Discord:CreateActivityInvite] Error:", err);
+    let msg = err.message || `Failed to create activity invite: ${response.status}`;
+    if (err.code === 50013 || msg.includes("Missing Permissions")) {
+      msg = "Missing Permissions: Paradox needs 'Create Instant Invite' and 'Use Embedded Activities' permissions in this voice channel.";
+    }
+    throw new Error(msg);
+  }
+  const data = await response.json();
+  const code = data.code;
+  const inviteUrl = `https://discord.gg/${code}`;
+  return {
+    code,
+    inviteUrl,
+    channelId,
+    applicationId
+  };
+}
+async function optimizeVoiceChannelForCinema(channelId, options) {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken || botToken.startsWith("dummy_")) {
+    throw new Error("Discord Bot token not configured or invalid.");
+  }
+  let currentBitrate = 64e3;
+  let channelName = "voice-channel";
+  let guildId = options?.guildId;
+  try {
+    const chRes = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}`, {
+      headers: { Authorization: `Bot ${botToken}` }
+    });
+    if (chRes.ok) {
+      const chData = await chRes.json();
+      currentBitrate = chData.bitrate || 64e3;
+      channelName = chData.name || "voice-channel";
+      if (!guildId && chData.guild_id) {
+        guildId = chData.guild_id;
+      }
+    }
+  } catch {
+  }
+  let maxTierBitrate = 96e3;
+  if (guildId) {
+    try {
+      const gRes = await fetch(`${DISCORD_API_ENDPOINT}/guilds/${guildId}`, {
+        headers: { Authorization: `Bot ${botToken}` }
+      });
+      if (gRes.ok) {
+        const gData = await gRes.json();
+        const tier = gData.premium_tier || 0;
+        if (tier === 3) maxTierBitrate = 384e3;
+        else if (tier === 2) maxTierBitrate = 256e3;
+        else if (tier === 1) maxTierBitrate = 128e3;
+        else maxTierBitrate = 96e3;
+      }
+    } catch {
+    }
+  }
+  const targetBitrate = options?.preferredBitrate ? Math.min(options.preferredBitrate, maxTierBitrate) : maxTierBitrate;
+  const targetQualityMode = options?.videoQualityMode ?? 2;
+  const patchRes = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      bitrate: targetBitrate,
+      video_quality_mode: targetQualityMode
+    })
+  });
+  if (!patchRes.ok) {
+    if (targetBitrate > 96e3) {
+      const fallbackRes = await fetch(`${DISCORD_API_ENDPOINT}/channels/${channelId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          bitrate: 96e3,
+          video_quality_mode: targetQualityMode
+        })
+      });
+      if (fallbackRes.ok) {
+        return {
+          channelId,
+          name: channelName,
+          oldBitrate: currentBitrate,
+          newBitrate: 96e3,
+          videoQualityMode: targetQualityMode,
+          maxTierBitrate: 96e3
+        };
+      }
+    }
+    const err = await patchRes.json().catch(() => ({ message: patchRes.statusText }));
+    console.warn("[Discord:OptimizeVoiceChannel] Error:", err);
+    throw new Error(err.message || `Failed to optimize voice channel: ${patchRes.status}`);
+  }
+  return {
+    channelId,
+    name: channelName,
+    oldBitrate: currentBitrate,
+    newBitrate: targetBitrate,
+    videoQualityMode: targetQualityMode,
+    maxTierBitrate
+  };
+}
+
 // ../DC BOTS/Paradox/src/bot/commands/index.ts
 var SLASH_COMMANDS_DATA = [
   new import_discord3.SlashCommandBuilder().setName("help").setDescription("Explore Paradox commands, features, and dashboard link"),
@@ -1526,6 +1710,32 @@ var SLASH_COMMANDS_DATA = [
     (opt) => opt.setName("image").setDescription("Optional Image or animated GIF file to attach with the announcement")
   ).addStringOption(
     (opt) => opt.setName("image_url").setDescription("Optional direct Image or GIF URL to attach with the announcement")
+  ),
+  // 11. Watch Movie / VC Cinema Launcher (No Quality Loss)
+  new import_discord3.SlashCommandBuilder().setName("watch").setDescription("Launch synchronized movie or YouTube player in VC with uncapped high-def video quality").addStringOption(
+    (opt) => opt.setName("activity").setDescription("Video Activity or Player to launch in Voice Channel").addChoices(
+      { name: "\u{1F37F} YouTube Together (Synced HD Player)", value: "WATCH_TOGETHER" },
+      { name: "\u{1F3AC} Watch Together (Embedded VPlayer)", value: "VPLAYER_TOGETHER" },
+      { name: "\u{1F3A8} Gartic Phone (Drawing & Laughs)", value: "GARTIC_PHONE" },
+      { name: "\u265F\uFE0F Chess in the Park", value: "CHESS_IN_THE_PARK" },
+      { name: "\u26F3 Putt Party (Mini-Golf)", value: "PUTT_PARTY" },
+      { name: "\u{1F0CF} Poker Night (Texas Hold'em)", value: "POKER_NIGHT" }
+    )
+  ).addChannelOption(
+    (opt) => opt.setName("channel").setDescription("Target voice channel (defaults to your current voice channel)").addChannelTypes(import_discord3.ChannelType.GuildVoice, import_discord3.ChannelType.GuildStageVoice)
+  ).addBooleanOption(
+    (opt) => opt.setName("optimize_quality").setDescription("Automatically boost voice channel bitrate to max tier and lock Full Video Quality")
+  ),
+  // 12. Voice Channel Cinema Mode Optimizer
+  new import_discord3.SlashCommandBuilder().setName("cinema").setDescription("Boost voice channel bitrate & video quality mode to maximum + cinema streaming guide").addChannelOption(
+    (opt) => opt.setName("channel").setDescription("Target voice channel (defaults to your current voice channel)").addChannelTypes(import_discord3.ChannelType.GuildVoice, import_discord3.ChannelType.GuildStageVoice)
+  ).addIntegerOption(
+    (opt) => opt.setName("bitrate").setDescription("Target audio/video bitrate in kbps (up to server tier limit)").addChoices(
+      { name: "384 kbps (Tier 3 Cinema Master Quality)", value: 384e3 },
+      { name: "256 kbps (Tier 2 Ultra Quality)", value: 256e3 },
+      { name: "128 kbps (Tier 1 High Definition)", value: 128e3 },
+      { name: "96 kbps (Standard Server Maximum)", value: 96e3 }
+    )
   )
 ];
 async function resolveMessageFromInput(channel, input) {
@@ -1624,6 +1834,13 @@ Command Prefix: \`${prefix}\` | Slash Commands: \`/\``
       {
         name: "\u2728 4. Creative & Community Tools",
         value: "`/postinvite [message] [channel] [url]` \u2014 Staff: Post branded invite embed & native preview\n`/gif <image|url> [style]` \u2014 Transform a static picture into an animated GIF\n`/quote <quote> [author] [background]` \u2014 Generate an AURA quote card image\n`/animatedquote <quote> [author] [background]` \u2014 Generate an animated glowing quote card GIF"
+      },
+      {
+        name: "\u{1F3AC} 5. VC Cinema & Watch Party (Zero Quality Loss)",
+        value: `\`/watch [activity] [channel]\` \u2014 Launch synchronized YouTube or Watch Together activity in VC
+\`/cinema [channel] [bitrate]\` \u2014 Unlock maximum audio bitrate & Full Video Quality mode (Mode 2)
+\`${prefix}watch [activity]\` \u2014 Instant 1-click watch party launcher in your VC
+\`${prefix}cinema\` \u2014 Instant VC bitrate and video quality boost with black-screen fix guide`
       }
     ).setFooter({ text: "Paradox \u2022 Specialist Discord Bot" }).setTimestamp();
     const row = new import_discord3.ActionRowBuilder().addComponents(
@@ -2419,6 +2636,115 @@ Type your event ideas, thoughts, and suggestions below, or click the **\u{1F4A1}
       });
     }
   }
+  if (commandName === "watch") {
+    await interaction.deferReply();
+    const chosenActivityKey = interaction.options.getString("activity") || "WATCH_TOGETHER";
+    const targetChannel = interaction.options.getChannel("channel");
+    const optimizeQuality = interaction.options.getBoolean("optimize_quality") ?? true;
+    const member = interaction.member;
+    const voiceChannel = targetChannel || member?.voice?.channel;
+    if (!voiceChannel || voiceChannel.type !== import_discord3.ChannelType.GuildVoice && voiceChannel.type !== import_discord3.ChannelType.GuildStageVoice) {
+      return interaction.editReply({
+        content: "\u26A0\uFE0F **No Voice Channel Found!**\nPlease join a voice channel first, or select a voice channel in the `channel:` option of this command."
+      });
+    }
+    const activity = DISCORD_ACTIVITIES[chosenActivityKey] || DISCORD_ACTIVITIES.WATCH_TOGETHER;
+    try {
+      const inviteData = await createDiscordActivityInvite(voiceChannel.id, activity.id);
+      let qualityInfo = null;
+      if (optimizeQuality) {
+        qualityInfo = await optimizeVoiceChannelForCinema(voiceChannel.id, { guildId: guild?.id }).catch((err) => {
+          console.warn("[Bot:Watch] Could not auto-optimize voice channel:", err.message);
+          return null;
+        });
+      }
+      const bitrateKbps = qualityInfo?.newBitrate ? Math.round(qualityInfo.newBitrate / 1e3) : 96;
+      const embed = new import_discord3.EmbedBuilder().setColor(15401984).setTitle(`\u{1F3AC} Cinema Lounge & Watch Party: ${activity.name}`).setDescription(
+        `Stream movies, anime, and videos with friends in <#${voiceChannel.id}> with **zero video quality loss**, **no frame stuttering**, and **uncapped audio**!
+
+\u{1F4FA} **Activity:** ${activity.emoji} **${activity.name}**
+\u{1F50A} **Channel Audio Bitrate:** **${bitrateKbps} kbps** (Uncapped HD)
+\u{1F3A5} **Video Quality Mode:** **FULL High-Definition (Resolution Lock enabled)**
+
+\u{1F449} **Click the button below to launch the player directly in your Voice Channel!**`
+      ).addFields(
+        {
+          name: "\u{1F31F} Why Watch Without Screen-Sharing?",
+          value: "\u2022 **Native Source Resolution:** Videos stream directly from the video host in 1080p/4K to each person rather than being downscaled by Discord WebRTC screen-sharing.\n\u2022 **Zero Black Screen:** Completely bypasses DRM hardware-acceleration black screens from streaming sites.\n\u2022 **Synced Controls:** Anyone in the VC can pause, play, or scrub forward together in exact sync!"
+        },
+        {
+          name: "\u{1F6E1}\uFE0F Streaming from Browser / Screen Share?",
+          value: "If you screen share a browser window (Netflix, Prime, Anime), turn off **Hardware Acceleration** (`Settings > System > Use graphics acceleration when available -> OFF`) to prevent Discord's black screen!"
+        }
+      ).setFooter({ text: "Paradox Cinema \u2022 Uncapped Quality Watch Party" }).setTimestamp();
+      const row = new import_discord3.ActionRowBuilder().addComponents(
+        new import_discord3.ButtonBuilder().setLabel(`\u{1F680} Launch ${activity.name}`).setStyle(import_discord3.ButtonStyle.Link).setURL(inviteData.inviteUrl),
+        new import_discord3.ButtonBuilder().setLabel("\u{1F37F} Join Voice Channel").setStyle(import_discord3.ButtonStyle.Link).setURL(`https://discord.com/channels/${guildId}/${voiceChannel.id}`),
+        new import_discord3.ButtonBuilder().setLabel("\u{1F3A5} Open Web Theater").setStyle(import_discord3.ButtonStyle.Link).setURL(`${appUrl}/dashboard/${guildId}/theater`)
+      );
+      return interaction.editReply({
+        embeds: [embed],
+        components: [row]
+      });
+    } catch (err) {
+      return interaction.editReply({
+        content: `\u274C **Failed to launch Watch Party:** ${err.message}`
+      });
+    }
+  }
+  if (commandName === "cinema") {
+    await interaction.deferReply();
+    const targetChannel = interaction.options.getChannel("channel");
+    const chosenBitrate = interaction.options.getInteger("bitrate");
+    const member = interaction.member;
+    const voiceChannel = targetChannel || member?.voice?.channel;
+    if (!voiceChannel || voiceChannel.type !== import_discord3.ChannelType.GuildVoice && voiceChannel.type !== import_discord3.ChannelType.GuildStageVoice) {
+      return interaction.editReply({
+        content: "\u26A0\uFE0F **No Voice Channel Found!**\nPlease join a voice channel first, or select a voice channel in the `channel:` option of this command."
+      });
+    }
+    try {
+      const result = await optimizeVoiceChannelForCinema(voiceChannel.id, {
+        guildId: guild?.id,
+        preferredBitrate: chosenBitrate || void 0,
+        videoQualityMode: 2
+        // FULL
+      });
+      const oldKbps = result.oldBitrate ? Math.round(result.oldBitrate / 1e3) : 64;
+      const newKbps = Math.round(result.newBitrate / 1e3);
+      const embed = new import_discord3.EmbedBuilder().setColor(5763719).setTitle("\u{1F37F} Voice Channel Cinema Mode Activated").setDescription(
+        `Successfully optimized **<#${voiceChannel.id}>** for high-fidelity movie and video streaming!
+
+\u{1F50A} **Audio Bitrate:** **${newKbps} kbps** (Upgraded from ${oldKbps} kbps)
+\u{1F3AC} **Video Quality Mode:** **FULL High-Definition (Resolution Lock enabled)**`
+      ).addFields(
+        {
+          name: "\u{1F6E1}\uFE0F Step 1: Prevent Discord Black Screen (DRM Fix)",
+          value: "When streaming Netflix, Disney+, Prime Video, or anime sites in Discord:\n1. Open Chrome, Brave, or Edge **Settings** \u2699\uFE0F\n2. Search for **Hardware Acceleration** (under System)\n3. Turn **OFF** *'Use graphics acceleration when available'*\n4. Relaunch browser \u2014 black screen is permanently gone!"
+        },
+        {
+          name: "\u{1F3A7} Step 2: Unmuffled Movie Audio",
+          value: "In Discord **User Settings > Voice & Video**:\n\u2022 Set **Noise Suppression** to **None** or **Standard** (disable *Krisp*, which mistakenly cuts out movie soundtracks and whisper dialogue!)\n\u2022 Enable **High Packet Priority (Quality of Service)** for lag-free audio."
+        },
+        {
+          name: "\u{1F4FA} Step 3: Stream Settings",
+          value: "\u2022 Share the **Application Window** (not Entire Screen) for crisp text & 0 frame tearing.\n\u2022 Choose **Source** resolution and **60 FPS** (or 30 FPS for cinematic films to eliminate micro-stuttering)."
+        }
+      ).setFooter({ text: "Paradox Cinema Optimizer \u2022 Maximum Bitrate & Full Video Quality" }).setTimestamp();
+      const row = new import_discord3.ActionRowBuilder().addComponents(
+        new import_discord3.ButtonBuilder().setLabel("\u{1F37F} Join Voice Channel").setStyle(import_discord3.ButtonStyle.Link).setURL(`https://discord.com/channels/${guildId}/${voiceChannel.id}`),
+        new import_discord3.ButtonBuilder().setLabel("\u{1F3A5} Open Web Theater").setStyle(import_discord3.ButtonStyle.Link).setURL(`${appUrl}/dashboard/${guildId}/theater`)
+      );
+      return interaction.editReply({
+        embeds: [embed],
+        components: [row]
+      });
+    } catch (err) {
+      return interaction.editReply({
+        content: `\u274C **Failed to optimize voice channel:** ${err.message}`
+      });
+    }
+  }
 }
 async function handleTextCommand(message, prefix) {
   const content = message.content.slice(prefix.length).trim();
@@ -2552,6 +2878,11 @@ Paradox is optimized for **Visual Roles** and **Social Video Fixes**.`
 \`${prefix}embed edit <msgId> <title> | <description>\` \u2014 Edit existing embed
 \`${prefix}prefix <newPrefix>\` \u2014 Change server prefix
 \`${prefix}dashboard\` \u2014 Web dashboard link`
+      },
+      {
+        name: "\u{1F3AC} VC Cinema & Watch Party (Zero Quality Loss)",
+        value: `\`${prefix}watch [activity]\` \u2014 Instant 1-click watch party launcher in your VC
+\`${prefix}cinema\` \u2014 Instant VC bitrate and video quality boost with black-screen fix guide`
       }
     ).setFooter({ text: "Type '/' to use interactive Discord slash commands!" }).setTimestamp();
     return message.reply({ embeds: [embed] });
@@ -3022,6 +3353,102 @@ Type your event ideas, thoughts, and suggestions below, or click the **\u{1F4A1}
       return message.reply(`\u274C Failed to send announcement: ${err.message}`);
     }
   }
+  if (command === "watch" || command === "movie" || command === "movienight") {
+    if (!guild || !member) return;
+    const voiceChannel = member.voice?.channel;
+    if (!voiceChannel || voiceChannel.type !== import_discord3.ChannelType.GuildVoice && voiceChannel.type !== import_discord3.ChannelType.GuildStageVoice) {
+      return message.reply(
+        `\u26A0\uFE0F **You must be in a voice channel first!**
+Join a voice channel and type \`${prefix}watch\` to launch a crystal-clear movie or YouTube watch party with zero quality drops!`
+      );
+    }
+    const activityArg = args[1]?.toLowerCase();
+    let activity = DISCORD_ACTIVITIES.WATCH_TOGETHER;
+    if (activityArg?.includes("vplayer") || activityArg?.includes("official")) {
+      activity = DISCORD_ACTIVITIES.VPLAYER_TOGETHER;
+    } else if (activityArg?.includes("gartic")) {
+      activity = DISCORD_ACTIVITIES.GARTIC_PHONE;
+    } else if (activityArg?.includes("chess")) {
+      activity = DISCORD_ACTIVITIES.CHESS_IN_THE_PARK;
+    } else if (activityArg?.includes("putt") || activityArg?.includes("golf")) {
+      activity = DISCORD_ACTIVITIES.PUTT_PARTY;
+    }
+    try {
+      const inviteData = await createDiscordActivityInvite(voiceChannel.id, activity.id);
+      const qualityInfo = await optimizeVoiceChannelForCinema(voiceChannel.id, { guildId: guild.id }).catch(() => null);
+      const bitrateKbps = qualityInfo?.newBitrate ? Math.round(qualityInfo.newBitrate / 1e3) : 96;
+      const embed = new import_discord3.EmbedBuilder().setColor(15401984).setTitle(`\u{1F3AC} Cinema Lounge & Watch Party: ${activity.name}`).setDescription(
+        `Stream movies, anime, and videos with friends in <#${voiceChannel.id}> with **zero video quality loss**, **no frame stuttering**, and **uncapped audio**!
+
+\u{1F4FA} **Activity:** ${activity.emoji} **${activity.name}**
+\u{1F50A} **Channel Audio Bitrate:** **${bitrateKbps} kbps** (Uncapped HD)
+\u{1F3A5} **Video Quality Mode:** **FULL High-Definition (Resolution Lock enabled)**
+
+\u{1F449} **Click the button below to launch the player directly in your Voice Channel!**`
+      ).addFields(
+        {
+          name: "\u{1F31F} Why Watch Without Screen-Sharing?",
+          value: "\u2022 **Native Source Resolution:** Streams in 1080p/4K directly from source to each viewer.\n\u2022 **Zero Black Screen:** Completely bypasses DRM hardware-acceleration black screens.\n\u2022 **Synced Controls:** Anyone in the VC can pause, play, or scrub forward together in exact sync!"
+        },
+        {
+          name: "\u{1F6E1}\uFE0F Streaming from Browser / Screen Share?",
+          value: "If you screen share a browser window (Netflix, Prime, Anime), turn off **Hardware Acceleration** (`Settings > System > Use graphics acceleration when available -> OFF`) to prevent Discord's black screen!"
+        }
+      ).setFooter({ text: "Paradox Cinema \u2022 Uncapped Quality Watch Party" }).setTimestamp();
+      const row = new import_discord3.ActionRowBuilder().addComponents(
+        new import_discord3.ButtonBuilder().setLabel(`\u{1F680} Launch ${activity.name}`).setStyle(import_discord3.ButtonStyle.Link).setURL(inviteData.inviteUrl),
+        new import_discord3.ButtonBuilder().setLabel("\u{1F37F} Join Voice Channel").setStyle(import_discord3.ButtonStyle.Link).setURL(`https://discord.com/channels/${guild.id}/${voiceChannel.id}`),
+        new import_discord3.ButtonBuilder().setLabel("\u{1F3A5} Open Web Theater").setStyle(import_discord3.ButtonStyle.Link).setURL(`${appUrl}/dashboard/${guild.id}/theater`)
+      );
+      return message.reply({ embeds: [embed], components: [row] });
+    } catch (err) {
+      return message.reply(`\u274C **Failed to launch Watch Party:** ${err.message}`);
+    }
+  }
+  if (command === "cinema" || command === "moviemode") {
+    if (!guild || !member) return;
+    const voiceChannel = member.voice?.channel;
+    if (!voiceChannel || voiceChannel.type !== import_discord3.ChannelType.GuildVoice && voiceChannel.type !== import_discord3.ChannelType.GuildStageVoice) {
+      return message.reply(
+        `\u26A0\uFE0F **You must be in a voice channel first!**
+Join a voice channel and type \`${prefix}cinema\` to optimize bitrate and video quality!`
+      );
+    }
+    try {
+      const result = await optimizeVoiceChannelForCinema(voiceChannel.id, {
+        guildId: guild.id,
+        videoQualityMode: 2
+      });
+      const oldKbps = result.oldBitrate ? Math.round(result.oldBitrate / 1e3) : 64;
+      const newKbps = Math.round(result.newBitrate / 1e3);
+      const embed = new import_discord3.EmbedBuilder().setColor(5763719).setTitle("\u{1F37F} Voice Channel Cinema Mode Activated").setDescription(
+        `Successfully optimized **<#${voiceChannel.id}>** for high-fidelity movie and video streaming!
+
+\u{1F50A} **Audio Bitrate:** **${newKbps} kbps** (Upgraded from ${oldKbps} kbps)
+\u{1F3AC} **Video Quality Mode:** **FULL High-Definition (Resolution Lock enabled)**`
+      ).addFields(
+        {
+          name: "\u{1F6E1}\uFE0F Step 1: Prevent Discord Black Screen (DRM Fix)",
+          value: "When streaming Netflix, Disney+, Prime Video, or anime sites in Discord:\n1. Open Chrome, Brave, or Edge **Settings** \u2699\uFE0F\n2. Search for **Hardware Acceleration** (under System)\n3. Turn **OFF** *'Use graphics acceleration when available'*\n4. Relaunch browser \u2014 black screen is permanently gone!"
+        },
+        {
+          name: "\u{1F3A7} Step 2: Unmuffled Movie Audio",
+          value: "In Discord **User Settings > Voice & Video**:\n\u2022 Set **Noise Suppression** to **None** or **Standard** (disable *Krisp*, which mistakenly cuts out movie soundtracks and whisper dialogue!)\n\u2022 Enable **High Packet Priority (Quality of Service)** for lag-free audio."
+        },
+        {
+          name: "\u{1F4FA} Step 3: Stream Settings",
+          value: "\u2022 Share the **Application Window** (not Entire Screen) for crisp text & 0 frame tearing.\n\u2022 Choose **Source** resolution and **60 FPS** (or 30 FPS for cinematic films to save bandwidth)."
+        }
+      ).setFooter({ text: "Paradox Cinema Optimizer \u2022 Maximum Bitrate & Full Video Quality" }).setTimestamp();
+      const row = new import_discord3.ActionRowBuilder().addComponents(
+        new import_discord3.ButtonBuilder().setLabel("\u{1F37F} Join Voice Channel").setStyle(import_discord3.ButtonStyle.Link).setURL(`https://discord.com/channels/${guild.id}/${voiceChannel.id}`),
+        new import_discord3.ButtonBuilder().setLabel("\u{1F3A5} Open Web Theater").setStyle(import_discord3.ButtonStyle.Link).setURL(`${appUrl}/dashboard/${guild.id}/theater`)
+      );
+      return message.reply({ embeds: [embed], components: [row] });
+    } catch (err) {
+      return message.reply(`\u274C **Failed to optimize voice channel:** ${err.message}`);
+    }
+  }
   if (command === "dashboard") {
     return message.reply(`Manage Paradox in the web dashboard: ${appUrl}/dashboard/${guild?.id}`);
   }
@@ -3145,7 +3572,7 @@ async function ensureDatabaseSchema(prisma2) {
 async function onReady(client) {
   if (!client.user) return;
   console.log(`[Bot] Successfully connected to Discord Gateway as ${client.user.tag} (ID: ${client.user.id})`);
-  client.user.setActivity("Managing servers & video embeds", { type: import_discord4.ActivityType.Custom });
+  client.user.setActivity("Managing servers & video embeds", { type: import_discord5.ActivityType.Custom });
   try {
     if (client.application) {
       console.log(`[Bot] Registering slash commands globally with Discord...`);
@@ -3194,7 +3621,7 @@ async function onReady(client) {
 }
 
 // ../DC BOTS/Paradox/src/bot/events/messageCreate.ts
-var import_discord5 = require("discord.js");
+var import_discord6 = require("discord.js");
 
 // ../DC BOTS/Paradox/src/bot/services/videoTransformer.ts
 function extractAndTransformVideoUrls(content, enabledProviders = ["twitter", "tiktok", "instagram", "reddit", "bluesky", "threads"]) {
@@ -3367,14 +3794,14 @@ ${linksList}`;
       allowedMentions: { users: [] }
     };
     if (config.videoFixerDeleteButton !== false) {
-      const row = new import_discord5.ActionRowBuilder().addComponents(
-        new import_discord5.ButtonBuilder().setCustomId(`rr_del_video_${message.author.id}`).setLabel("Dismiss Preview").setEmoji("\u{1F5D1}\uFE0F").setStyle(import_discord5.ButtonStyle.Secondary)
+      const row = new import_discord6.ActionRowBuilder().addComponents(
+        new import_discord6.ButtonBuilder().setCustomId(`rr_del_video_${message.author.id}`).setLabel("Dismiss Preview").setEmoji("\u{1F5D1}\uFE0F").setStyle(import_discord6.ButtonStyle.Secondary)
       );
       sendPayload.components = [row];
     }
     await message.channel.send(sendPayload);
     const botMember = message.guild.members.me;
-    if (botMember && botMember.permissionsIn(message.channel.id).has(import_discord5.PermissionFlagsBits.ManageMessages)) {
+    if (botMember && botMember.permissionsIn(message.channel.id).has(import_discord6.PermissionFlagsBits.ManageMessages)) {
       await message.suppressEmbeds(true).catch(() => null);
     }
   } catch (err) {
@@ -3519,7 +3946,7 @@ async function onMessageReactionRemove(reaction, user) {
 }
 
 // ../DC BOTS/Paradox/src/bot/events/interactionCreate.ts
-var import_discord6 = require("discord.js");
+var import_discord7 = require("discord.js");
 var recentSubmissions = /* @__PURE__ */ new Map();
 async function onInteractionCreate(interaction) {
   if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand()) {
@@ -3533,7 +3960,7 @@ async function onInteractionCreate(interaction) {
     if (interaction.customId.startsWith("rr_del_video_")) {
       const authorId = interaction.customId.replace("rr_del_video_", "");
       const isAuthor = interaction.user.id === authorId;
-      const isMod = interaction.memberPermissions?.has(import_discord6.PermissionsBitField.Flags.ManageMessages) || interaction.memberPermissions?.has(import_discord6.PermissionsBitField.Flags.Administrator);
+      const isMod = interaction.memberPermissions?.has(import_discord7.PermissionsBitField.Flags.ManageMessages) || interaction.memberPermissions?.has(import_discord7.PermissionsBitField.Flags.Administrator);
       if (isAuthor || isMod) {
         await interaction.message.delete().catch(() => null);
         return;
@@ -3551,7 +3978,7 @@ async function onInteractionCreate(interaction) {
     }
     if (interaction.customId.startsWith("delete_temp_channel_")) {
       const isOwner = interaction.guild?.ownerId === interaction.user.id;
-      const isAdmin = interaction.memberPermissions?.has(import_discord6.PermissionsBitField.Flags.Administrator) || interaction.memberPermissions?.has(import_discord6.PermissionsBitField.Flags.ManageGuild);
+      const isAdmin = interaction.memberPermissions?.has(import_discord7.PermissionsBitField.Flags.Administrator) || interaction.memberPermissions?.has(import_discord7.PermissionsBitField.Flags.ManageGuild);
       if (!isOwner && !isAdmin) {
         return interaction.reply({
           content: "\u274C Only the server owner and administrators can delete this temporary channel.",
@@ -3569,9 +3996,9 @@ async function onInteractionCreate(interaction) {
     }
     if (interaction.customId.startsWith("announcement_idea_")) {
       const announcementId = interaction.customId.replace("announcement_idea_", "");
-      const modal = new import_discord6.ModalBuilder().setCustomId(`announcement_modal_${announcementId}`).setTitle("\u{1F4A1} Submit Your Idea").addComponents(
-        new import_discord6.ActionRowBuilder().addComponents(
-          new import_discord6.TextInputBuilder().setCustomId("idea_text").setLabel("Your Idea / Suggestion").setStyle(import_discord6.TextInputStyle.Paragraph).setPlaceholder("Type your ideas, thoughts, or suggestions below...").setMinLength(2).setMaxLength(1e3).setRequired(true)
+      const modal = new import_discord7.ModalBuilder().setCustomId(`announcement_modal_${announcementId}`).setTitle("\u{1F4A1} Submit Your Idea").addComponents(
+        new import_discord7.ActionRowBuilder().addComponents(
+          new import_discord7.TextInputBuilder().setCustomId("idea_text").setLabel("Your Idea / Suggestion").setStyle(import_discord7.TextInputStyle.Paragraph).setPlaceholder("Type your ideas, thoughts, or suggestions below...").setMinLength(2).setMaxLength(1e3).setRequired(true)
         )
       );
       return await interaction.showModal(modal);
@@ -3623,7 +4050,7 @@ async function onInteractionCreate(interaction) {
               announcement.threadName || announcement.title || void 0
             );
             if (adminChannel && "send" in adminChannel) {
-              const submissionEmbed = new import_discord6.EmbedBuilder().setColor(16096779).setAuthor({
+              const submissionEmbed = new import_discord7.EmbedBuilder().setColor(16096779).setAuthor({
                 name: `${userTag} (@${interaction.user.username})`,
                 iconURL: avatarUrl
               }).setTitle("\u{1F4A1} New Submission Received").addFields(
@@ -3703,7 +4130,7 @@ async function handleRoleToggle(interaction, roleId) {
       });
     }
     const botMember = await guild.members.fetchMe().catch(() => null);
-    if (!botMember || !botMember.permissions.has(import_discord6.PermissionsBitField.Flags.ManageRoles)) {
+    if (!botMember || !botMember.permissions.has(import_discord7.PermissionsBitField.Flags.ManageRoles)) {
       return interaction.reply({
         content: "\u26A0\uFE0F The bot lacks the **Manage Roles** permission to assign this role.",
         ephemeral: true
@@ -3837,7 +4264,7 @@ async function sendRoleClaimResponse(interaction, role, mapping, removedNames) {
 **Perks & Details:**
 ${mapping.description}`;
   }
-  const addEmbed = new import_discord6.EmbedBuilder().setColor(role.color || 5793266).setTitle(`\u2728 Role Equipped: ${role.name}`).setDescription(descriptionText).setTimestamp();
+  const addEmbed = new import_discord7.EmbedBuilder().setColor(role.color || 5793266).setTitle(`\u2728 Role Equipped: ${role.name}`).setDescription(descriptionText).setTimestamp();
   if (mapping?.imageUrl) {
     addEmbed.setThumbnail(mapping.imageUrl);
   }
@@ -3852,7 +4279,7 @@ ${mapping.description}`;
   });
 }
 async function sendRoleRemoveResponse(interaction, role, mapping) {
-  const removeEmbed = new import_discord6.EmbedBuilder().setColor(15548997).setTitle(`Role Removed: ${role.name}`).setDescription(`You have removed the **${role.name}** role from your profile.`).setTimestamp();
+  const removeEmbed = new import_discord7.EmbedBuilder().setColor(15548997).setTitle(`Role Removed: ${role.name}`).setDescription(`You have removed the **${role.name}** role from your profile.`).setTimestamp();
   if (mapping?.imageUrl) {
     removeEmbed.setThumbnail(mapping.imageUrl);
   }
@@ -3863,7 +4290,7 @@ async function sendRoleRemoveResponse(interaction, role, mapping) {
 }
 
 // ../DC BOTS/Paradox/src/bot/events/guildMemberAdd.ts
-var import_discord7 = require("discord.js");
+var import_discord8 = require("discord.js");
 async function onGuildMemberAdd(member) {
   if (member.user.bot) return;
   const guildId = member.guild.id;
@@ -3917,7 +4344,7 @@ async function onGuildMemberAdd(member) {
         if (config.welcomeEmbed) {
           try {
             const raw = JSON.parse(config.welcomeEmbed);
-            embed = new import_discord7.EmbedBuilder();
+            embed = new import_discord8.EmbedBuilder();
             if (raw.title) {
               let titleHeader = replaceTags(raw.title);
               titleHeader = titleHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);
@@ -3989,7 +4416,7 @@ async function onGuildMemberAdd(member) {
 }
 
 // ../DC BOTS/Paradox/src/bot/events/guildMemberRemove.ts
-var import_discord8 = require("discord.js");
+var import_discord9 = require("discord.js");
 async function onGuildMemberRemove(member) {
   if (member.user?.bot) return;
   const guildId = member.guild.id;
@@ -4032,7 +4459,7 @@ async function onGuildMemberRemove(member) {
     if (config.goodbyeEmbed) {
       try {
         const raw = JSON.parse(config.goodbyeEmbed);
-        embed = new import_discord8.EmbedBuilder();
+        embed = new import_discord9.EmbedBuilder();
         if (raw.title) {
           let titleHeader = replaceTags(raw.title);
           titleHeader = titleHeader.replace(/<@!?\d+>/g, `@${userDisplayName}`);

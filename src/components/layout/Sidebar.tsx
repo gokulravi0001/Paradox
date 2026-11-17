@@ -25,6 +25,7 @@ import {
   Shield,
   Bot,
   Sparkles,
+  Tv,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -115,6 +116,12 @@ export function Sidebar({
           href: `/dashboard/${guildId}/video-embeds`,
           icon: Film,
           badge: "Fixer",
+        },
+        {
+          name: "Cinema & Theater",
+          href: `/dashboard/${guildId}/theater`,
+          icon: Tv,
+          badge: "HD Stream",
         },
         {
           name: "Auto Messages",
