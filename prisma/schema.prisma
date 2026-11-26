@@ -59,6 +59,7 @@ model GuildConfig {
   giveaways                Giveaway[]
   autoMessages             AutoMessage[]
   stickyMessages           StickyMessage[]
+  movies                   Movie[]
 
   createdAt                DateTime       @default(now())
   updatedAt                DateTime       @updatedAt
@@ -261,6 +262,26 @@ model AuditLog {
   createdAt DateTime    @default(now())
 
   guild     GuildConfig @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId])
+}
+
+model Movie {
+  id          String      @id @default(cuid())
+  guildId     String
+  title       String
+  description String?
+  fileUrl     String      // Direct streaming URL or relative path
+  fileName    String?
+  fileSize    String?     // Size in bytes (stored as string for JSON compatibility)
+  mimeType    String?     // e.g. "video/mp4", "video/webm", "video/x-matroska"
+  duration    Float?      // In seconds
+  thumbnail   String?
+  uploadedBy  String?     // Discord User ID or Username
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  guild       GuildConfig @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
   @@index([guildId])
 }

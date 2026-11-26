@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeGuildAdmin } from "@/lib/serverAuth";
+import { prisma } from "@/lib/prisma";
 import {
   DISCORD_ACTIVITIES,
   DiscordActivityKey,
@@ -93,6 +94,38 @@ export async function POST(
         newBitrate: result.newBitrate,
         videoQualityMode: result.videoQualityMode,
         maxTierBitrate: result.maxTierBitrate,
+      });
+    }
+
+    if (action === "stream_movie") {
+      const { movieId } = body;
+      const movie = await prisma.movie.findFirst({
+        where: { id: movieId, guildId },
+      });
+
+      if (!movie) {
+        return NextResponse.json({ error: "Movie not found in server library" }, { status: 404 });
+      }
+
+      // 1. Optimize the Voice Channel for max quality & bitrate
+      const optimized = await optimizeVoiceChannelForCinema(channelId, { guildId }).catch(() => null);
+
+      // 2. Create the Discord Watch Together Activity invite
+      const activity = DISCORD_ACTIVITIES.VPLAYER_TOGETHER || DISCORD_ACTIVITIES.WATCH_TOGETHER;
+      const invite = await createDiscordActivityInvite(channelId, activity.id);
+
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://paradox00.netlify.app";
+      const streamUrl = movie.fileUrl.startsWith("http")
+        ? movie.fileUrl
+        : `${appUrl}/api/guilds/${guildId}/theater/stream/${movie.id}`;
+
+      return NextResponse.json({
+        success: true,
+        movie,
+        inviteUrl: invite.inviteUrl,
+        streamUrl,
+        bitrate: optimized?.newBitrate,
+        videoQualityMode: optimized?.videoQualityMode,
       });
     }
 
