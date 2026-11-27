@@ -27,6 +27,7 @@ import {
   Calendar,
   X,
   Share2,
+  RefreshCw,
 } from "lucide-react";
 import { ToastContainer, ToastMessage } from "@/components/ui/Toast";
 
@@ -80,6 +81,7 @@ export default function TheaterPage() {
   const [selectedActivity, setSelectedActivity] = useState<string>("WATCH_TOGETHER");
   const [launching, setLaunching] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
+  const [refreshingChannels, setRefreshingChannels] = useState(false);
   const [activeInviteUrl, setActiveInviteUrl] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -111,6 +113,36 @@ export default function TheaterPage() {
 
   const addToast = (type: "success" | "error" | "info", message: string) => {
     setToasts((prev) => [...prev, { id: Math.random().toString(), type, message }]);
+  };
+
+  const refreshVoiceChannels = async () => {
+    setRefreshingChannels(true);
+    try {
+      const res = await fetch(`/api/guilds/${guildId}/theater`);
+      if (res.ok) {
+        const data = await res.json();
+        const loadedChannels = data.channels || [];
+        setChannels(loadedChannels);
+        if (data.activities?.length > 0) {
+          setActivities(data.activities);
+        }
+        if (loadedChannels.length > 0) {
+          if (!selectedChannelId || !loadedChannels.some((c: VoiceChannel) => c.id === selectedChannelId)) {
+            setSelectedChannelId(loadedChannels[0].id);
+          }
+          addToast("success", `Found ${loadedChannels.length} voice/stage channel(s).`);
+        } else {
+          addToast("info", "No voice channels found. Ensure the bot is invited and has 'View Channel' permission.");
+        }
+      } else {
+        addToast("error", "Failed to fetch voice channels from Discord.");
+      }
+    } catch (err) {
+      console.error("Failed to refresh voice channels:", err);
+      addToast("error", "Error connecting to Discord API.");
+    } finally {
+      setRefreshingChannels(false);
+    }
   };
 
   const loadData = async () => {
@@ -644,22 +676,54 @@ export default function TheaterPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Target Voice Channel</label>
-              <select
-                value={selectedChannelId}
-                onChange={(e) => setSelectedChannelId(e.target.value)}
-                className="w-full bg-zinc-800/80 border border-zinc-700/80 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 focus:outline-none focus:border-red-500"
-              >
-                {channels.map((ch) => (
-                  <option key={ch.id} value={ch.id}>
-                    🔊 {ch.name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-zinc-400">Target Voice Channel</label>
+                <button
+                  type="button"
+                  onClick={refreshVoiceChannels}
+                  disabled={refreshingChannels}
+                  title="Refresh voice channels from Discord"
+                  className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white transition disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${refreshingChannels ? "animate-spin text-red-400" : ""}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedChannelId}
+                  onChange={(e) => setSelectedChannelId(e.target.value)}
+                  className="flex-1 bg-zinc-800/80 border border-zinc-700/80 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 focus:outline-none focus:border-red-500"
+                >
+                  {channels.length === 0 ? (
+                    <option value="" disabled>
+                      No voice channels found (Click Refresh)
+                    </option>
+                  ) : (
+                    channels.map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        🔊 {ch.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <button
+                  type="button"
+                  onClick={refreshVoiceChannels}
+                  disabled={refreshingChannels}
+                  title="Reload channels from Discord"
+                  className="p-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700/80 text-zinc-300 hover:text-white transition disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshingChannels ? "animate-spin text-red-400" : ""}`} />
+                </button>
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Activity Player</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-zinc-400">Activity Player</label>
+                <span className="text-[10px] text-zinc-500 font-mono">Watch Together &amp; Games</span>
+              </div>
               <select
                 value={selectedActivity}
                 onChange={(e) => setSelectedActivity(e.target.value)}

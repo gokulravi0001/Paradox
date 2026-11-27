@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import { Shield, ChevronDown, RefreshCw, Search, AlertCircle, Check } from "lucide-react";
 
 export interface DiscordRoleItem {
@@ -22,10 +23,12 @@ interface RoleSelectProps {
   refreshing?: boolean;
   filterManaged?: boolean;
   className?: string;
+  guildId?: string;
+  onRolesUpdated?: (roles: DiscordRoleItem[]) => void;
 }
 
 export function RoleSelect({
-  roles,
+  roles: initialRoles,
   selectedRoleId,
   onSelect,
   placeholder = "Select a Discord role...",
@@ -34,11 +37,54 @@ export function RoleSelect({
   refreshing = false,
   filterManaged = true,
   className = "",
+  guildId,
+  onRolesUpdated,
 }: RoleSelectProps) {
+  const params = useParams();
+  const targetGuildId = guildId || (params?.guildId as string);
+
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [internalRoles, setInternalRoles] = useState<DiscordRoleItem[]>(initialRoles);
+  const [internalRefreshing, setInternalRefreshing] = useState(false);
 
-  const filtered = roles
+  useEffect(() => {
+    setInternalRoles(initialRoles);
+  }, [initialRoles]);
+
+  const activeRoles = internalRoles.length > 0 ? internalRoles : initialRoles;
+
+  async function handleRefreshClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (onRefresh) {
+      onRefresh();
+      return;
+    }
+
+    if (!targetGuildId) return;
+
+    try {
+      setInternalRefreshing(true);
+      const res = await fetch(`/api/guilds/${targetGuildId}/roles`);
+      if (res.ok) {
+        const data = await res.json();
+        const freshRoles = data.roles || [];
+        setInternalRoles(freshRoles);
+        if (onRolesUpdated) {
+          onRolesUpdated(freshRoles);
+        }
+      }
+    } catch (err) {
+      console.error("[RoleSelect] Failed to refresh roles:", err);
+    } finally {
+      setInternalRefreshing(false);
+    }
+  }
+
+  const isSpinning = refreshing || internalRefreshing;
+  const showRefreshButton = Boolean(onRefresh || targetGuildId);
+
+  const filtered = activeRoles
     .filter((r) => {
       if (filterManaged && r.managed) return false;
       if (!query.trim()) return true;
@@ -46,7 +92,7 @@ export function RoleSelect({
     })
     .sort((a, b) => b.position - a.position);
 
-  const selectedRole = roles.find((r) => r.id === selectedRoleId);
+  const selectedRole = activeRoles.find((r) => r.id === selectedRoleId);
 
   return (
     <div className={`relative ${className}`}>
@@ -93,15 +139,15 @@ export function RoleSelect({
           />
         </button>
 
-        {onRefresh && (
+        {showRefreshButton && (
           <button
             type="button"
-            onClick={onRefresh}
-            disabled={refreshing || disabled}
-            title="Refresh roles list"
+            onClick={handleRefreshClick}
+            disabled={isSpinning || disabled}
+            title="Refresh roles list from Discord"
             className="p-2.5 rounded-xl bg-discord-dark border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition disabled:opacity-50 cursor-pointer"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-discord-blurple" : ""}`} />
+            <RefreshCw className={`w-4 h-4 ${isSpinning ? "animate-spin text-discord-blurple" : ""}`} />
           </button>
         )}
       </div>
